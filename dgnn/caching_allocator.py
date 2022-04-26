@@ -69,8 +69,8 @@ class CachingAllocator:
         if requested_size_in_bytes + self._gpu_mem_usage_in_bytes > self._gpu_mem_threshold_in_bytes:
             self.swap_to_cpu(requested_size_in_bytes)
 
-        if len(self._free_gpu_blocks[capacity]) > 0:
-            block = self._free_gpu_blocks[capacity].pop()
+        if len(self._free_cpu_blocks[capacity]) > 0:
+            block = self._free_cpu_blocks[capacity].pop()
             block.to(self._device)
             self._gpu_mem_usage_in_bytes += requested_size_in_bytes
 
