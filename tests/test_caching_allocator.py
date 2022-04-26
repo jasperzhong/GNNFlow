@@ -15,6 +15,7 @@ class TestCachingAllocator(unittest.TestCase):
         self.block_size = 1024  # 1 KB
         self.alloc = CachingAllocator(
             device, gpu_mem_threshold_in_bytes, self.block_size)
+        self.blocks = []
 
     def test_allocate_on_gpu(self):
         """
@@ -24,6 +25,7 @@ class TestCachingAllocator(unittest.TestCase):
         for _ in range(10):
             num_edges = torch.randint(1, 5000, (1,)).item()
             tblock = self.alloc.allocate_on_gpu(num_edges)
+            self.blocks.append(tblock)
             requested_size_in_bytes = capacity_to_bytes(align(num_edges, self.block_size))
             gpu_memory_usage_in_bytes += requested_size_in_bytes
 
@@ -32,8 +34,18 @@ class TestCachingAllocator(unittest.TestCase):
 
         print("GPU memory usage: {}".format(gpu_memory_usage_in_bytes))
 
+    def test_deallocate(self):
+        """
+        Deallocate when GPU memory is enough.
+        """
+
+
     def test_swap_to_cpu(self):
         """
         Swap to CPU when GPU memory is too low.
         """
         pass
+
+
+
+

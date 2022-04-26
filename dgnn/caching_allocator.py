@@ -148,6 +148,7 @@ class CachingAllocator:
                     self._free_gpu_blocks[block.capacity].append(block)
                     block_size_in_bytes = capacity_to_bytes(block.capacity)
                     self._gpu_mem_usage_in_bytes -= block_size_in_bytes
+                    minimum_swap_size_in_bytes -= block_size_in_bytes
 
                 if minimum_swap_size_in_bytes <= 0:
                     break
