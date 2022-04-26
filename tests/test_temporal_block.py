@@ -30,9 +30,9 @@ class TestTemporalBlock(unittest.TestCase):
         self.assertTrue(is_sorted(tblock.timestamps),
                         "timestamps are not sorted")
 
-        print("Add edges from cpu tensor test passed with capacity {}, "\
+        print("Add edges from cpu tensor test passed with capacity {}, "
               "device {}, num_edge_every_insertion {}".format(
-              capacity, device, num_edge_every_insertion))
+                  capacity, device, num_edge_every_insertion))
 
     @parameterized.expand(itertools.product([1024, 2048, 4096], [torch.device("cuda:0"), torch.device("cpu")], [100, 200, 300]))
     def test_add_edges_from_gpu_tensor(self, capacity, device, num_edge_every_insertion, num_insertions=3):
@@ -52,9 +52,9 @@ class TestTemporalBlock(unittest.TestCase):
         self.assertTrue(is_sorted(tblock.timestamps),
                         "timestamps are not sorted")
 
-        print("Add edges from gpu tensor test passed with capacity {}, "\
+        print("Add edges from gpu tensor test passed with capacity {}, "
               "device {}, num_edge_every_insertion {}".format(
-              capacity, device, num_edge_every_insertion))
+                  capacity, device, num_edge_every_insertion))
 
     @parameterized.expand(itertools.product([torch.int32, torch.int64], [torch.int32, torch.float32, torch.float64]))
     def test_add_edges_in_different_dtypes(self, target_vertex_dtype, timestamp_dtype):
@@ -84,3 +84,18 @@ class TestTemporalBlock(unittest.TestCase):
         self.assertRaises(RuntimeError, tblock.add_edges,
                           torch.tensor([2]), torch.tensor([2]))
         print("Out of capacity test passed")
+
+    def test_copy(self):
+        """
+        Test if the copy method works correctly.
+        """
+        tblock = TemporalBlock(2, torch.device("cuda:0"))
+        tblock.add_edges(torch.tensor([0, 1]), torch.tensor([0, 1]))
+        tblock_copy = TemporalBlock(4, torch.device("cuda:0"))
+        tblock.copy_to(tblock_copy)
+        self.assertTrue(tblock_copy.target_vertices.eq(
+            tblock.target_vertices).all())
+        self.assertTrue(tblock_copy.timestamps.eq(
+            tblock.timestamps).all())
+        self.assertEqual(tblock_copy.size, tblock.size)
+        print("Copy test passed")

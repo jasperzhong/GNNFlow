@@ -1,6 +1,16 @@
+from __future__ import annotations
+
 from typing import Union
 
 import torch
+
+
+def capacity_to_bytes(capacity: int) -> int:
+    """
+    Convert the capacity of a memory buffer to bytes.
+    """
+    return capacity * (8 + 4)
+                       
 
 
 class TemporalBlock:
@@ -8,6 +18,10 @@ class TemporalBlock:
     This class is used to store the temporal blocks in the graph.
 
     The blocks are stored in a linked list. The first block is the newest block.
+    Each block stores the target vertices and timestamps of the edges. The target
+    vertices are sorted by timestamps. The block has a maximum capacity and can
+    only store a certain number of edges. The block can be moved to a different
+    device.
     """
 
     def __init__(self, capacity: int, device: Union[torch.device, str]):
@@ -84,6 +98,33 @@ class TemporalBlock:
             self._timestamps = self._timestamps.to(device)
         self._device = device
         return self
+
+    def copy_to(self, other: TemporalBlock):
+        """
+        Copy the block to another block.
+
+        Arguments:
+            other: The block to copy to.
+        """
+        if other.capacity < self._capacity:
+            raise RuntimeError("The block to copy to has a smaller capacity.")
+
+        if self._size > 0:
+            if other._target_vertices is None or other._timestamps is None:
+                other._target_vertices = self._target_vertices.clone()
+                other._timestamps = self._timestamps.clone()
+            else:
+                other._target_vertices[:self._size] = self._target_vertices[:self._size]
+                other._timestamps[:self._size] = self._timestamps[:self._size]
+
+        other._size = self._size
+        other._device = self._device
+
+    def size_in_bytes(self):
+        """
+        Return the size of the block in bytes.
+        """
+        return capacity_to_bytes(self._capacity)
 
     @property
     def device(self):
