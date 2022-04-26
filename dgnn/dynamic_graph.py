@@ -74,8 +74,9 @@ class DynamicGraph:
                 # reallocate
                 block = self._allocator.reallocate_on_gpu(
                     curr_block, incoming_size)
-                self._vertex_table[source_vertex] = block elif self._insertion_policy == "new":
-                    # create a new block
+                self._vertex_table[source_vertex] = block
+            elif self._insertion_policy == "new":
+                # create a new block
                 block = self._allocator.allocate_on_gpu(incoming_size)
                 block.next_block = curr_block
                 self._vertex_table[source_vertex] = block
