@@ -15,12 +15,18 @@ class DynamicGraph:
     a list of edges. Each edge is a tuple of (target_vertex, timestamp).
     """
 
-    def __init__(self, num_vertex: int, device: Union[torch.device, str],
+    def __init__(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
+                 timestamps: torch.Tensor, device: Union[torch.device, str],
                  block_size: int, gpu_mem_threshold_in_bytes: int,
                  insertion_policy: str = "reallocate"):
         """
+        The graph is initially empty and can be optionaly initialized with 
+        a list of edges. 
+
         Arguments:
-            num_vertex: number of vertices in the graph.
+            source_vertices: 1D tensor or None, the source vertices of the edges.
+            target_vertices: 1D tensor or None, the target vertices of the edges.
+            timestamps: 1D tensor or None, the timestamps of the edges. 
             device: the device to use.
             block_size: size of the blocks.
             gpu_mem_threshold_in_bytes: threshold for GPU memory.
@@ -28,8 +34,8 @@ class DynamicGraph:
                               Case insensitive.
         """
         # lazy initialization
-        self._vertex_table = [None for _ in range(num_vertex)]
-        self._num_vertex = num_vertex
+        self._vertex_table = []
+        self._num_vertex = 0
         self._allocator = CachingAllocator(
             device, block_size, gpu_mem_threshold_in_bytes)
         self._device = device
@@ -37,6 +43,10 @@ class DynamicGraph:
         assert insertion_policy in ["reallocate", "new"], \
             "Invalid insertion policy: {}".format(insertion_policy)
         self._insertion_policy = insertion_policy
+
+        # initialize the graph
+        if source_vertices is not None and target_vertices is not None and timestamps is not None:
+            self.add_edges(source_vertices, target_vertices, timestamps)
 
     def add_edges_for_one_vertex(self, source_vertex: int,
                                  target_vertices: torch.Tensor,
@@ -82,7 +92,7 @@ class DynamicGraph:
                 self._vertex_table[source_vertex] = block
                 curr_block = block
 
-        # add edges
+        # add edges to the current block
         curr_block.add_edges(target_vertices, timestamps)
 
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
@@ -120,5 +130,19 @@ class DynamicGraph:
             target_vertices_i = target_vertices_i[sorted_idx]
             timestamps_i = timestamps_i[sorted_idx]
 
+            if source_vertex >= self._num_vertex:
+                # lazy initialization
+                self.add_vertices(source_vertex)
+
             self.add_edges_for_one_vertex(source_vertex, target_vertices_i,
                                           timestamps_i)
+
+    def add_vertices(self, max_vertex: int):
+        """
+        Add vertices to the graph.
+        """
+        assert max_vertex >= self._num_vertex, "max_vertex must be greater than or equal to num_vertex"
+
+        diff = max_vertex - self._num_vertex
+        self._vertex_table.extend([None for _ in range(diff)])
+        self._num_vertex = max_vertex
