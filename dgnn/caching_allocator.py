@@ -6,7 +6,7 @@ class CachingAllocator:
     This class implements a caching allocator.
     """
 
-    def __init__(self, gpu_mem_threshold: int):
+    def __init__(self, gpu_mem_threshold: int, block_size: int):
         pass
 
     def allocate_on_gpu(self, size: int) -> TemporalBlock:

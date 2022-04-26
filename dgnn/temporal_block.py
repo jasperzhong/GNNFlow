@@ -4,19 +4,27 @@ import torch
 
 
 class TemporalBlock:
-    def __init__(self, capacity: int):
+    """
+    This class is used to store the temporal blocks in the graph.
+
+    The blocks are stored in a linked list. The first block is the newest block.
+    """
+
+    def __init__(self, capacity: int, device: Union[torch.device, str]):
         """
         Create a new temporal block. The block is initially empty.
 
         Arguments:
             capacity: The maximum number of edges that can be stored in the block.
+            device: The device to store the block on.
         """
         # lazy initialization
-        self.target_vertices = None
-        self.timestamps = None
-        self.capacity = capacity
-        self.size = 0
-        self.next_block = None  # points to the next block in the linked list
+        self._target_vertices = None
+        self._timestamps = None
+        self._capacity = capacity
+        self._device = device
+        self._size = 0
+        self._next_block = None  # points to the next block in the linked list
 
     def add_edges(self, target_vertices: torch.Tensor, timestamps: torch.Tensor):
         """
@@ -25,33 +33,44 @@ class TemporalBlock:
         Arguments:
             target_vertices: Tensor of shape (N,), where N is the number of edges.
             timestamps: Tensor of shape (N,), where N is the number of edges.
-        """
-        assert target_vertices.shape[0] == timestamps.shape[0]
-        assert len(target_vertices.shape) == 1 and len(timestamps.shape) == 1
 
-        if self.size + target_vertices.size(0) > self.capacity:
-            raise RuntimeError("Block is full")
-        else:
-            if self.target_vertices is None:
-                self.target_vertices = torch.zeros(
-                    self.capacity, dtype=torch.long)
-                self.timestamps = torch.zeros(
-                    self.capacity, dtype=torch.float32)
-
-            self.target_vertices[self.size:self.size +
-                                 target_vertices.size(0)] = target_vertices
-            self.timestamps[self.size:self.size +
-                            timestamps.size(0)] = timestamps
-            self.size += target_vertices.size(0)
-
-    def device(self) -> torch.device:
+        Note: raise RuntimeError if the block cannot hold more edges.
         """
-        Return the device of the block.
-        """
-        if self.target_vertices is not None:
-            return self.target_vertices.device
-        else:
-            return torch.device("cpu")
+        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
+        assert len(target_vertices.shape) == 1 and len(
+            timestamps.shape) == 1, "Target vertices and timestamps must be 1D"
+
+        if target_vertices.dtype not in [torch.int32, torch.int64]:
+            raise ValueError("Target vertices must be of type int32 or int64.")
+
+        if self._size + target_vertices.size(0) > self._capacity:
+            raise RuntimeError("Block can only hold {} edges more, but {} edges are added.".format(
+                self._capacity - self._size, target_vertices.size(0)))
+
+        if self._target_vertices is None:
+            # lazy initialization
+            self._target_vertices = torch.zeros(
+                self._capacity, dtype=torch.long, device=self._device)
+            self._timestamps = torch.zeros(
+                self._capacity, dtype=torch.float32, device=self._device)
+
+        if target_vertices.device != self._device or timestamps.device != self._device:
+            # move to the correct device
+            target_vertices = target_vertices.to(self._device)
+            timestamps = timestamps.to(self._device)
+
+        if target_vertices.dtype != self._target_vertices.dtype or \
+                timestamps.dtype != self._timestamps.dtype:
+            # convert to correct dtype
+            target_vertices = target_vertices.to(
+                self._target_vertices.dtype)
+            timestamps = timestamps.to(self._timestamps.dtype)
+
+        self._target_vertices[self._size:self._size +
+                              target_vertices.size(0)] = target_vertices
+        self._timestamps[self._size:self._size +
+                         timestamps.size(0)] = timestamps
+        self._size += target_vertices.size(0)
 
     def to(self, device: Union[torch.device, str]):
         """
@@ -60,31 +79,70 @@ class TemporalBlock:
         Arguments:
             device: The device to move the block to.
         """
-        if self.target_vertices is not None:
-            self.target_vertices = self.target_vertices.to(device)
-            self.timestamps = self.timestamps.to(device)
+        if self._target_vertices is not None:
+            self._target_vertices = self._target_vertices.to(device)
+            self._timestamps = self._timestamps.to(device)
+        self._device = device
         return self
 
+    @property
+    def device(self):
+        return self._device
+
+    @property
+    def capacity(self):
+        return self._capacity
+
+    @property
+    def size(self):
+        return self._size
+
+    @property
+    def target_vertices(self):
+        if self._target_vertices is None:
+            return None
+        else:
+            return self._target_vertices[:self._size]
+
+    @property
+    def timestamps(self):
+        if self._timestamps is None:
+            return None
+        else:
+            return self._timestamps[:self._size]
+
+    @property
+    def next_block(self):
+        return self._next_block
+
+    @next_block.setter
+    def next_block(self, block):
+        self._next_block = block
+
     def __len__(self):
-        return self.size
+        return self._size
 
     def __getitem__(self, index):
-        if self.target_vertices is None or self.timestamps is None:
+        if self._target_vertices is None or self._timestamps is None:
             raise RuntimeError("Block is empty")
-        elif index < 0 or index >= self.size:
+        elif index < 0 or index >= self._size:
             raise RuntimeError("Index out of range")
         else:
-            return self.target_vertices[index], self.timestamps[index]
+            return self._target_vertices[index], self._timestamps[index]
 
     def __iter__(self):
-        if self.target_vertices is None or self.timestamps is None:
+        if self._target_vertices is None or self._timestamps is None:
             raise RuntimeError("Block is empty")
         else:
-            for i in range(self.size):
-                yield self.target_vertices[i], self.timestamps[i]
+            for i in range(self._size):
+                yield self._target_vertices[i], self._timestamps[i]
 
     def __repr__(self):
-        return f"TemporalBlock(capacity={self.capacity}, size={self.size})"
+        return f"TemporalBlock(capacity={self._capacity}, size={self._size},"  \
+            f"device={self._device}, target_vertices={self._target_vertices}," \
+            f"timestamps={self._timestamps})"
 
     def __str__(self):
-        return f"TemporalBlock(capacity={self.capacity}, size={self.size})"
+        return f"TemporalBlock(capacity={self._capacity}, size={self._size},"  \
+            f"device={self._device}, target_vertices={self._target_vertices}," \
+            f"timestamps={self._timestamps})"
