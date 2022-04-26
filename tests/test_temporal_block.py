@@ -47,7 +47,7 @@ class TestTemporalBlock(unittest.TestCase):
             num_insertions, num_edge_every_insertion)
 
         for i in range(num_insertions):
-            tblock.add_edges(edges[i].to(device), timestamps[i].to(device))
+            tblock.add_edges(edges[i].to("cuda:0"), timestamps[i].to("cuda:0"))
 
         self.assertTrue(is_sorted(tblock.timestamps),
                         "timestamps are not sorted")
