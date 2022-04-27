@@ -168,13 +168,13 @@ class DynamicGraph:
         self._vertex_table.extend([None for _ in range(diff)])
         self._num_vertex = max_vertex + 1
 
-    def num_vertices(self):
+    def num_vertices(self) -> int:
         """
         Return the number of vertices in the graph.
         """
         return self._num_vertex
 
-    def num_edges(self):
+    def num_edges(self) -> int:
         """
         Return the number of edges in the graph.
         """
@@ -187,7 +187,7 @@ class DynamicGraph:
 
         return num_edges
 
-    def out_degree(self, vertex: int):
+    def out_degree(self, vertex: int) -> int:
         """
         Return the out degree of the specified vertex.
         """
