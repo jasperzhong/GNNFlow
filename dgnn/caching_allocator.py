@@ -94,11 +94,13 @@ class CachingAllocator:
         """
         if temporal_block in self._used_gpu_blocks:
             self._used_gpu_blocks.pop(temporal_block)
+            temporal_block.size = 0
             self._free_gpu_blocks[temporal_block.capacity].append(
                 temporal_block)
 
         if temporal_block in self._used_cpu_blocks:
             self._used_cpu_blocks.pop(temporal_block)
+            temporal_block.size = 0
             self._free_cpu_blocks[temporal_block.capacity].append(
                 temporal_block)
 
@@ -110,8 +112,11 @@ class CachingAllocator:
             temporal_block: The temporal block to be reallocated.
             size: The size of the temporal block.
         """
+        # save device because this block may swap to cpu
+        device = temporal_block.device
         new_block = self.allocate_on_gpu(size)
-        temporal_block.copy_to(new_block)
+        temporal_block.copy_to(new_block, device)
+        new_block.next_block = temporal_block.next_block
         self.deallocate(temporal_block)
         return new_block
 

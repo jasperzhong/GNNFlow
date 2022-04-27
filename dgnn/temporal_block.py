@@ -99,7 +99,7 @@ class TemporalBlock:
         self._device = device
         return self
 
-    def copy_to(self, other: TemporalBlock):
+    def copy_to(self, other: TemporalBlock, device: torch.device):
         """
         Copy the block to another block.
 
@@ -111,16 +111,16 @@ class TemporalBlock:
 
         if self._size > 0:
             if other._target_vertices is None or other._timestamps is None:
-                other._target_vertices = self._target_vertices.clone()
-                other._timestamps = self._timestamps.clone()
+                other._target_vertices = torch.Tensor.new_tensor(self._target_vertices, device=device)
+                other._timestamps = torch.Tensor.new_tensor(self._timestamps, device=device)
             else:
+                other._target_vertices.to(device)
                 other._target_vertices[:self._size] = self._target_vertices[:self._size]
-                other._target_vertices.to(self._device)
+                other._timestamps.to(device)
                 other._timestamps[:self._size] = self._timestamps[:self._size]
-                other._timestamps.to(self._device)
 
         other._size = self._size
-        other._device = self._device
+        other._device = device
 
     def size_in_bytes(self):
         """
@@ -139,7 +139,11 @@ class TemporalBlock:
     @property
     def size(self):
         return self._size
-
+    
+    @size.setter
+    def size(self, value):
+        self._size = value
+    
     @property
     def target_vertices(self):
         if self._target_vertices is None:
