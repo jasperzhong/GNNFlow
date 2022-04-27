@@ -99,6 +99,7 @@ class TemporalBlock:
         self._device = device
         return self
 
+    # BUG: Specify the device
     def copy_to(self, other: TemporalBlock):
         """
         Copy the block to another block.

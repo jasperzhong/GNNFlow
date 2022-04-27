@@ -35,7 +35,7 @@ class CachingAllocator:
             block_size: The size of temporal blocks.
         """
         device = torch.device(device)
-        if device.type != 'cuda':
+        if device.type != 'cuda' or (isinstance(device, str) and 'cuda' not in device):
             raise ValueError('device must be a GPU device')
 
         self._device = device
@@ -66,11 +66,12 @@ class CachingAllocator:
         if len(self._free_gpu_blocks[capacity]) > 0:
             block = self._free_gpu_blocks[capacity].pop()
 
-        if requested_size_in_bytes + self._gpu_mem_usage_in_bytes > self._gpu_mem_threshold_in_bytes:
-            self.swap_to_cpu(requested_size_in_bytes)
+        if block is None and requested_size_in_bytes + self._gpu_mem_usage_in_bytes > self._gpu_mem_threshold_in_bytes:
+            self.swap_to_cpu(requested_size_in_bytes + self._gpu_mem_usage_in_bytes 
+                             - self._gpu_mem_threshold_in_bytes)
 
-        if len(self._free_gpu_blocks[capacity]) > 0:
-            block = self._free_gpu_blocks[capacity].pop()
+        if len(self._free_cpu_blocks[capacity]) > 0:
+            block = self._free_cpu_blocks[capacity].pop()
             block.to(self._device)
             self._gpu_mem_usage_in_bytes += requested_size_in_bytes
 
@@ -120,6 +121,7 @@ class CachingAllocator:
         minimum_swap_size_in_bytes is  reached. If failed to swap enough 
         temporal blocks,  raise an exception.
         """
+        # may also need sort
         for capacity, blocks in self._free_gpu_blocks.items():
             while minimum_swap_size_in_bytes > 0 and len(blocks) > 0:
                 block = blocks.pop()
@@ -141,11 +143,10 @@ class CachingAllocator:
                 self._used_gpu_blocks.items(), key=lambda item: item[1])}
 
             for block, sequence_number in used_gpu_blocks_sorted_by_sequence_number.items():
-                while minimum_swap_size_in_bytes > 0:
+                if minimum_swap_size_in_bytes > 0:
                     block.to('cpu')
                     self._used_cpu_blocks[block] = sequence_number
                     self._used_gpu_blocks.pop(block)
-                    self._free_gpu_blocks[block.capacity].append(block)
                     block_size_in_bytes = capacity_to_bytes(block.capacity)
                     self._gpu_mem_usage_in_bytes -= block_size_in_bytes
                     minimum_swap_size_in_bytes -= block_size_in_bytes
