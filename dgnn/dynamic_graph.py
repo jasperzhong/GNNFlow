@@ -73,10 +73,10 @@ class DynamicGraph:
             raise ValueError("source_vertex must be non-negative")
 
         max_vertex = int(target_vertices.max().item())
-        max_vertex = max(max_vertex, source_vertex)) 
+        max_vertex = max(max_vertex, source_vertex) 
         if max_vertex >= self._num_vertex:
             # lazy initialization
-            self.add_vertices(source_vertex)
+            self.add_vertices(max_vertex)
 
         incoming_size = target_vertices.size(0)
         if self._vertex_table[source_vertex] is None:
