@@ -72,7 +72,9 @@ class DynamicGraph:
         if source_vertex < 0:
             raise ValueError("source_vertex must be non-negative")
 
-        if source_vertex >= self._num_vertex:
+        max_vertex = int(target_vertices.max().item())
+        max_vertex = max(max_vertex, source_vertex)) 
+        if max_vertex >= self._num_vertex:
             # lazy initialization
             self.add_vertices(source_vertex)
 
@@ -103,18 +105,13 @@ class DynamicGraph:
 
             curr_block = block
 
-        # add edges to the current block
-        max_vertex = int(target_vertices.max().item())
-        if max_vertex >= self._num_vertex:
-            # lazy initialization
-            self.add_vertices(max_vertex)
-
         # check timestamps are newer than the existing edges
         if curr_block.size > 0:
             if timestamps[0] <= curr_block.timestamps[curr_block.size - 1]:
                 raise ValueError(
                     "Timestamps must be newer than the existing edges")
 
+        # add the edges to the current block
         curr_block.add_edges(target_vertices, timestamps)
 
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
