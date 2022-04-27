@@ -6,9 +6,7 @@ from parameterized import parameterized
 
 from dgnn.temporal_block import TemporalBlock
 
-
-def is_sorted(tensor: torch.Tensor):
-    return torch.all(torch.ge(tensor[1:], tensor[:-1]))
+from utils import is_sorted
 
 
 class TestTemporalBlock(unittest.TestCase):
@@ -92,7 +90,7 @@ class TestTemporalBlock(unittest.TestCase):
         tblock = TemporalBlock(2, torch.device("cuda:0"))
         tblock.add_edges(torch.tensor([0, 1]), torch.tensor([0, 1]))
         tblock_copy = TemporalBlock(4, torch.device("cuda:0"))
-        tblock.copy_to(tblock_copy)
+        tblock.copy_to(tblock_copy, tblock.device)
         self.assertTrue(tblock_copy.target_vertices.eq(
             tblock.target_vertices).all())
         self.assertTrue(tblock_copy.timestamps.eq(

@@ -105,14 +105,19 @@ class TemporalBlock:
 
         Arguments:
             other: The block to copy to.
+            device: The device to copy the block to.
         """
         if other.capacity < self._capacity:
             raise RuntimeError("The block to copy to has a smaller capacity.")
 
         if self._size > 0:
             if other._target_vertices is None or other._timestamps is None:
-                other._target_vertices = torch.Tensor.new_tensor(self._target_vertices, device=device)
-                other._timestamps = torch.Tensor.new_tensor(self._timestamps, device=device)
+                other._target_vertices = torch.zeros(
+                    other._capacity, dtype=torch.long, device=device)
+                other._timestamps = torch.zeros(
+                    other._capacity, dtype=torch.float32, device=device)
+                other._target_vertices[:self._size] = self._target_vertices[:self._size]
+                other._timestamps[:self._size] = self._timestamps[:self._size]
             else:
                 other._target_vertices.to(device)
                 other._target_vertices[:self._size] = self._target_vertices[:self._size]
