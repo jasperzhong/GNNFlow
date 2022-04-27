@@ -105,6 +105,7 @@ class TemporalBlock:
 
         Arguments:
             other: The block to copy to.
+            device: The device to copy the block to.
         """
         if other.capacity < self._capacity:
             raise RuntimeError("The block to copy to has a smaller capacity.")
