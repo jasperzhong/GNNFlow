@@ -6,9 +6,7 @@ from parameterized import parameterized
 
 from dgnn.temporal_block import TemporalBlock
 
-
-def is_sorted(tensor: torch.Tensor):
-    return torch.all(torch.ge(tensor[1:], tensor[:-1]))
+from utils import is_sorted
 
 
 class TestTemporalBlock(unittest.TestCase):
