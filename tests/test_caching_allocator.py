@@ -55,6 +55,7 @@ class TestCachingAllocator(unittest.TestCase):
         for blocks in self.alloc._free_cpu_blocks.values():
             for block in blocks:
                 self.assertEqual(block.size, 0)
+
         
         # Test Swap to CPU
         sum_capacity = 0
