@@ -115,7 +115,9 @@ class TemporalBlock:
                 other._timestamps = self._timestamps.clone()
             else:
                 other._target_vertices[:self._size] = self._target_vertices[:self._size]
+                other._target_vertices.to(self._device)
                 other._timestamps[:self._size] = self._timestamps[:self._size]
+                other._timestamps.to(self._device)
 
         other._size = self._size
         other._device = self._device
