@@ -16,7 +16,6 @@ class TestCachingAllocator(unittest.TestCase):
             device, gpu_mem_threshold_in_bytes, self.block_size)
         self.blocks = []
 
-    # @parameterized.expand(itertools.product([1 * 1024 * 1024, 128 * 1024]))
     def test_allocate_on_gpu(self, gpu_mem_threshold_in_bytes=128 * 1024):
         """
         Allocate on GPU when GPU memory is enough.
