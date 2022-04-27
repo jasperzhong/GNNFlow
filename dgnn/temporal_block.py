@@ -111,8 +111,12 @@ class TemporalBlock:
 
         if self._size > 0:
             if other._target_vertices is None or other._timestamps is None:
-                other._target_vertices = self._target_vertices.clone()
-                other._timestamps = self._timestamps.clone()
+                other._target_vertices = torch.zeros(
+                    other._capacity, dtype=torch.long, device=self._device)
+                other._timestamps = torch.zeros(
+                    other._capacity, dtype=torch.float32, device=self._device)
+                other._target_vertices[:self._size] = self._target_vertices[:self._size]
+                other._timestamps[:self._size] = self._timestamps[:self._size]
             else:
                 other._target_vertices[:self._size] = self._target_vertices[:self._size]
                 other._target_vertices.to(self._device)

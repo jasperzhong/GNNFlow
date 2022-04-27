@@ -93,7 +93,6 @@ class DynamicGraph:
                 block = self._allocator.reallocate_on_gpu(
                     curr_block, curr_block.size + incoming_size)
                 self._vertex_table[source_vertex] = block
-                print("block capacity: {}".format(block.capacity))
             elif self._insertion_policy == "new":
                 # create a new block
                 block = self._allocator.allocate_on_gpu(incoming_size)
@@ -117,7 +116,15 @@ class DynamicGraph:
                 raise ValueError(
                     "Timestamps must be newer than the existing edges")
 
-        curr_block.add_edges(target_vertices, timestamps)
+        try:
+            curr_block.add_edges(target_vertices, timestamps)
+        except RuntimeError as e:
+            print(e)
+            print("curr_block.size: {}, capacity: {}, incoming_size: {}".format(
+                curr_block.size, curr_block.capacity, incoming_size))
+            print("shape of target_vertices: {}, shape of timestamps: {}".format(
+                curr_block.target_vertices.shape, curr_block.timestamps.shape))
+            raise e
 
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   timestamps: torch.Tensor):
