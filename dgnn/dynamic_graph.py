@@ -3,7 +3,6 @@ from typing import Optional, Union, Tuple, List
 import torch
 
 from .caching_allocator import CachingAllocator
-from .temporal_block import TemporalBlock
 
 
 class DynamicGraph:
@@ -116,15 +115,7 @@ class DynamicGraph:
                 raise ValueError(
                     "Timestamps must be newer than the existing edges")
 
-        try:
-            curr_block.add_edges(target_vertices, timestamps)
-        except RuntimeError as e:
-            print(e)
-            print("curr_block.size: {}, capacity: {}, incoming_size: {}".format(
-                curr_block.size, curr_block.capacity, incoming_size))
-            print("shape of target_vertices: {}, shape of timestamps: {}".format(
-                curr_block.target_vertices.shape, curr_block.timestamps.shape))
-            raise e
+        curr_block.add_edges(target_vertices, timestamps)
 
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   timestamps: torch.Tensor):
@@ -212,7 +203,9 @@ class DynamicGraph:
 
     def out_edges(self, vertex: int) -> Tuple[List, List]:
         """
-        Return the out edges of the specified vertex.
+        Return the out edges of the specified vertex. The edges are sorted by
+        timestamps in descending order (i.e., the newest edge is at the front 
+        of the list).
         """
         assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
 
@@ -221,8 +214,10 @@ class DynamicGraph:
         curr_block = self._vertex_table[vertex]
         while curr_block is not None:
             if curr_block.size > 0:
-                target_vertices.extend(curr_block.target_vertices.tolist())
-                timestamps.extend(curr_block.timestamps.tolist())
+                target_vertices.extend(
+                    curr_block.target_vertices.flip(dims=[0]).tolist())
+                timestamps.extend(
+                    curr_block.timestamps.flip(dims=[0]).tolist())
 
             curr_block = curr_block.next_block
 
