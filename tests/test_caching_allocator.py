@@ -37,7 +37,7 @@ class TestCachingAllocator(unittest.TestCase):
             requested_size_in_bytes = capacity_to_bytes(align(num_edges, self.block_size))
             gpu_memory_usage_in_bytes += requested_size_in_bytes
         
-        # Test Deallocate
+        # Test Deallocate: deallocate all blocks
         blocks = self.alloc._used_gpu_blocks.keys()
         for block in list(blocks):
             self.alloc.deallocate(block)
@@ -48,6 +48,13 @@ class TestCachingAllocator(unittest.TestCase):
         
         self.assertEqual(len(self.alloc._used_gpu_blocks), 0)
         self.assertEqual(len(self.alloc._used_cpu_blocks), 0)
+        for blocks in self.alloc._free_gpu_blocks.values():
+            for block in blocks:
+                self.assertEqual(block.size, 0)
+                
+        for blocks in self.alloc._free_cpu_blocks.values():
+            for block in blocks:
+                self.assertEqual(block.size, 0)
         
         # Test Swap to CPU
         sum_capacity = 0
@@ -80,6 +87,21 @@ class TestCachingAllocator(unittest.TestCase):
         print("CPU USED:{}".format(self.alloc._used_cpu_blocks))
         print("GPU FREE:{}".format(self.alloc._free_gpu_blocks))
         print("CPU FREE:{}".format(self.alloc._free_cpu_blocks))
+        
+        # Test Reallocate
+        latest_block = list(self.alloc._used_gpu_blocks.keys())[-1]
+        temp_block = self.alloc.allocate_on_gpu(1)
+        latest_block.next_block = temp_block
+        new_block = self.alloc.reallocate_on_gpu(latest_block, latest_block.capacity)
+        self.assertEqual(new_block.next_block, temp_block)
+        self.assertEqual(new_block.device.type, 'cuda')
+        
+        print("***allocate end****")
+        print("GPU USED:{}".format(self.alloc._used_gpu_blocks))
+        print("CPU USED:{}".format(self.alloc._used_cpu_blocks))
+        print("GPU FREE:{}".format(self.alloc._free_gpu_blocks))
+        print("CPU FREE:{}".format(self.alloc._free_cpu_blocks))
+        
         
 
 
