@@ -20,7 +20,7 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(source_vertex), 3)
 
-        target_vertices, timestamps = dgraph.out_edges(source_vertex)
+        target_vertices, timestamps = dgraph.get_neighbors(source_vertex)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
         print("Test add edges for one vertex passed.")
@@ -41,7 +41,7 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(source_vertex), 4)
 
-        target_vertices, timestamps = dgraph.out_edges(source_vertex)
+        target_vertices, timestamps = dgraph.get_neighbors(source_vertex)
         self.assertEqual(target_vertices, [2, 3, 2, 1])
         self.assertEqual(timestamps, [3, 2, 1, 0])
         print("Test add edges for one vertex with duplicate edges passed.")
@@ -62,19 +62,19 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 3)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps = dgraph.out_edges(0)
+        target_vertices, timestamps = dgraph.get_neighbors(0)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(1)
+        target_vertices, timestamps = dgraph.get_neighbors(1)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(2)
+        target_vertices, timestamps = dgraph.get_neighbors(2)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(3)
+        target_vertices, timestamps = dgraph.get_neighbors(3)
         self.assertEqual(target_vertices, [])
         self.assertEqual(timestamps, [])
         print("Test add edges sorted by timestamps passed.")
@@ -95,19 +95,19 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 3)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps = dgraph.out_edges(0)
+        target_vertices, timestamps = dgraph.get_neighbors(0)
         self.assertEqual(target_vertices, [1, 2, 3])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(1)
+        target_vertices, timestamps = dgraph.get_neighbors(1)
         self.assertEqual(target_vertices, [1, 2, 3])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(2)
+        target_vertices, timestamps = dgraph.get_neighbors(2)
         self.assertEqual(target_vertices, [1, 2, 3])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(3)
+        target_vertices, timestamps = dgraph.get_neighbors(3)
         self.assertEqual(target_vertices, [])
         self.assertEqual(timestamps, [])
         print("Test add edges unsorted passed.")
@@ -128,19 +128,19 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 3)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps = dgraph.out_edges(0)
+        target_vertices, timestamps = dgraph.get_neighbors(0)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(1)
+        target_vertices, timestamps = dgraph.get_neighbors(1)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(2)
+        target_vertices, timestamps = dgraph.get_neighbors(2)
         self.assertEqual(target_vertices, [3, 2, 1])
         self.assertEqual(timestamps, [2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(3)
+        target_vertices, timestamps = dgraph.get_neighbors(3)
         self.assertEqual(target_vertices, [])
         self.assertEqual(timestamps, [])
 
@@ -156,19 +156,19 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 6)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps = dgraph.out_edges(0)
+        target_vertices, timestamps = dgraph.get_neighbors(0)
         self.assertEqual(target_vertices, [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps, [5, 4, 3, 2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(1)
+        target_vertices, timestamps = dgraph.get_neighbors(1)
         self.assertEqual(target_vertices, [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps, [5, 4, 3, 2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(2)
+        target_vertices, timestamps = dgraph.get_neighbors(2)
         self.assertEqual(target_vertices, [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps, [5, 4, 3, 2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(3)
+        target_vertices, timestamps = dgraph.get_neighbors(3)
         self.assertEqual(target_vertices, [])
         self.assertEqual(timestamps, [])
         print("Test add edges multiple times passed.")
@@ -214,20 +214,36 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 6)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps = dgraph.out_edges(0)
+        target_vertices, timestamps = dgraph.get_neighbors(0)
         self.assertEqual(target_vertices, [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps, [5, 4, 3, 2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(1)
+        target_vertices, timestamps = dgraph.get_neighbors(1)
         self.assertEqual(target_vertices, [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps, [5, 4, 3, 2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(2)
+        target_vertices, timestamps = dgraph.get_neighbors(2)
         self.assertEqual(target_vertices, [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps, [5, 4, 3, 2, 1, 0])
 
-        target_vertices, timestamps = dgraph.out_edges(3)
+        target_vertices, timestamps = dgraph.get_neighbors(3)
         self.assertEqual(target_vertices, [])
         self.assertEqual(timestamps, [])
 
         print("Test new insertion policy passed.")
+
+    def test_get_neighbors_before_timestamp(self):
+        """
+        Test if get_neighbors_before_timestamp works.
+        """
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+
+        target_vertices, timestamps = dgraph.get_neighbors_before_timestamp(0, 1.5)
+        self.assertEqual(target_vertices, [2, 1])
+        self.assertEqual(timestamps, [1, 0])
+        print("Test out edges before timestamp passed.")

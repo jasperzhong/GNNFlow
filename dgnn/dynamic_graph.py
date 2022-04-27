@@ -73,7 +73,7 @@ class DynamicGraph:
             raise ValueError("source_vertex must be non-negative")
 
         max_vertex = int(target_vertices.max().item())
-        max_vertex = max(max_vertex, source_vertex) 
+        max_vertex = max(max_vertex, source_vertex)
         if max_vertex >= self._num_vertex:
             # lazy initialization
             self.add_vertices(max_vertex)
@@ -198,9 +198,9 @@ class DynamicGraph:
 
         return out_degree
 
-    def out_edges(self, vertex: int) -> Tuple[List, List]:
+    def get_neighbors(self, vertex: int) -> Tuple[List, List]:
         """
-        Return the out edges of the specified vertex. The edges are sorted by
+        Return the neighbors of the specified vertex. The edges are sorted by
         timestamps in descending order (i.e., the newest edge is at the front 
         of the list).
         """
@@ -215,6 +215,49 @@ class DynamicGraph:
                     curr_block.target_vertices.flip(dims=[0]).tolist())
                 timestamps.extend(
                     curr_block.timestamps.flip(dims=[0]).tolist())
+
+            curr_block = curr_block.next_block
+
+        return target_vertices, timestamps
+
+    def get_neighbors_before_timestamp(self, vertex: int, timestamp: float) -> Tuple[List, List]:
+        """
+        Return the out edges of the specified vertex before the specified
+        timestamp. The edges are sorted by timestamps in descending order
+        (i.e., the newest edge is at the front of the list).
+        """
+        assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
+
+        target_vertices = []
+        timestamps = []
+        curr_block = self._vertex_table[vertex]
+        while curr_block is not None:
+            if curr_block.size > 0:
+                while True:
+                    if timestamp < curr_block.timestamps[0]:
+                        # this block does not contain any edges before the timestamp
+                        break
+
+                    if timestamp > curr_block.timestamps[curr_block.size - 1]:
+                        # this block contains all edges before the timestamp
+                        target_vertices.extend(
+                            curr_block.target_vertices.flip(dims=[0]).tolist())
+                        timestamps.extend(
+                            curr_block.timestamps.flip(dims=[0]).tolist())
+                        break
+
+                    # find the first edge before the timestamp
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
+                                             side='right')
+                    if idx == 0:
+                        break
+
+                    # add the edges
+                    target_vertices.extend(
+                        curr_block.target_vertices[:idx].flip(dims=[0]).tolist())
+                    timestamps.extend(
+                        curr_block.timestamps[:idx].flip(dims=[0]).tolist())
+                    break
 
             curr_block = curr_block.next_block
 
