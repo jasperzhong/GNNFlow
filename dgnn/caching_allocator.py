@@ -35,7 +35,7 @@ class CachingAllocator:
             block_size: The size of temporal blocks.
         """
         device = torch.device(device)
-        if device.type != 'cuda' or (isinstance(device, str) and 'cuda' not in device):
+        if device.type != 'cuda':
             raise ValueError('device must be a GPU device')
 
         self._device = device
@@ -121,7 +121,7 @@ class CachingAllocator:
         minimum_swap_size_in_bytes is  reached. If failed to swap enough 
         temporal blocks,  raise an exception.
         """
-        # may also need sort
+        # TODO:may also need sort
         for capacity, blocks in self._free_gpu_blocks.items():
             while minimum_swap_size_in_bytes > 0 and len(blocks) > 0:
                 block = blocks.pop()

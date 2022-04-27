@@ -17,7 +17,7 @@ class TestCachingAllocator(unittest.TestCase):
         self.blocks = []
 
     # @parameterized.expand(itertools.product([1 * 1024 * 1024, 128 * 1024]))
-    def test_allocate_on_gpu_first(self, gpu_mem_threshold_in_bytes=128 * 1024):
+    def test_allocate_on_gpu(self, gpu_mem_threshold_in_bytes=128 * 1024):
         """
         Allocate on GPU when GPU memory is enough.
         1. has free_gpu_blocks
@@ -29,6 +29,7 @@ class TestCachingAllocator(unittest.TestCase):
         2. allocate too much and exceed the threshold, swap to cpu
         """
         self.setUp(gpu_mem_threshold_in_bytes)
+        # allocate some blocks on gpu.
         gpu_memory_usage_in_bytes = 0
         for _ in range(10):
             num_edges = torch.randint(3000, 5000, (1,)).item()
@@ -36,18 +37,8 @@ class TestCachingAllocator(unittest.TestCase):
             self.blocks.append(tblock)
             requested_size_in_bytes = capacity_to_bytes(align(num_edges, self.block_size))
             gpu_memory_usage_in_bytes += requested_size_in_bytes
-
-        # print("allocate end")
-        # print("GPU USED:{}".format(self.alloc._used_gpu_blocks))
-        # print("CPU USED:{}".format(self.alloc._used_cpu_blocks))
-        # print("GPU FREE:{}".format(self.alloc._free_gpu_blocks))
-        # print("CPU FREE:{}".format(self.alloc._free_cpu_blocks))
-
-    def test_deallocate(self):
-        """
-        Deallocate when GPU memory is enough.
-        """
-        self.test_allocate_on_gpu_first(128 * 1024)
+        
+        # Test Deallocate
         blocks = self.alloc._used_gpu_blocks.keys()
         for block in list(blocks):
             self.alloc.deallocate(block)
@@ -58,13 +49,8 @@ class TestCachingAllocator(unittest.TestCase):
         
         self.assertEqual(len(self.alloc._used_gpu_blocks), 0)
         self.assertEqual(len(self.alloc._used_cpu_blocks), 0)
-
-    def test_swap_to_cpu(self):
-        """
-        Swap to CPU when GPU memory is too low.
-        """
-        # all the blocks are free
-        self.test_deallocate()
+        
+        # Test Swap to CPU
         sum_capacity = 0
         for blocks in self.alloc._free_gpu_blocks.values():
             for block in blocks:
@@ -79,10 +65,9 @@ class TestCachingAllocator(unittest.TestCase):
         
         self.assertEqual(num, 0)
         
-        
-    def test_allocate_on_gpu_second(self):
-        self.test_swap_to_cpu()
+        # Test allocate on gpu again
         # all free blocks are on cpu
+        # it will use free cpu blocks.
         gpu_memory_usage_in_bytes = 0
         for _ in range(10):
             num_edges = torch.randint(3000, 5000, (1,)).item()
@@ -96,6 +81,7 @@ class TestCachingAllocator(unittest.TestCase):
         print("CPU USED:{}".format(self.alloc._used_cpu_blocks))
         print("GPU FREE:{}".format(self.alloc._free_gpu_blocks))
         print("CPU FREE:{}".format(self.alloc._free_cpu_blocks))
+        
 
 
 
