@@ -1,4 +1,4 @@
-from typing import Optional, Union, Tuple, List
+from typing import Optional, Tuple, Union
 
 import torch
 
@@ -37,7 +37,8 @@ class DynamicGraph:
         """
         # lazy initialization
         self._vertex_table = []
-        self._num_vertex = 0
+        self._num_vertices = 0
+        self._num_edges = 0
         self._allocator = CachingAllocator(
             device, gpu_mem_threshold_in_bytes, block_size)
         self._device = device
@@ -74,7 +75,7 @@ class DynamicGraph:
 
         max_vertex = int(target_vertices.max().item())
         max_vertex = max(max_vertex, source_vertex)
-        if max_vertex >= self._num_vertex:
+        if max_vertex >= self._num_vertices:
             # lazy initialization
             self.add_vertices(max_vertex)
 
@@ -112,7 +113,10 @@ class DynamicGraph:
                     "Timestamps must be newer than the existing edges")
 
         # add the edges to the current block
-        curr_block.add_edges(target_vertices, timestamps)
+        edges_ids = torch.arange(
+            self._num_edges, self._num_edges + incoming_size)
+        curr_block.add_edges(target_vertices, timestamps, edges_ids)
+        self._num_edges += incoming_size
 
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   timestamps: torch.Tensor):
@@ -159,36 +163,25 @@ class DynamicGraph:
         Arguments:
             max_vertex: the maximum vertex id to add.
         """
-        assert max_vertex >= self._num_vertex, "max_vertex must be greater than or equal to num_vertex"
+        assert max_vertex >= self._num_vertices, "max_vertex must be greater than or equal to num_vertex"
 
-        diff = max_vertex - self._num_vertex + 1
+        diff = max_vertex - self._num_vertices + 1
         self._vertex_table.extend([None for _ in range(diff)])
-        self._num_vertex = max_vertex + 1
+        self._num_vertices = max_vertex + 1
 
-    def num_vertices(self) -> int:
-        """
-        Return the number of vertices in the graph.
-        """
-        return self._num_vertex
+    @property
+    def num_vertices(self):
+        return self._num_vertices
 
-    def num_edges(self) -> int:
-        """
-        Return the number of edges in the graph.
-        """
-        num_edges = 0
-        for i in range(self._num_vertex):
-            curr_block = self._vertex_table[i]
-            while curr_block is not None:
-                num_edges += curr_block.size
-                curr_block = curr_block.next_block
-
-        return num_edges
+    @property
+    def num_edges(self):
+        return self._num_edges
 
     def out_degree(self, vertex: int) -> int:
         """
         Return the out degree of the specified vertex.
         """
-        assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
+        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         out_degree = 0
         curr_block = self._vertex_table[vertex]
@@ -204,7 +197,7 @@ class DynamicGraph:
         timestamps in descending order (i.e., the newest edge is at the front 
         of the list).
         """
-        assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
+        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()
@@ -227,7 +220,7 @@ class DynamicGraph:
         timestamp. The edges are sorted by timestamps in descending order
         (i.e., the newest edge is at the front of the list).
         """
-        assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
+        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()

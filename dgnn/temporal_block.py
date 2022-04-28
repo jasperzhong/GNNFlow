@@ -17,10 +17,10 @@ class TemporalBlock:
     This class is used to store the temporal blocks in the graph.
 
     The blocks are stored in a linked list. The first block is the newest block.
-    Each block stores the target vertices and timestamps of the edges. The target
-    vertices are sorted by timestamps. The block has a maximum capacity and can
-    only store a certain number of edges. The block can be moved to a different
-    device.
+    Each block stores the target vertices, timestamps of the edges and IDs of 
+    edges. The target vertices and corresponding edge ids are sorted by 
+    timestamps. The block has a maximum capacity and can  only store a certain 
+    number of edges. The block can be moved to a different device.
     """
 
     def __init__(self, capacity: int, device: Union[torch.device, str]):
@@ -99,7 +99,7 @@ class TemporalBlock:
                        edge_ids.size(0)] = edge_ids
         self._size += target_vertices.size(0)
 
-    def to(self, device: Union[torch.device, str]):
+    def to(self, device: Union[torch.device, str]) -> TemporalBlock:
         """
         Move the block to the specified device.
 
@@ -131,7 +131,8 @@ class TemporalBlock:
                     other._capacity, dtype=torch.long, device=device)
                 other._timestamps = torch.zeros(
                     other._capacity, dtype=torch.float32, device=device)
-                other._edge_ids = torch.zeros( other._capacity, dtype=torch.long, device=device)
+                other._edge_ids = torch.zeros(
+                    other._capacity, dtype=torch.long, device=device)
                 other._target_vertices[:self._size] = self._target_vertices[:self._size]
                 other._timestamps[:self._size] = self._timestamps[:self._size]
                 other._edge_ids[:self._size] = self._edge_ids[:self._size]
