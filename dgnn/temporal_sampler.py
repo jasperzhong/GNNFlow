@@ -6,11 +6,11 @@ import torch
 from .dynamic_graph import DynamicGraph
 
 
-@dataclass(init=False)
+@dataclass
 class TemporalGraphBlock:
-    source_vertices: torch.LongTensor
-    target_vertices: torch.LongTensor
-    timestamps: torch.FloatTensor
+    source_vertices: torch.LongTensor = torch.LongTensor(0)
+    target_vertices: torch.LongTensor = torch.LongTensor(0)
+    timestamps: torch.FloatTensor = torch.FloatTensor(0)
 
 
 class TemporalSampler:
@@ -51,9 +51,7 @@ class TemporalSampler:
 
     def sample_layer(self, fanout: int, vertices: torch.Tensor, timestamps: torch.Tensor) -> TemporalGraphBlock:
         """
-        Sample 1-hop neighbors of given vertices.
-        Arguments:
-            fanout: fanout of the layer
+        Sample 1-hop neighbors of given vertices. Arguments: fanout: fanout of the layer
             vertices: given vertices
             timestamps: timestamps of given vertices
 
@@ -62,7 +60,7 @@ class TemporalSampler:
         """
         assert vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
         assert len(vertices.shape) == 1 and len(
-             timestamps.shape) == 1, "Given vertices and timestamps must be 1D"
+            timestamps.shape) == 1, "Given vertices and timestamps must be 1D"
 
         temporal_block = TemporalGraphBlock()
         # TODO: parallelize this
@@ -89,10 +87,10 @@ class TemporalSampler:
 
             num_edges_sampled = len(target_vertices_i)
             temporal_block.source_vertices = torch.cat(
-                [temporal_block.source_vertices, torch.tensor([vertex]*num_edges_sampled)])
+                (temporal_block.source_vertices, torch.tensor([vertex]*num_edges_sampled)), dim=0)
             temporal_block.target_vertices = torch.cat(
-                [temporal_block.target_vertices, target_vertices_i])
+                (temporal_block.target_vertices, torch.tensor(target_vertices_i)), dim=0)
             temporal_block.timestamps = torch.cat(
-                [temporal_block.timestamps, timestamps_i])
+                (temporal_block.timestamps, torch.tensor(timestamps_i)), dim=0)
 
         return temporal_block
