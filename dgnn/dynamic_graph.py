@@ -191,16 +191,17 @@ class DynamicGraph:
 
         return out_degree
 
-    def get_neighbors(self, vertex: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_neighbors(self, vertex: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Return the neighbors of the specified vertex. The edges are sorted by
-        timestamps in descending order (i.e., the newest edge is at the front 
-        of the list).
+        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids). 
+        The edges are sorted bytimestamps in descending order (i.e., the newest 
+        edge is at the front of the list).
         """
         assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
         curr_block = self._vertex_table[vertex]
         while curr_block is not None:
             if curr_block.size > 0:
@@ -208,22 +209,25 @@ class DynamicGraph:
                     (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
                 timestamps = torch.cat(
                     (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                edge_ids = torch.cat(
+                    (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
 
             curr_block = curr_block.next_block
 
-        return target_vertices, timestamps
+        return target_vertices, timestamps, edge_ids
 
     def get_neighbors_before_timestamp(self, vertex: int, timestamp: float) -> \
-            Tuple[torch.Tensor, torch.Tensor]:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Return the out edges of the specified vertex before the specified
-        timestamp. The edges are sorted by timestamps in descending order
+        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids)
+        before the specified timestamp. The edges are sorted bytimestamps in descending order
         (i.e., the newest edge is at the front of the list).
         """
         assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
         curr_block = self._vertex_table[vertex]
         while curr_block is not None:
             if curr_block.size > 0:
@@ -238,6 +242,8 @@ class DynamicGraph:
                             (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
                         timestamps = torch.cat(
                             (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                        edge_ids = torch.cat(
+                            (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
                         break
 
                     # find the first edge before the timestamp
@@ -251,8 +257,10 @@ class DynamicGraph:
                         (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
                     timestamps = torch.cat(
                         (timestamps, curr_block.timestamps[:idx].flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids[:idx].flip(dims=[0]).cpu()), dim=0)
                     break
 
             curr_block = curr_block.next_block
 
-        return target_vertices, timestamps
+        return target_vertices, timestamps, edge_ids
