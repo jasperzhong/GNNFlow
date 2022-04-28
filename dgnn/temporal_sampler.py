@@ -1,35 +1,26 @@
-from dataclasses import dataclass
 from typing import List
 
 import torch
+import dgl
+from dgl.heterograph import DGLBlock
 
 from .dynamic_graph import DynamicGraph
 
 
-@dataclass
-class TemporalGraphBlock:
-    source_vertices: torch.LongTensor = torch.LongTensor(0)
-    target_vertices: torch.LongTensor = torch.LongTensor(0)
-    timestamps: torch.FloatTensor = torch.FloatTensor(0)
-
-
 class TemporalSampler:
 
-    def __init__(self, graph: DynamicGraph, fanouts: List[int],
-                 strategy: str = 'recent', num_snapshots: int = 1,
-                 snapshot_time_window: float = 0):
+    def __init__(self, graph: DynamicGraph, strategy: str = 'recent',
+                 num_snapshots: int = 1, snapshot_time_window: float = 0):
         """
         Initialize the sampler.
 
         Arguments:
             graph: the dynamic graph
-            fanouts: fanouts of each layer
             strategy: sampling strategy, 'recent' or 'uniform'
             num_snapshots: number of snapshots to sample
             snapshot_time_window: time window every snapshot covers
         """
         self._graph = graph
-        self._fanouts = fanouts
         if strategy not in ['recent', 'uniform']:
             raise ValueError(
                 'Sampling strategy must be either recent or uniform')
@@ -37,61 +28,96 @@ class TemporalSampler:
         self._num_snapshots = num_snapshots
         self._snapshot_time_window = snapshot_time_window
 
-    def sample(self, vertices: torch.Tensor, timestamps: torch.Tensor):
+    def sample(self, fanouts: List[int], target_vertices: torch.Tensor,
+               timestamps: torch.Tensor) -> List[DGLBlock]:
         """
         Sample k-hop neighbors of given vertices.
 
         Arguments:
-            vertices: given vertices
-            timestamps: timestamps of given vertices
+            fanouts: fanouts of each layer
+            target_vertices: root vertices to sample
+            timestamps: timestamps of target vertices
 
         Returns: message flow graphs
         """
         raise NotImplementedError
 
-    def sample_layer(self, fanout: int, vertices: torch.Tensor, timestamps: torch.Tensor) -> TemporalGraphBlock:
+    def sample_layer(self, fanout: int, target_vertices: torch.Tensor,
+                     timestamps: torch.Tensor) -> List[DGLBlock]:
         """
-        Sample 1-hop neighbors of given vertices. Arguments: fanout: fanout of the layer
-            vertices: given vertices
-            timestamps: timestamps of given vertices
+        Sample 1-hop neighbors of target vertices. 
 
-        Returns: sampled neighbors (source_vertices, target_vertices, timestamps).
-        Tensors are on the CPU.
+        Arguments: 
+            fanout: fanout of the layer
+            target_vertices: root vertices to sample
+            timestamps: timestamps of target vertices
+
+        Returns: message flow graphs (# of graphs = # of snapshots)
         """
-        assert vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
-        assert len(vertices.shape) == 1 and len(
+        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
+        assert len(target_vertices.shape) == 1 and len(
             timestamps.shape) == 1, "Given vertices and timestamps must be 1D"
 
-        temporal_block = TemporalGraphBlock()
-        # TODO: parallelize this
-        for vertex, timestamp in zip(vertices, timestamps):
-            vertex, timestamp = int(vertex), float(timestamp)
-            if vertex < 0 or vertex >= self._graph.num_vertices():
-                raise ValueError("Vertex must be in [0, {})".format(
-                    self._graph.num_vertices))
+        blocks = []
+        # TODO: support multiple snapshots
+        for snapshot in range(self._num_snapshots):
+            repeated_target_vertices = torch.LongTensor()
+            source_vertices = torch.LongTensor()
+            source_timestamps = torch.FloatTensor()
+            delta_timestamps = torch.FloatTensor()
+            edge_ids = torch.LongTensor()
 
-            target_vertices_i, timestamps_i = self._graph.get_neighbors_before_timestamp(
-                vertex, timestamp)
-            if len(target_vertices_i) == 0:
-                continue
-            if self._strategy == 'recent':
-                target_vertices_i = target_vertices_i[:fanout]
-                timestamps_i = timestamps_i[:fanout]
-            elif self._strategy == 'uniform':
-                indices = torch.randint(0, len(target_vertices_i), (fanout,))
-                target_vertices_i = target_vertices_i[indices]
-                timestamps_i = timestamps_i[indices]
-            else:
-                raise ValueError(
-                    'Sampling strategy must be either recent or uniform')
+            # TODO: parallelize this
+            for vertex, timestamp in zip(target_vertices, timestamps):
+                vertex, timestamp = int(vertex), float(timestamp)
+                if vertex < 0 or vertex >= self._graph.num_vertices:
+                    raise ValueError("Vertex must be in [0, {})".format(
+                        self._graph.num_vertices))
 
-            num_edges_sampled = len(target_vertices_i)
-            repeated_source_vetices = torch.full((num_edges_sampled,), vertex)
-            temporal_block.source_vertices = torch.cat(
-                (temporal_block.source_vertices, repeated_source_vetices), dim=0)
-            temporal_block.target_vertices = torch.cat(
-                (temporal_block.target_vertices, target_vertices_i), dim=0)
-            temporal_block.timestamps = torch.cat(
-                (temporal_block.timestamps, timestamps_i), dim=0)
+                # TODO: remove memcpy's synchronization
+                source_vertices_i, timestamps_i, edge_ids_i = self._graph.get_neighbors_before_timestamp(
+                    vertex, timestamp)
 
-        return temporal_block
+                if len(source_vertices_i) == 0:
+                    continue
+
+                if self._strategy == 'recent':
+                    source_vertices_i = source_vertices_i[:fanout]
+                    timestamps_i = timestamps_i[:fanout]
+                    edge_ids_i = edge_ids_i[:fanout]
+                elif self._strategy == 'uniform':
+                    indices = torch.randint(
+                        0, len(source_vertices_i), (fanout,))
+                    source_vertices_i = source_vertices_i[indices]
+                    timestamps_i = timestamps_i[indices]
+                    edge_ids_i = edge_ids_i[indices]
+                else:
+                    raise ValueError(
+                        'Sampling strategy must be either recent or uniform')
+
+                delta_timestamps_i = torch.FloatTensor(
+                    [timestamp - t for t in timestamps_i])
+
+                repeated_target_vertices = torch.cat((repeated_target_vertices, torch.full(
+                    (len(source_vertices_i),), vertex, dtype=torch.long)))
+
+                source_vertices = torch.cat(
+                    (source_vertices, source_vertices_i), dim=0)
+                source_timestamps = torch.cat(
+                    (source_timestamps, timestamps_i), dim=0)
+                delta_timestamps = torch.cat(
+                    (delta_timestamps, delta_timestamps_i), dim=0)
+                edge_ids = torch.cat((edge_ids, edge_ids_i), dim=0)
+
+            all_vertices = torch.cat((target_vertices, source_vertices), dim=0)
+            all_timestamps = torch.cat((timestamps, source_timestamps), dim=0)
+            block = dgl.create_block((source_vertices, repeated_target_vertices),
+                                     num_src_nodes=len(all_vertices),
+                                     num_dst_nodes=len(target_vertices))
+            block.srcdata['ID'] = all_vertices
+            block.srcdata['ts'] = all_timestamps
+            block.edata['dt'] = delta_timestamps
+            block.edata['ID'] = edge_ids
+            blocks.append(block)
+
+        return blocks
