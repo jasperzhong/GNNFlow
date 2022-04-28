@@ -86,11 +86,12 @@ class TemporalSampler:
                     'Sampling strategy must be either recent or uniform')
 
             num_edges_sampled = len(target_vertices_i)
+            repeated_source_vetices = torch.full((num_edges_sampled,), vertex)
             temporal_block.source_vertices = torch.cat(
-                (temporal_block.source_vertices, torch.tensor([vertex]*num_edges_sampled)), dim=0)
+                (temporal_block.source_vertices, repeated_source_vetices), dim=0)
             temporal_block.target_vertices = torch.cat(
-                (temporal_block.target_vertices, torch.tensor(target_vertices_i)), dim=0)
+                (temporal_block.target_vertices, target_vertices_i), dim=0)
             temporal_block.timestamps = torch.cat(
-                (temporal_block.timestamps, torch.tensor(timestamps_i)), dim=0)
+                (temporal_block.timestamps, timestamps_i), dim=0)
 
         return temporal_block
