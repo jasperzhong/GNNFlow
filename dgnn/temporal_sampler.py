@@ -29,7 +29,7 @@ class TemporalSampler:
         self._snapshot_time_window = snapshot_time_window
 
     def sample(self, fanouts: List[int], target_vertices: torch.Tensor,
-               timestamps: torch.Tensor) -> List[DGLBlock]:
+               timestamps: torch.Tensor) -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
 
@@ -38,9 +38,27 @@ class TemporalSampler:
             target_vertices: root vertices to sample
             timestamps: timestamps of target vertices
 
-        Returns: message flow graphs
+        Returns: list of message flow graphs (# of graphs = # of snapshots) for 
+            each layer.
         """
-        raise NotImplementedError
+        assert all([fanout > 0 for fanout in fanouts]), \
+            "Fanouts must be positive"
+        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
+        assert len(target_vertices.shape) == 1 and len(
+            timestamps.shape) == 1, "Target vertices and timestamps must be 1D tensors"
+
+        blocks = []
+        # TODO: support multiple snapshots
+        for layer in range(len(fanouts)):
+            blocks_i = self.sample_layer(
+                fanouts[layer], target_vertices, timestamps)
+            blocks.append(blocks_i)
+
+            target_vertices = blocks_i[0].srcdata["ID"][blocks_i[0].num_dst_nodes():]
+            timestamps = blocks_i[0].srcdata["ts"][blocks_i[0].num_dst_nodes():]
+
+        blocks.reverse()
+        return blocks
 
     def sample_layer(self, fanout: int, target_vertices: torch.Tensor,
                      timestamps: torch.Tensor) -> List[DGLBlock]:
