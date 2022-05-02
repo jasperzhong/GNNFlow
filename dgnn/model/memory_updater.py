@@ -1,6 +1,6 @@
 import torch
 import dgl
-from layers import TimeEncode
+from .layers import TimeEncode
 from torch_scatter import scatter
 
 class MailBox():
@@ -10,6 +10,7 @@ class MailBox():
         self.dim_edge_feat = dim_edge_feat
         if memory_param['type'] != 'node':
             raise NotImplementedError
+        #  In origin TGN, dim_out == mem_dim
         self.node_memory = torch.zeros((num_nodes, memory_param['dim_out']), dtype=torch.float32) if _node_memory is None else _node_memory
         self.node_memory_ts = torch.zeros(num_nodes, dtype=torch.float32) if _node_memory_ts is None else _node_memory_ts
         self.mailbox = torch.zeros((num_nodes, memory_param['mailbox_size'], 2 * memory_param['dim_out'] + dim_edge_feat), dtype=torch.float32) if _mailbox is None else _mailbox
@@ -182,6 +183,12 @@ class GRUMemeoryUpdater(torch.nn.Module):
             if self.dim_time > 0:
                 time_feat = self.time_enc(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
                 b.dstdata['mem_input'] = torch.cat([b.dstdata['mem_input'], time_feat], dim=1)
+            # updater take two inputs: input_size = msg_dim & hidden_size = mem_dim
+            # msg_dim comes from msg_function it maybe an mlp or identity
+            # if is identity: msg_dim = raw_msg_dim = 2 * mem_dim + n_edge_dim + time_encoder_dim
+            # updater(dim_in + dim_time -> msg_dim, dim_hid == mem_dim == dim_out)
+            # TODO: What's the msg_function
+            # b.dstdata['mem_input'] ==> message ; b.srcdata['mem][:b.num_dst_nodes()] ==> target nodes' memory
             updated_memory = self.updater(b.dstdata['mem_input'], b.srcdata['mem'][:b.num_dst_nodes()])
             self.last_updated_ts = b.srcdata['ts'][:b.num_dst_nodes()].detach().clone()
             self.last_updated_memory = updated_memory.detach().clone()

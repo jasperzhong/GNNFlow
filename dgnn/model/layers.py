@@ -49,6 +49,7 @@ class TransfomerAttentionLayer(torch.nn.Module):
         self.att_act = torch.nn.LeakyReLU(0.2)
         self.combined = combined
         if dim_time > 0:
+            # use a linear function to encode time
             self.time_enc = TimeEncode(dim_time)
         if combined:
             if dim_node_feat > 0:
@@ -63,6 +64,13 @@ class TransfomerAttentionLayer(torch.nn.Module):
                 self.w_k_t = torch.nn.Linear(dim_time, dim_out)
                 self.w_v_t = torch.nn.Linear(dim_time, dim_out)
         else:
+            # print("dim_node_feat {}".format(dim_node_feat))
+            # print("dim_edge_feat {}".format(dim_edge_feat))
+            # print("dim_time {}".format(dim_time))
+            # print("dim_out {}".format(dim_out))
+            
+            # In the origin TGN, dim_out == dim_node_feat + dim_time.
+            # TGL unify them all to dim_out
             if dim_node_feat + dim_time > 0:
                 self.w_q = torch.nn.Linear(dim_node_feat + dim_time, dim_out)
             self.w_k = torch.nn.Linear(dim_node_feat + dim_edge_feat + dim_time, dim_out)
@@ -122,18 +130,31 @@ class TransfomerAttentionLayer(torch.nn.Module):
                 K = self.w_k(torch.cat([b.srcdata['h'][b.num_dst_nodes():], time_feat], dim=1))
                 V = self.w_v(torch.cat([b.srcdata['h'][b.num_dst_nodes():], time_feat], dim=1))
             else:
+                # [:b.num_dst_nodes()] shape is 1800 == num_dst_nodes
+                # Q.shape[912, 100]
                 Q = self.w_q(torch.cat([b.srcdata['h'][:b.num_dst_nodes()], zero_time_feat], dim=1))[b.edges()[1]]
+                # [b.num_dst_nodes():] shape is 915 == num_edges
                 K = self.w_k(torch.cat([b.srcdata['h'][b.num_dst_nodes():], b.edata['f'], time_feat], dim=1))
                 V = self.w_v(torch.cat([b.srcdata['h'][b.num_dst_nodes():], b.edata['f'], time_feat], dim=1))
+            # [912, 2, 50]
             Q = torch.reshape(Q, (Q.shape[0], self.num_head, -1))
             K = torch.reshape(K, (K.shape[0], self.num_head, -1))
             V = torch.reshape(V, (V.shape[0], self.num_head, -1))
             att = dgl.ops.edge_softmax(b, self.att_act(torch.sum(Q*K, dim=2)))
+            # [912, 2]
             att = self.att_dropout(att)
+            # [912, 100]
             V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
             b.srcdata['v'] = torch.cat([torch.zeros((b.num_dst_nodes(), V.shape[1]), device=torch.device('cuda:0')), V], dim=0)
+             # edges.src['v'] -> edges.dst['m']
+            # 实际上是将周围邻居的attention后的msg，即为v先聚合到target node的memory中，然后将这些聚合的msg和mem原有的值一起加起来，作为features（embeddings）
             b.update_all(dgl.function.copy_src('v', 'm'), dgl.function.sum('m', 'h'))
         if self.dim_node_feat != 0:
+            # 原本neighbors nodes' features存储在b.srcdata['h'][b.num_dst_nodes():]中
+            # aggregate之后存在了dst部分。
+            # b.srcdata['h'][:b.num_dst_nodes()] ==> target nodes' features
+            # b.dstdata['h'] ==> neighbor nodes' aggregated features
+            # TODO: 具体b里面是怎么存的...还是没完全懂
             rst = torch.cat([b.dstdata['h'], b.srcdata['h'][:b.num_dst_nodes()]], dim=1)
         else:
             rst = b.dstdata['h']
