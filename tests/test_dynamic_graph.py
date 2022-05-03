@@ -20,7 +20,7 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(source_vertex), 3)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             source_vertex)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
@@ -43,7 +43,7 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(source_vertex), 4)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             source_vertex)
         self.assertEqual(target_vertices.tolist(), [2, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [3, 2, 1, 0])
@@ -66,22 +66,22 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 3)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(0)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [2, 1, 0])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(1)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [5, 4, 3])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(2)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [8, 7, 6])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(3)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
@@ -103,22 +103,22 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 3)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(0)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
         self.assertEqual(target_vertices.tolist(), [1, 2, 3])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [2, 1, 0])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(1)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
         self.assertEqual(target_vertices.tolist(), [1, 2, 3])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [5, 4, 3])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(2)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
         self.assertEqual(target_vertices.tolist(), [1, 2, 3])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [8, 7, 6])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(3)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
@@ -140,22 +140,22 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 3)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(0)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [2, 1, 0])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(1)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [5, 4, 3])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(2)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [8, 7, 6])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(3)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
@@ -172,22 +172,22 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 6)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(0)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [11, 10, 9, 2, 1, 0])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(1)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [14, 13, 12, 5, 4, 3])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(2)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [17, 16, 15, 8, 7, 6])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(3)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
@@ -234,22 +234,22 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(2), 6)
         self.assertEqual(dgraph.out_degree(3), 0)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(0)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [11, 10, 9, 2, 1, 0])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(1)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [14, 13, 12, 5, 4, 3])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(2)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [17, 16, 15, 8, 7, 6])
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(3)
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
@@ -266,7 +266,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, end_timestamp=1.5)
         self.assertEqual(target_vertices.tolist(), [2, 1])
         self.assertEqual(timestamps.tolist(), [1, 0])
@@ -284,7 +284,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, end_timestamp=10)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
@@ -302,7 +302,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, end_timestamp=0)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
@@ -319,7 +319,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, start_timestamp=1.5)
         self.assertEqual(target_vertices.tolist(), [3])
         self.assertEqual(timestamps.tolist(), [2])
@@ -336,7 +336,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, 1.5, 2.5)
         self.assertEqual(target_vertices.tolist(), [3])
         self.assertEqual(timestamps.tolist(), [2])

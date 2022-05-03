@@ -192,13 +192,13 @@ class DynamicGraph:
 
         return out_degree
 
-    def get_neighbors(self, vertex: int, start_timestamp: float = float("-inf"),
-                      end_timestamp: float = float("inf")) -> \
+    def get_temporal_neighbors(self, vertex: int, start_timestamp: float = float("-inf"),
+                               end_timestamp: float = float("inf")) -> \
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids)
-        between start_timestamp and end_timestamp. The edges are sorted by timestamps 
-        in descending order (i.e., the newest edge is at the front of the list).
+        in the specified time range [start_timestamp, end_timestamp].The neighbors 
+        are sorted by timestamps in decending order.
 
         Arguments:
             vertex: the vertex to get neighbors for.

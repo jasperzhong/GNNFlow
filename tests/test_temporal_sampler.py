@@ -16,10 +16,10 @@ class TestTemporalSampler(unittest.TestCase):
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
         # sample 1-hop neighbors
-        sampler = TemporalSampler(dgraph)
+        sampler = TemporalSampler(dgraph, [2])
         target_vertices = torch.tensor([0, 1, 2])
-        blocks = sampler.sample_layer(2, target_vertices,
-                                      torch.tensor([1.5, 1.5, 1.5]))
+        blocks = sampler._sample_layer_from_root(2, target_vertices,
+                                                 torch.tensor([1.5, 1.5, 1.5]))
         block = blocks[0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
                          0, 1, 2, 2, 1, 2, 1, 2, 1])
@@ -40,9 +40,9 @@ class TestTemporalSampler(unittest.TestCase):
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
         # sample 2-hop neighbors
-        sampler = TemporalSampler(dgraph)
+        sampler = TemporalSampler(dgraph, [2, 2])
         target_vertices = torch.tensor([0, 1, 2])
-        blocks = sampler.sample([2, 2], target_vertices,
+        blocks = sampler.sample(target_vertices,
                                 torch.tensor([1.5, 1.5, 1.5]))
 
         block = blocks[1][0]
