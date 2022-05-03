@@ -83,7 +83,7 @@ class TemporalSampler:
                                 timestamps: torch.Tensor) -> List[DGLBlock]:
 
         blocks = [None for _ in range(self._num_snapshots)]
-        for i, snapshot in enumerate(reversed(range(self._num_snapshots))):
+        for snapshot in reversed(range(self._num_snapshots)):
             # from the last snapshot, we sample the vertices with the largest
             # timestamps
             repeated_target_vertices = torch.LongTensor()
@@ -92,17 +92,21 @@ class TemporalSampler:
             delta_timestamps = torch.FloatTensor()
             edge_ids = torch.LongTensor()
 
+            # update the timestamps
+            offset = self._snapshot_time_window * \
+                (self._num_snapshots - snapshot - 1)
+            timestamps -= offset
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=self._num_workers) as executor:
                 futures = []
                 for i in range(len(target_vertices)):
                     vertex = int(target_vertices[i])
-                    end_timestamp = float(
-                        timestamps[i]) - self._snapshot_time_window * i
-                    start_timestmap = end_timestamp - self._snapshot_time_window \
+                    end_timestamp = float(timestamps[i])
+                    start_timestamp = end_timestamp - self._snapshot_time_window \
                         if self._snapshot_time_window != 0 else float("-inf")
                     future = executor.submit(
                         self._sample_layer_helper, fanout, vertex,
-                        start_timestmap, end_timestamp)
+                        start_timestamp, end_timestamp)
                     futures.append(future)
 
                 for future in concurrent.futures.as_completed(futures):
@@ -138,28 +142,32 @@ class TemporalSampler:
             prev_blocks) == self._num_snapshots, "Number of snapshots must match"
 
         blocks = [None for _ in range(self._num_snapshots)]
-        for i, snapshot in enumerate(reversed(range(self._num_snapshots))):
+        for snapshot in reversed(range(self._num_snapshots)):
             repeated_target_vertices = torch.LongTensor()
             source_vertices = torch.LongTensor()
             source_timestamps = torch.FloatTensor()
             delta_timestamps = torch.FloatTensor()
             edge_ids = torch.LongTensor()
 
+            start_index = prev_blocks[snapshot].num_dst_nodes()
+            target_vertices = prev_blocks[snapshot].srcdata['ID'][start_index:]
+            timestamps = prev_blocks[snapshot].srcdata['ts'][start_index:]
+
+            offset = self._snapshot_time_window * \
+                (self._num_snapshots - snapshot - 1)
+            timestamps -= offset
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=self._num_workers) as executor:
                 futures = []
-                start_index = prev_blocks[snapshot].num_dst_nodes()
-                target_vertices = prev_blocks[snapshot].srcdata['ID'][start_index:]
-                timestamps = prev_blocks[snapshot].srcdata['ts'][start_index:]
 
                 for i in range(len(target_vertices)):
                     vertex = int(target_vertices[i])
-                    end_timestamp = float(
-                        timestamps[i]) - self._snapshot_time_window * i
-                    start_timestmap = end_timestamp - self._snapshot_time_window \
+                    end_timestamp = float(timestamps[i])
+                    start_timestamp = end_timestamp - self._snapshot_time_window \
                         if self._snapshot_time_window != 0 else float("-inf")
                     future = executor.submit(
                         self._sample_layer_helper, fanout, vertex,
-                        start_timestmap, end_timestamp)
+                        start_timestamp, end_timestamp)
                     futures.append(future)
 
                 for future in concurrent.futures.as_completed(futures):
@@ -193,6 +201,8 @@ class TemporalSampler:
 
         source_vertices, timestamps, edge_ids = self._graph.get_temporal_neighbors(
             vertex, start_timestamp, end_timestamp)
+        print(vertex, start_timestamp, end_timestamp)
+        print(source_vertices, timestamps, edge_ids)
 
         if len(source_vertices) == 0:
             return None

@@ -341,4 +341,20 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(target_vertices.tolist(), [3])
         self.assertEqual(timestamps.tolist(), [2])
         self.assertEqual(edge_ids.tolist(), [2])
+
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = torch.tensor(
+            [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
+        target_vertices = torch.tensor(
+            [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
+        timestamps = torch.tensor(
+            [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
+            0, 3, 4)
+        self.assertEqual(target_vertices.tolist(), [5, 4])
+        self.assertEqual(timestamps.tolist(), [4, 3])
+        self.assertEqual(edge_ids.tolist(), [4, 3])
+
         print("Test out edges between timestamps passed.")
