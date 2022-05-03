@@ -1,4 +1,5 @@
 import concurrent.futures
+import threading
 import warnings
 from typing import List, Optional
 
@@ -12,7 +13,7 @@ from .dynamic_graph import DynamicGraph
 class TemporalSampler:
 
     def __init__(self, graph: DynamicGraph, fanouts:  List[int], strategy: str = 'recent',
-                 num_snapshots: int = 1, snapshot_time_window: float = float('inf'),
+                 num_snapshots: int = 1, snapshot_time_window: float = 0,
                  num_workers: int = 1):
         """
         Initialize the sampler.
@@ -30,6 +31,7 @@ class TemporalSampler:
         assert all([fanout > 0 for fanout in fanouts]), \
             "Fanouts must be positive"
         self._fanouts = fanouts
+
         if strategy not in ['recent', 'uniform']:
             raise ValueError(
                 'Sampling strategy must be either recent or uniform')
@@ -38,9 +40,9 @@ class TemporalSampler:
         if num_snapshots <= 0:
             raise ValueError('Number of snapshots must be positive')
 
-        if num_snapshots == 1 and snapshot_time_window != float('inf'):
+        if num_snapshots == 1 and snapshot_time_window != 0:
             warnings.warn(
-                'Snapshot time window must be inf when num_snapshots = 1. Ignore'
+                'Snapshot time window must be 0 when num_snapshots = 1. Ignore'
                 'the snapshot time window.')
 
         self._num_snapshots = num_snapshots
@@ -80,12 +82,8 @@ class TemporalSampler:
     def _sample_layer_from_root(self, fanout: int, target_vertices: torch.Tensor,
                                 timestamps: torch.Tensor) -> List[DGLBlock]:
 
-        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
-        assert len(target_vertices.shape) == 1 and len(
-            timestamps.shape) == 1, "Given vertices and timestamps must be 1D"
-
-        blocks = []
-        for snapshot in reversed(range(self._num_snapshots)):
+        blocks = [None for _ in range(self._num_snapshots)]
+        for i, snapshot in enumerate(reversed(range(self._num_snapshots))):
             # from the last snapshot, we sample the vertices with the largest
             # timestamps
             repeated_target_vertices = torch.LongTensor()
@@ -98,8 +96,10 @@ class TemporalSampler:
                 futures = []
                 for i in range(len(target_vertices)):
                     vertex = int(target_vertices[i])
-                    end_timestamp = float(timestamps[i])
-                    start_timestmap = end_timestamp - self._snapshot_time_window
+                    end_timestamp = float(
+                        timestamps[i]) - self._snapshot_time_window * i
+                    start_timestmap = end_timestamp - self._snapshot_time_window \
+                        if self._snapshot_time_window != 0 else float("-inf")
                     future = executor.submit(
                         self._sample_layer_helper, fanout, vertex,
                         start_timestmap, end_timestamp)
@@ -127,7 +127,7 @@ class TemporalSampler:
             block.srcdata['ts'] = all_timestamps
             block.edata['dt'] = delta_timestamps
             block.edata['ID'] = edge_ids
-            blocks.append(block)
+            blocks[snapshot] = block
 
         return blocks
 
@@ -137,8 +137,8 @@ class TemporalSampler:
         assert len(
             prev_blocks) == self._num_snapshots, "Number of snapshots must match"
 
-        blocks = []
-        for snapshot in reversed(range(self._num_snapshots)):
+        blocks = [None for _ in range(self._num_snapshots)]
+        for i, snapshot in enumerate(reversed(range(self._num_snapshots))):
             repeated_target_vertices = torch.LongTensor()
             source_vertices = torch.LongTensor()
             source_timestamps = torch.FloatTensor()
@@ -153,8 +153,10 @@ class TemporalSampler:
 
                 for i in range(len(target_vertices)):
                     vertex = int(target_vertices[i])
-                    end_timestamp = float(timestamps[i])
-                    start_timestmap = end_timestamp - self._snapshot_time_window
+                    end_timestamp = float(
+                        timestamps[i]) - self._snapshot_time_window * i
+                    start_timestmap = end_timestamp - self._snapshot_time_window \
+                        if self._snapshot_time_window != 0 else float("-inf")
                     future = executor.submit(
                         self._sample_layer_helper, fanout, vertex,
                         start_timestmap, end_timestamp)
@@ -182,16 +184,12 @@ class TemporalSampler:
             block.srcdata['ts'] = all_timestamps
             block.edata['dt'] = delta_timestamps
             block.edata['ID'] = edge_ids
-            blocks.append(block)
+            blocks[snapshot] = block
 
         return blocks
 
     def _sample_layer_helper(self, fanout: int, vertex: int, start_timestamp: float,
                              end_timestamp: float) -> Optional[List[torch.Tensor]]:
-
-        if vertex < 0 or vertex >= self._graph.num_vertices:
-            raise ValueError("Vertex must be in [0, {})".format(
-                self._graph.num_vertices))
 
         source_vertices, timestamps, edge_ids = self._graph.get_temporal_neighbors(
             vertex, start_timestamp, end_timestamp)
@@ -208,9 +206,6 @@ class TemporalSampler:
             source_vertices = source_vertices[indices]
             timestamps = timestamps[indices]
             edge_ids = edge_ids[indices]
-        else:
-            raise ValueError(
-                'Sampling strategy must be either recent or uniform')
 
         repeated_target_vertices = torch.full_like(source_vertices, vertex)
 
