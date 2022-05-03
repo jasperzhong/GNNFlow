@@ -272,3 +272,56 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(timestamps.tolist(), [1, 0])
         self.assertEqual(edge_ids.tolist(), [1, 0])
         print("Test out edges before timestamp passed.")
+
+    def test_get_neighbors_before_timestamp_with_a_larger_timestamp(self):
+        """
+        Test if get_neighbors_before_timestamp works when the timestamp is 
+        larger than the existing timestamps.
+        """
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_before_timestamp(
+            0, 10)
+        self.assertEqual(target_vertices.tolist(), [3, 2, 1])
+        self.assertEqual(timestamps.tolist(), [2, 1, 0])
+        self.assertEqual(edge_ids.tolist(), [2, 1, 0])
+        print("Test out edges before timestamp with a larger timestamp passed.")
+
+    def test_get_neighbors_before_timestamp_with_a_smaller_timestamp(self):
+        """
+        Test if get_neighbors_before_timestamp works when the timestamp is 
+        smaller than the existing timestamps.
+        """
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_before_timestamp(
+            0, 0)
+        self.assertEqual(target_vertices.tolist(), [])
+        self.assertEqual(timestamps.tolist(), [])
+        self.assertEqual(edge_ids.tolist(), [])
+        print("Test out edges before timestamp with a smaller timestamp passed.")
+
+    def test_get_neighbors_between_timestamps(self):
+        """
+        Test if get_neighbors_between_timestamps works.
+        """
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_between_timestamps(
+            0, 1.5, 2.5)
+        self.assertEqual(target_vertices.tolist(), [3])
+        self.assertEqual(timestamps.tolist(), [2])
+        self.assertEqual(edge_ids.tolist(), [2])
+        print("Test out edges between timestamps passed.")

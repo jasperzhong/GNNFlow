@@ -9,8 +9,8 @@ class DynamicGraph:
     """
     A dynamic graph is a graph that can be modified at runtime.
 
-    The dynamic graph is implemented as block adjacency list. It has a vertex 
-    table where each entry is a linked list of blocks. Each block contains 
+    The dynamic graph is implemented as block adjacency list. It has a vertex
+    table where each entry is a linked list of blocks. Each block contains
     a list of edges. Each edge is a tuple of (target_vertex, timestamp).
     """
 
@@ -22,17 +22,17 @@ class DynamicGraph:
                  block_size: int = 1024,
                  insertion_policy: str = "reallocate"):
         """
-        The graph is initially empty and can be optionaly initialized with 
-        a list of edges. 
+        The graph is initially empty and can be optionaly initialized with
+        a list of edges.
 
         Arguments:
             source_vertices: optional, 1D tensor, the source vertices of the edges.
             target_vertices: optional, 1D tensor, the target vertices of the edges.
-            timestamps: optional, 1D tensor, the timestamps of the edges. 
+            timestamps: optional, 1D tensor, the timestamps of the edges.
             device: the device to use.
             block_size: size of the blocks.
             gpu_mem_threshold_in_bytes: threshold for GPU memory.
-            insertion_policy: the insertion policy to use ("reallocate" or "new"). 
+            insertion_policy: the insertion policy to use ("reallocate" or "new").
                               Case insensitive.
         """
         # lazy initialization
@@ -55,7 +55,7 @@ class DynamicGraph:
                                  target_vertices: torch.Tensor,
                                  timestamps: torch.Tensor):
         """
-        Add edges for a specified vertex. Assume that target_vertices have been 
+        Add edges for a specified vertex. Assume that target_vertices have been
         sorted in ascending order of timestamps and that the timestamps are
         newer than the existing edges.
 
@@ -107,8 +107,8 @@ class DynamicGraph:
             curr_block = block
 
         # check timestamps are newer than the existing edges
-        if curr_block.size > 0:
-            if timestamps[0] <= curr_block.timestamps[curr_block.size - 1]:
+        if not curr_block.empty():
+            if timestamps[0] <= curr_block.end_timestamp():
                 raise ValueError(
                     "Timestamps must be newer than the existing edges")
 
@@ -121,7 +121,7 @@ class DynamicGraph:
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   timestamps: torch.Tensor):
         """
-        Add edges to the graph. 
+        Add edges to the graph.
 
         Arguments:
             source_vertices: 1D tensor, the source vertices of the edges.
@@ -193,8 +193,8 @@ class DynamicGraph:
 
     def get_neighbors(self, vertex: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids). 
-        The edges are sorted bytimestamps in descending order (i.e., the newest 
+        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids).
+        The edges are sorted by timestamps in descending order (i.e., the newest
         edge is at the front of the list).
         """
         assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
@@ -204,7 +204,7 @@ class DynamicGraph:
         edge_ids = torch.LongTensor()
         curr_block = self._vertex_table[vertex]
         while curr_block is not None:
-            if curr_block.size > 0:
+            if not curr_block.empty():
                 target_vertices = torch.cat(
                     (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
                 timestamps = torch.cat(
@@ -220,7 +220,7 @@ class DynamicGraph:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids)
-        before the specified timestamp. The edges are sorted bytimestamps in descending order
+        before the specified timestamp. The edges are sorted by timestamps in descending order
         (i.e., the newest edge is at the front of the list).
         """
         assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
@@ -230,37 +230,100 @@ class DynamicGraph:
         edge_ids = torch.LongTensor()
         curr_block = self._vertex_table[vertex]
         while curr_block is not None:
-            if curr_block.size > 0:
-                while True:
-                    if timestamp < curr_block.timestamps[0]:
-                        # this block does not contain any edges before the timestamp
-                        break
-
-                    if timestamp > curr_block.timestamps[curr_block.size - 1]:
-                        # this block contains all edges before the timestamp
-                        target_vertices = torch.cat(
-                            (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
-                        timestamps = torch.cat(
-                            (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
-                        edge_ids = torch.cat(
-                            (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
-                        break
-
+            if not curr_block.empty():
+                if timestamp < curr_block.start_timestamp():
+                    # this block does not contain any edges before the timestamp
+                    pass
+                elif timestamp > curr_block.end_timestamp():
+                    # this block contains all edges before the timestamp
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+                else:
                     # find the first edge before the timestamp
                     idx = torch.searchsorted(curr_block.timestamps, timestamp,
                                              side='right')
-                    if idx == 0:
-                        break
+                    if idx > 0:
+                        target_vertices = torch.cat(
+                            (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
+                        timestamps = torch.cat(
+                            (timestamps, curr_block.timestamps[:idx].flip(dims=[0]).cpu()), dim=0)
+                        edge_ids = torch.cat(
+                            (edge_ids, curr_block.edge_ids[:idx].flip(dims=[0]).cpu()), dim=0)
 
-                    # add the edges
+                curr_block = curr_block.next_block
+
+        return target_vertices, timestamps, edge_ids
+
+    def get_neighbors_between_timestamps(self, vertex: int, start_timestamp: float,
+                                         end_timestamp: float) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Return the neighbors of the specified vertex (vertex ids, timestamps,
+        edge ids) between the specified start and end timestamps. The edges are
+        sorted by timestamps in descending order (i.e., the newest edge is at
+        the front of the list).
+        """
+        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
+        assert start_timestamp <= end_timestamp, "start_timestamp must be less than or equal to end_timestamp"
+
+        target_vertices = torch.LongTensor()
+        timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
+        curr_block = self._vertex_table[vertex]
+        while curr_block is not None:
+            if not curr_block.empty():
+                if end_timestamp < curr_block.start_timestamp():
+                    # search in the next block
+                    curr_block = curr_block.next_block
+                    continue
+
+                if start_timestamp > curr_block.end_timestamp():
+                    # no need to search in the next block
+                    break
+
+                # search in the current block
+                if start_timestamp >= curr_block.start_timestamp() and \
+                        end_timestamp <= curr_block.end_timestamp():
+                    # all edges are in the current block
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+                    break
+                elif start_timestamp < curr_block.start_timestamp() and \
+                        end_timestamp <= curr_block.end_timestamp():
+                    # only the edges before end_timestamp are in the current block
+                    idx = torch.searchsorted(curr_block.timestamps, end_timestamp,
+                                             side='right')
                     target_vertices = torch.cat(
                         (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
                     timestamps = torch.cat(
                         (timestamps, curr_block.timestamps[:idx].flip(dims=[0]).cpu()), dim=0)
                     edge_ids = torch.cat(
                         (edge_ids, curr_block.edge_ids[:idx].flip(dims=[0]).cpu()), dim=0)
-                    break
 
-            curr_block = curr_block.next_block
+                    curr_block = curr_block.next_block
+                    continue
+                elif start_timestamp >= curr_block.start_timestamp() and \
+                        end_timestamp > curr_block.end_timestamp():
+                    # only the edges after start_timestamp are in the current block
+                    idx = torch.searchsorted(curr_block.timestamps, start_timestamp,
+                                             side='left')
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices[idx:].flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps[idx:].flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids[idx:].flip(dims=[0]).cpu()), dim=0)
+
+                    break
+                else:
+                    assert False, "should not reach here"
 
         return target_vertices, timestamps, edge_ids

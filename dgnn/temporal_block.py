@@ -159,6 +159,22 @@ class TemporalBlock:
         """
         return self._size == 0
 
+    def start_timestamp(self) -> float:
+        """
+        Return the start timestamp of the block.
+        """
+        if self.empty():
+            raise RuntimeError("The block is empty.")
+        return self._timestamps[0]
+
+    def end_timestamp(self) -> float:
+        """
+        Return the end timestamp of the block.
+        """
+        if self.empty():
+            raise RuntimeError("The block is empty.")
+        return self._timestamps[self._size - 1]
+
     @property
     def device(self):
         return self._device
