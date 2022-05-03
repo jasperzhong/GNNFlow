@@ -51,9 +51,61 @@ class DynamicGraph:
         if source_vertices is not None and target_vertices is not None and timestamps is not None:
             self.add_edges(source_vertices, target_vertices, timestamps)
 
-    def add_edges_for_one_vertex(self, source_vertex: int,
-                                 target_vertices: torch.Tensor,
-                                 timestamps: torch.Tensor):
+    def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
+                  timestamps: torch.Tensor):
+        """
+        Add edges to the graph.
+
+        Arguments:
+            source_vertices: 1D tensor, the source vertices of the edges.
+            target_vertices: 1D tensor, the target vertices of the edges.
+            timestamps: 1D tensor, the timestamps of the edges.
+
+        The input tensors can be on CPU or GPU.
+
+        Note that we do not assume that the incoming edges are sorted by
+        timestamps. The function will sort the incoming edges by timestamps.
+        """
+        assert source_vertices.shape[0] == target_vertices.shape[0] == \
+            timestamps.shape[0], "Number of edges must match"
+        assert len(source_vertices.shape) == 1 and len(
+            target_vertices.shape) == 1 and len(timestamps.shape) == 1, \
+            "Source vertices, target vertices and timestamps must be 1D"
+
+        # group by source vertex
+        sorted_idx = torch.argsort(source_vertices)
+        unique, counts = torch.unique(
+            source_vertices, sorted=True, return_counts=True)
+        split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
+        for i, indices in enumerate(split_idx):
+            source_vertex = unique[i]
+            target_vertices_i = target_vertices[indices]
+            timestamps_i = timestamps[indices]
+            # sorted target_vertices_i by timestamps_i
+            sorted_idx = torch.argsort(timestamps_i)
+            target_vertices_i = target_vertices_i[sorted_idx]
+            timestamps_i = timestamps_i[sorted_idx]
+
+            self._add_edges_for_one_vertex(source_vertex, target_vertices_i,
+                                           timestamps_i)
+
+    def add_vertices(self, max_vertex: int):
+        """
+        Add vertices to the graph.
+
+        Arguments:
+            max_vertex: the maximum vertex id to add.
+        """
+        assert max_vertex >= self._num_vertices, "max_vertex must be greater " \
+            "than or equal to num_vertex"
+
+        diff = max_vertex - self._num_vertices + 1
+        self._vertex_table.extend([None for _ in range(diff)])
+        self._num_vertices = max_vertex + 1
+
+    def _add_edges_for_one_vertex(self, source_vertex: int,
+                                  target_vertices: torch.Tensor,
+                                  timestamps: torch.Tensor):
         """
         Add edges for a specified vertex. Assume that target_vertices have been
         sorted in ascending order of timestamps and that the timestamps are
@@ -118,57 +170,6 @@ class DynamicGraph:
         curr_block.add_edges(target_vertices, timestamps, edges_ids)
         self._num_edges += incoming_size
 
-    def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
-                  timestamps: torch.Tensor):
-        """
-        Add edges to the graph.
-
-        Arguments:
-            source_vertices: 1D tensor, the source vertices of the edges.
-            target_vertices: 1D tensor, the target vertices of the edges.
-            timestamps: 1D tensor, the timestamps of the edges.
-
-        The input tensors can be on CPU or GPU.
-
-        Note that we do not assume that the incoming edges are sorted by
-        timestamps. The function will sort the incoming edges by timestamps.
-        """
-        assert source_vertices.shape[0] == target_vertices.shape[0] == \
-            timestamps.shape[0], "Number of edges must match"
-        assert len(source_vertices.shape) == 1 and len(
-            target_vertices.shape) == 1 and len(timestamps.shape) == 1, \
-            "Source vertices, target vertices and timestamps must be 1D"
-
-        # group by source vertex
-        sorted_idx = torch.argsort(source_vertices)
-        unique, counts = torch.unique(
-            source_vertices, sorted=True, return_counts=True)
-        split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
-        for i, indices in enumerate(split_idx):
-            source_vertex = unique[i]
-            target_vertices_i = target_vertices[indices]
-            timestamps_i = timestamps[indices]
-            # sorted target_vertices_i by timestamps_i
-            sorted_idx = torch.argsort(timestamps_i)
-            target_vertices_i = target_vertices_i[sorted_idx]
-            timestamps_i = timestamps_i[sorted_idx]
-
-            self.add_edges_for_one_vertex(source_vertex, target_vertices_i,
-                                          timestamps_i)
-
-    def add_vertices(self, max_vertex: int):
-        """
-        Add vertices to the graph.
-
-        Arguments:
-            max_vertex: the maximum vertex id to add.
-        """
-        assert max_vertex >= self._num_vertices, "max_vertex must be greater than or equal to num_vertex"
-
-        diff = max_vertex - self._num_vertices + 1
-        self._vertex_table.extend([None for _ in range(diff)])
-        self._num_vertices = max_vertex + 1
-
     @property
     def num_vertices(self):
         return self._num_vertices
@@ -191,13 +192,41 @@ class DynamicGraph:
 
         return out_degree
 
-    def get_neighbors(self, vertex: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_neighbors(self, vertex: int, start_timestamp: float = float("-inf"),
+                      end_timestamp: float = float("inf")) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids).
-        The edges are sorted by timestamps in descending order (i.e., the newest
-        edge is at the front of the list).
+        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids)
+        between start_timestamp and end_timestamp. The edges are sorted by timestamps 
+        in descending order (i.e., the newest edge is at the front of the list).
+
+        Arguments:
+            vertex: the vertex to get neighbors for.
+            start_timestamp: the start timestamp. Default to float("-inf").
+            end_timestamp: the end timestamp. Default to float("inf").
+
+        Returns:
+            A tuple of (target_vertices, timestamps, edge_ids)
         """
         assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
+        assert start_timestamp <= end_timestamp, "start_timestamp must be less" \
+            " than or equal to end_timestamp"
+
+        if start_timestamp == float("-inf") and end_timestamp == float("inf"):
+            # no need to filter
+            return self._get_neighbors(vertex)
+        elif start_timestamp == float("-inf") and end_timestamp < float("inf"):
+            # filter by end_timestamp
+            return self._get_neighbors_before_timestamp(vertex, end_timestamp)
+        elif start_timestamp > float("-inf") and end_timestamp == float("inf"):
+            # filter by start_timestamp
+            return self._get_neighbors_after_timestamp(vertex, start_timestamp)
+        else:
+            # filter by start_timestamp and end_timestamp
+            return self._get_neighbors_between_timestamps(vertex, start_timestamp, end_timestamp)
+
+    def _get_neighbors(self, vertex: int) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()
@@ -216,14 +245,8 @@ class DynamicGraph:
 
         return target_vertices, timestamps, edge_ids
 
-    def get_neighbors_before_timestamp(self, vertex: int, timestamp: float) -> \
+    def _get_neighbors_before_timestamp(self, vertex: int, timestamp: float) -> \
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids)
-        before the specified timestamp. The edges are sorted by timestamps in descending order
-        (i.e., the newest edge is at the front of the list).
-        """
-        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()
@@ -258,17 +281,46 @@ class DynamicGraph:
 
         return target_vertices, timestamps, edge_ids
 
-    def get_neighbors_between_timestamps(self, vertex: int, start_timestamp: float,
-                                         end_timestamp: float) -> \
+    def _get_neighbors_after_timestamp(self, vertex: int, timestamp: float) -> \
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Return the neighbors of the specified vertex (vertex ids, timestamps,
-        edge ids) between the specified start and end timestamps. The edges are
-        sorted by timestamps in descending order (i.e., the newest edge is at
-        the front of the list).
-        """
-        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
-        assert start_timestamp <= end_timestamp, "start_timestamp must be less than or equal to end_timestamp"
+
+        target_vertices = torch.LongTensor()
+        timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
+        curr_block = self._vertex_table[vertex]
+        while curr_block is not None:
+            if not curr_block.empty():
+                if timestamp > curr_block.end_timestamp():
+                    # this block does not contain any edges after the timestamp
+                    # no need to search in the next block
+                    break
+                elif timestamp < curr_block.start_timestamp():
+                    # this block contains all edges after the timestamp
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+                else:
+                    # find the first edge after the timestamp
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
+                                             side='left')
+                    if idx < curr_block.size:
+                        target_vertices = torch.cat(
+                            (target_vertices, curr_block.target_vertices[idx:].flip(dims=[0]).cpu()), dim=0)
+                        timestamps = torch.cat(
+                            (timestamps, curr_block.timestamps[idx:].flip(dims=[0]).cpu()), dim=0)
+                        edge_ids = torch.cat(
+                            (edge_ids, curr_block.edge_ids[idx:].flip(dims=[0]).cpu()), dim=0)
+
+                curr_block = curr_block.next_block
+
+        return target_vertices, timestamps, edge_ids
+
+    def _get_neighbors_between_timestamps(self, vertex: int, start_timestamp: float,
+                                          end_timestamp: float) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         target_vertices = torch.LongTensor()
         timestamps = torch.FloatTensor()

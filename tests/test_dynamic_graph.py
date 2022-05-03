@@ -14,7 +14,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertex = 0
         target_vertices = torch.tensor([1, 2, 3])
         timestamps = torch.tensor([0, 1, 2])
-        dgraph.add_edges_for_one_vertex(
+        dgraph._add_edges_for_one_vertex(
             source_vertex, target_vertices, timestamps)
         self.assertEqual(dgraph.num_edges, 3)
         self.assertEqual(dgraph.num_vertices, 4)
@@ -37,7 +37,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertex = 0
         target_vertices = torch.tensor([1, 2, 3, 2])
         timestamps = torch.tensor([0, 1, 2, 3])
-        dgraph.add_edges_for_one_vertex(
+        dgraph._add_edges_for_one_vertex(
             source_vertex, target_vertices, timestamps)
         self.assertEqual(dgraph.num_edges, 4)
         self.assertEqual(dgraph.num_vertices, 4)
@@ -266,8 +266,8 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_before_timestamp(
-            0, 1.5)
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+            0, end_timestamp=1.5)
         self.assertEqual(target_vertices.tolist(), [2, 1])
         self.assertEqual(timestamps.tolist(), [1, 0])
         self.assertEqual(edge_ids.tolist(), [1, 0])
@@ -284,8 +284,8 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_before_timestamp(
-            0, 10)
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+            0, end_timestamp=10)
         self.assertEqual(target_vertices.tolist(), [3, 2, 1])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [2, 1, 0])
@@ -302,12 +302,29 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_before_timestamp(
-            0, 0)
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+            0, end_timestamp=0)
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
         print("Test out edges before timestamp with a smaller timestamp passed.")
+
+    def test_get_neighbors_after_timestamp(self):
+        """
+        Test if get_neighbors_after_timestamp works.
+        """
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
+            0, start_timestamp=1.5)
+        self.assertEqual(target_vertices.tolist(), [3])
+        self.assertEqual(timestamps.tolist(), [2])
+        self.assertEqual(edge_ids.tolist(), [2])
+        print("Test in edges after timestamp passed.")
 
     def test_get_neighbors_between_timestamps(self):
         """
@@ -319,7 +336,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-        target_vertices, timestamps, edge_ids = dgraph.get_neighbors_between_timestamps(
+        target_vertices, timestamps, edge_ids = dgraph.get_neighbors(
             0, 1.5, 2.5)
         self.assertEqual(target_vertices.tolist(), [3])
         self.assertEqual(timestamps.tolist(), [2])
