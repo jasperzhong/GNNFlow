@@ -201,8 +201,6 @@ class TemporalSampler:
 
         source_vertices, timestamps, edge_ids = self._graph.get_temporal_neighbors(
             vertex, start_timestamp, end_timestamp)
-        print(vertex, start_timestamp, end_timestamp)
-        print(source_vertices, timestamps, edge_ids)
 
         if len(source_vertices) == 0:
             return None

@@ -205,8 +205,7 @@ class DynamicGraph:
             start_timestamp: the start timestamp. Default to float("-inf").
             end_timestamp: the end timestamp. Default to float("inf").
 
-        Returns:
-            A tuple of (target_vertices, timestamps, edge_ids)
+        Returns: A tuple of (target_vertices, timestamps, edge_ids)
         """
         assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
         assert start_timestamp <= end_timestamp, "start_timestamp must be less" \
@@ -341,12 +340,17 @@ class DynamicGraph:
                 if start_timestamp >= curr_block.start_timestamp() and \
                         end_timestamp <= curr_block.end_timestamp():
                     # all edges are in the current block
+                    start_idx = torch.searchsorted(curr_block.timestamps, start_timestamp,
+                                                   side='left')
+                    end_idx = torch.searchsorted(curr_block.timestamps, end_timestamp,
+                                                 side='right')
                     target_vertices = torch.cat(
-                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                        (target_vertices, curr_block.target_vertices[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
                     timestamps = torch.cat(
-                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                        (timestamps, curr_block.timestamps[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
                     edge_ids = torch.cat(
-                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+                        (edge_ids, curr_block.edge_ids[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
+
                     break
                 elif start_timestamp < curr_block.start_timestamp() and \
                         end_timestamp <= curr_block.end_timestamp():
