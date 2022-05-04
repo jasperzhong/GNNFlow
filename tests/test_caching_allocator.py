@@ -16,7 +16,7 @@ class TestCachingAllocator(unittest.TestCase):
             device, gpu_mem_threshold_in_bytes, self.block_size)
         self.blocks = []
 
-    def test_allocate_on_gpu(self, gpu_mem_threshold_in_bytes=128 * 1024):
+    def test_allocate_on_gpu(self):
         """
         Allocate on GPU when GPU memory is enough.
         1. has free_gpu_blocks
@@ -27,7 +27,6 @@ class TestCachingAllocator(unittest.TestCase):
         1. free blocks on gpu and cpu is empty, just allocate new mem
         2. allocate too much and exceed the threshold, swap to cpu
         """
-        self.setUp(gpu_mem_threshold_in_bytes)
         # allocate some blocks on gpu.
         gpu_memory_usage_in_bytes = 0
         for _ in range(10):
