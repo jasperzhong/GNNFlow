@@ -142,7 +142,7 @@ class TransfomerAttentionLayer(torch.nn.Module):
             # 2. sum: The aggregated msg from neighbors are then sum with the target nodes' memory. Then the outcome will serve as features (embeddings).
             b.update_all(dgl.function.copy_src('v', 'm'), dgl.function.sum('m', 'h'))
         if self.dim_node_feat != 0:
-            # The orgin neighbors nodes' features are stored in b.srcdata['h'][b.num_dst_nodes():]中
+            # The orgin neighbors nodes' features are stored in b.srcdata['h'][b.num_dst_nodes():]
             # After aggregation, the neighbors' node features are store in dstdata。
             # b.srcdata['h'][:b.num_dst_nodes()] ==> target nodes' features
             # b.dstdata['h'] ==> neighbor nodes' aggregated features
