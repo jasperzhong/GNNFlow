@@ -82,6 +82,8 @@ class TemporalSampler:
     def _sample_layer_from_root(self, fanout: int, target_vertices: torch.Tensor,
                                 timestamps: torch.Tensor) -> List[DGLBlock]:
 
+        end_timestamps = timestamps.clone()
+
         blocks = [None for _ in range(self._num_snapshots)]
         for snapshot in reversed(range(self._num_snapshots)):
             # from the last snapshot, we sample the vertices with the largest
@@ -95,15 +97,16 @@ class TemporalSampler:
             # update the timestamps
             offset = self._snapshot_time_window * \
                 (self._num_snapshots - snapshot - 1)
-            timestamps -= offset
+            end_timestamps -= offset
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=self._num_workers) as executor:
                 futures = []
                 for i in range(len(target_vertices)):
                     vertex = int(target_vertices[i])
-                    end_timestamp = float(timestamps[i])
+                    end_timestamp = float(end_timestamps[i])
                     start_timestamp = end_timestamp - self._snapshot_time_window \
                         if self._snapshot_time_window != 0 else float("-inf")
+
                     future = executor.submit(
                         self._sample_layer_helper, fanout, vertex,
                         start_timestamp, end_timestamp)
@@ -123,7 +126,7 @@ class TemporalSampler:
                         edge_ids = torch.cat([edge_ids, result[4]])
 
             all_vertices = torch.cat((target_vertices, source_vertices), dim=0)
-            all_timestamps = torch.cat((timestamps, source_timestamps), dim=0)
+            all_timestamps = torch.cat((end_timestamps, source_timestamps), dim=0)
             block = dgl.create_block((source_vertices, repeated_target_vertices),
                                      num_src_nodes=len(all_vertices),
                                      num_dst_nodes=len(target_vertices))
@@ -153,16 +156,19 @@ class TemporalSampler:
             target_vertices = prev_blocks[snapshot].srcdata['ID'][start_index:]
             timestamps = prev_blocks[snapshot].srcdata['ts'][start_index:]
 
+            end_timestamps = timestamps.clone()
+
+            # update the timestamps
             offset = self._snapshot_time_window * \
                 (self._num_snapshots - snapshot - 1)
-            timestamps -= offset
+            end_timestamps -= offset
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=self._num_workers) as executor:
                 futures = []
 
                 for i in range(len(target_vertices)):
                     vertex = int(target_vertices[i])
-                    end_timestamp = float(timestamps[i])
+                    end_timestamp = float(end_timestamps[i])
                     start_timestamp = end_timestamp - self._snapshot_time_window \
                         if self._snapshot_time_window != 0 else float("-inf")
                     future = executor.submit(
@@ -184,7 +190,7 @@ class TemporalSampler:
                         edge_ids = torch.cat([edge_ids, result[4]])
 
             all_vertices = torch.cat((target_vertices, source_vertices), dim=0)
-            all_timestamps = torch.cat((timestamps, source_timestamps), dim=0)
+            all_timestamps = torch.cat((end_timestamps, source_timestamps), dim=0)
             block = dgl.create_block((source_vertices, repeated_target_vertices),
                                      num_src_nodes=len(all_vertices),
                                      num_dst_nodes=len(target_vertices))
