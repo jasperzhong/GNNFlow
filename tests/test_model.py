@@ -2,20 +2,22 @@ import itertools
 import unittest
 import parameterized as parameterized
 from dgnn.model.tgn import TGN
+import torch
+import numpy as np
 
 class TestModel(unittest.TestCase):
     
     def setUp(self):
+        # The same setup using REDDIT Dataset
         self.node_feats = None
-        self.edge_feats = None
         self.gnn_dim_node = 0 if self.node_feats is None else self.node_feats.shape[1]
-        self.gnn_dim_edge = 0 if self.edge_feats is None else self.edge_feats.shape[1]
+        self.gnn_dim_edge = 172
         self.sample_param = {
             'layer': 1,
             'neighbor': 10,
             'strategy': 'recent',
             'prop_time': False,
-            'history': 2,
+            'history': 1,
             'duration': 0,
             'num_thread': 32
         }
@@ -33,7 +35,7 @@ class TestModel(unittest.TestCase):
 
         self.gnn_param = {
             'arch': 'transformer_attention',
-            'layer': 2,
+            'layer': 1,
             'att_head': 2,
             'dim_time': 100,
             'dim_out': 100,
@@ -56,8 +58,15 @@ class TestModel(unittest.TestCase):
         
         tgn = TGN(self.gnn_dim_node, self.gnn_dim_edge, 
                   self.sample_param, self.memory_param, 
-                  self.gnn_param, self.train_param, self.combined)
-        print("memory updater {}".format(tgn.memory_updater))
-        print("layers {}".format(tgn.layers))
+                  self.gnn_param, self.train_param, self.combined).cuda()
         
+        mfg = np.load('mfgs.npy', allow_pickle='TRUE')
+        mfgs = []
+        mfgs.append(mfg)
+        pred_pos, pred_neg = tgn(mfgs)
+        
+        creterion = torch.nn.BCEWithLogitsLoss()
+        loss = creterion(pred_pos, torch.ones_like(pred_pos))
+        loss += creterion(pred_neg, torch.zeros_like(pred_neg))
+        print("train loss: {}".format(loss))
         

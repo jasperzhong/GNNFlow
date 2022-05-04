@@ -3,45 +3,6 @@ import dgl
 from .memory_updater import *
 from .layers import *
 
-sample_param = {
-    'layer': 1,
-    'neighbor': 10,
-    'strategy': 'recent',
-    'prop_time': False,
-    'history': 1,
-    'duration': 0,
-    'num_thread': 32
-}
-
-memory_param = {
-    'type': 'node',
-    'dim_time': 100,
-    'deliver_to': 'self',
-    'mail_combine': 'last',
-    'memory_update': 'gru',
-    'mailbox_size': 1,
-    'combine_node_feature': True,
-    'dim_out': 100
-}
-
-gnn_param = {
-    'arch': 'transformer_attention',
-    'layer': 1,
-    'att_head': 2,
-    'dim_time': 100,
-    'dim_out': 100,
-}
-
-train_param = {
-    'epoch': 100,
-    'batch_size': 600,
-    # reorder: 16
-    'lr': 0.0001,
-    'dropout': 0.2,
-    'att_dropout': 0.2,
-    'all_on_gpu': True
-}
-
 class TGN(torch.nn.Module):
 
     def __init__(self, dim_node, dim_edge, sample_param, memory_param, gnn_param, train_param, combined=False):
