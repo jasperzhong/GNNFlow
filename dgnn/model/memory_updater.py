@@ -187,7 +187,6 @@ class GRUMemeoryUpdater(torch.nn.Module):
             # msg_dim comes from msg_function it maybe an mlp or identity
             # if is identity: msg_dim = raw_msg_dim = 2 * mem_dim + n_edge_dim + time_encoder_dim
             # updater(dim_in + dim_time -> msg_dim, dim_hid == mem_dim == dim_out)
-            # TODO: What's the msg_function
             # b.dstdata['mem_input'] ==> message ; b.srcdata['mem][:b.num_dst_nodes()] ==> target nodes' memory
             updated_memory = self.updater(b.dstdata['mem_input'], b.srcdata['mem'][:b.num_dst_nodes()])
             self.last_updated_ts = b.srcdata['ts'][:b.num_dst_nodes()].detach().clone()

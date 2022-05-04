@@ -51,7 +51,9 @@ class TestModel(unittest.TestCase):
         
         self.combined = False
         
-    def test_tgn(self):
+    def test_tgn_forward(self):
+        
+        
         tgn = TGN(self.gnn_dim_node, self.gnn_dim_edge, 
                   self.sample_param, self.memory_param, 
                   self.gnn_param, self.train_param, self.combined)
