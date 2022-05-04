@@ -136,12 +136,14 @@ class TransfomerAttentionLayer(torch.nn.Module):
             att = self.att_dropout(att)
             V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
             b.srcdata['v'] = torch.cat([torch.zeros((b.num_dst_nodes(), V.shape[1]), device=torch.device('cuda:0')), V], dim=0)
-             # edges.src['v'] -> edges.dst['m']
-            # 实际上是将周围邻居的attention后的msg，即为v先聚合到target node的memory中，然后将这些聚合的msg和mem原有的值一起加起来，作为features（embeddings）
+            # edges.src['v'] -> edges.dst['m']
+            # update_all function:
+            # 1. copy_src:First aggregate the "attentioned (or weighted sum)" msg from all the neighbors. That is, the 'v' is first aggregate to the target nodes' memory
+            # 2. sum: The aggregated msg from neighbors are then sum with the target nodes' memory. Then the outcome will serve as features (embeddings).
             b.update_all(dgl.function.copy_src('v', 'm'), dgl.function.sum('m', 'h'))
         if self.dim_node_feat != 0:
-            # 原本neighbors nodes' features存储在b.srcdata['h'][b.num_dst_nodes():]中
-            # aggregate之后存在了dst部分。
+            # The orgin neighbors nodes' features are stored in b.srcdata['h'][b.num_dst_nodes():]中
+            # After aggregation, the neighbors' node features are store in dstdata。
             # b.srcdata['h'][:b.num_dst_nodes()] ==> target nodes' features
             # b.dstdata['h'] ==> neighbor nodes' aggregated features
             rst = torch.cat([b.dstdata['h'], b.srcdata['h'][:b.num_dst_nodes()]], dim=1)
