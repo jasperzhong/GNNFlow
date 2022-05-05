@@ -14,15 +14,13 @@ class TestBuildGraph(unittest.TestCase):
         dgraph = build_dynamic_graph("REDDIT")
         df = load_graph("REDDIT")
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
-        train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)
         srcs = np.unique(srcs)
         
         dsts = np.array(df['dst'][:train_edge_end], dtype=int)
         dsts = np.unique(dsts)
         
-        # TODO: Test Not Pass
-        # self.assertEqual(dgraph.num_vertices, len(srcs) + len(dsts))
+        self.assertEqual(dgraph.num_vertices - 1, max(np.max(srcs), np.max(dsts)))
         
         # Test edges
         for src in srcs:
