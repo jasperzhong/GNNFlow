@@ -21,9 +21,11 @@ class TestTemporalBlock(unittest.TestCase):
         timestamps, _ = torch.sort(timestamps.reshape(-1))
         timestamps = timestamps.reshape(
             num_insertions, num_edge_every_insertion)
+        edge_ids = torch.arange(0, num_insertions * num_edge_every_insertion)
+        edge_ids = edge_ids.reshape(num_insertions, num_edge_every_insertion)
 
         for i in range(num_insertions):
-            tblock.add_edges(edges[i], timestamps[i])
+            tblock.add_edges(edges[i], timestamps[i], edge_ids[i])
 
         self.assertTrue(is_sorted(tblock.timestamps),
                         "timestamps are not sorted")
@@ -43,9 +45,12 @@ class TestTemporalBlock(unittest.TestCase):
         timestamps, _ = torch.sort(timestamps.reshape(-1))
         timestamps = timestamps.reshape(
             num_insertions, num_edge_every_insertion)
+        edge_ids = torch.arange(0, num_insertions * num_edge_every_insertion)
+        edge_ids = edge_ids.reshape(num_insertions, num_edge_every_insertion)
 
         for i in range(num_insertions):
-            tblock.add_edges(edges[i].to("cuda:0"), timestamps[i].to("cuda:0"))
+            tblock.add_edges(edges[i].to("cuda:0"), timestamps[i].to("cuda:0"),
+                             edge_ids[i].to("cuda:0"))
 
         self.assertTrue(is_sorted(tblock.timestamps),
                         "timestamps are not sorted")
@@ -58,7 +63,7 @@ class TestTemporalBlock(unittest.TestCase):
     def test_add_edges_in_different_dtypes(self, target_vertex_dtype, timestamp_dtype):
         tblock = TemporalBlock(2, torch.device("cuda:0"))
         tblock.add_edges(torch.tensor([0, 1], dtype=target_vertex_dtype), torch.tensor(
-            [0, 1], dtype=timestamp_dtype))
+            [0, 1], dtype=timestamp_dtype), torch.tensor([0, 1], dtype=target_vertex_dtype))
         print("Add edges in different dtypes test passed")
 
     def test_add_edges_in_wrong_dtype(self):
@@ -67,10 +72,12 @@ class TestTemporalBlock(unittest.TestCase):
         """
         tblock = TemporalBlock(2, torch.device("cuda:0"))
         self.assertRaises(ValueError, tblock.add_edges, torch.tensor(
-            [0, 1], dtype=torch.float32), torch.tensor([0, 1], dtype=torch.float32))
+            [0, 1], dtype=torch.float32), torch.tensor([0, 1], dtype=torch.float32),
+            torch.tensor([0, 1], dtype=torch.float32))
 
         self.assertRaises(ValueError, tblock.add_edges, torch.tensor(
-            [0, 1], dtype=torch.int16), torch.tensor([0, 1], dtype=torch.float32))
+            [0, 1], dtype=torch.int16), torch.tensor([0, 1], dtype=torch.float32),
+            torch.tensor([0, 1], dtype=torch.float32))
         print("Add edges in wrong dtype test passed")
 
     def test_out_of_capacity(self):
@@ -78,9 +85,10 @@ class TestTemporalBlock(unittest.TestCase):
         Test if the temporal block can raise an error when the capacity is exceeded.
         """
         tblock = TemporalBlock(2, torch.device("cuda:0"))
-        tblock.add_edges(torch.tensor([0, 1]), torch.tensor([0, 1]))
-        self.assertRaises(RuntimeError, tblock.add_edges,
-                          torch.tensor([2]), torch.tensor([2]))
+        tblock.add_edges(torch.tensor([0, 1]), torch.tensor(
+            [0, 1]), torch.tensor([0, 1]))
+        self.assertRaises(RuntimeError, tblock.add_edges, torch.tensor([0, 1]),
+                          torch.tensor([0, 1]), torch.tensor([0, 1]))
         print("Out of capacity test passed")
 
     def test_copy(self):
@@ -88,12 +96,14 @@ class TestTemporalBlock(unittest.TestCase):
         Test if the copy method works correctly.
         """
         tblock = TemporalBlock(2, torch.device("cuda:0"))
-        tblock.add_edges(torch.tensor([0, 1]), torch.tensor([0, 1]))
+        tblock.add_edges(torch.tensor([0, 1]), torch.tensor([0, 1]), torch.tensor([0, 1]))
         tblock_copy = TemporalBlock(4, torch.device("cuda:0"))
         tblock.copy_to(tblock_copy, tblock.device)
         self.assertTrue(tblock_copy.target_vertices.eq(
             tblock.target_vertices).all())
         self.assertTrue(tblock_copy.timestamps.eq(
             tblock.timestamps).all())
+        self.assertTrue(tblock_copy.edge_ids.eq(
+            tblock.edge_ids).all())
         self.assertEqual(tblock_copy.size, tblock.size)
         print("Copy test passed")

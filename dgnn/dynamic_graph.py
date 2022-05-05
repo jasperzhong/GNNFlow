@@ -1,4 +1,4 @@
-from typing import Optional, Union, Tuple, List
+from typing import Optional, Tuple, Union
 
 import torch
 
@@ -9,8 +9,8 @@ class DynamicGraph:
     """
     A dynamic graph is a graph that can be modified at runtime.
 
-    The dynamic graph is implemented as block adjacency list. It has a vertex 
-    table where each entry is a linked list of blocks. Each block contains 
+    The dynamic graph is implemented as block adjacency list. It has a vertex
+    table where each entry is a linked list of blocks. Each block contains
     a list of edges. Each edge is a tuple of (target_vertex, timestamp).
     """
 
@@ -22,22 +22,23 @@ class DynamicGraph:
                  block_size: int = 1024,
                  insertion_policy: str = "reallocate"):
         """
-        The graph is initially empty and can be optionaly initialized with 
-        a list of edges. 
+        The graph is initially empty and can be optionaly initialized with
+        a list of edges.
 
         Arguments:
             source_vertices: optional, 1D tensor, the source vertices of the edges.
             target_vertices: optional, 1D tensor, the target vertices of the edges.
-            timestamps: optional, 1D tensor, the timestamps of the edges. 
+            timestamps: optional, 1D tensor, the timestamps of the edges.
             device: the device to use.
             block_size: size of the blocks.
             gpu_mem_threshold_in_bytes: threshold for GPU memory.
-            insertion_policy: the insertion policy to use ("reallocate" or "new"). 
+            insertion_policy: the insertion policy to use ("reallocate" or "new").
                               Case insensitive.
         """
         # lazy initialization
         self._vertex_table = []
-        self._num_vertex = 0
+        self._num_vertices = 0
+        self._num_edges = 0
         self._allocator = CachingAllocator(
             device, gpu_mem_threshold_in_bytes, block_size)
         self._device = device
@@ -50,74 +51,10 @@ class DynamicGraph:
         if source_vertices is not None and target_vertices is not None and timestamps is not None:
             self.add_edges(source_vertices, target_vertices, timestamps)
 
-    def add_edges_for_one_vertex(self, source_vertex: int,
-                                 target_vertices: torch.Tensor,
-                                 timestamps: torch.Tensor):
-        """
-        Add edges for a specified vertex. Assume that target_vertices have been 
-        sorted in ascending order of timestamps and that the timestamps are
-        newer than the existing edges.
-
-        Arguments:
-            source_vertex: the vertex to add edges for.
-            target_vertices: the target vertices of the edges.
-            timestamps: the timestamps of the edges.
-
-        Note that duplicate edges are allowed.
-        """
-        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
-        assert len(target_vertices.shape) == 1 and len(
-            timestamps.shape) == 1, "Target vertices and timestamps must be 1D"
-
-        if source_vertex < 0:
-            raise ValueError("source_vertex must be non-negative")
-
-        max_vertex = int(target_vertices.max().item())
-        max_vertex = max(max_vertex, source_vertex) 
-        if max_vertex >= self._num_vertex:
-            # lazy initialization
-            self.add_vertices(max_vertex)
-
-        incoming_size = target_vertices.size(0)
-        if self._vertex_table[source_vertex] is None:
-            # lazy initialization
-            block = self._allocator.allocate_on_gpu(incoming_size)
-            self._vertex_table[source_vertex] = block
-
-        curr_block = self._vertex_table[source_vertex]
-        if curr_block.size + incoming_size > curr_block.capacity:
-            # if current block cannot hold the incoming edges, we need to
-            # reallocate the current block or create a new block based on
-            # the insertion policy.
-            if self._insertion_policy == "reallocate":
-                # reallocate
-                block = self._allocator.reallocate_on_gpu(
-                    curr_block, curr_block.size + incoming_size)
-                self._vertex_table[source_vertex] = block
-            elif self._insertion_policy == "new":
-                # create a new block
-                block = self._allocator.allocate_on_gpu(incoming_size)
-                block.next_block = curr_block
-                self._vertex_table[source_vertex] = block
-            else:
-                raise ValueError("Invalid insertion policy: {}".format(
-                    self._insertion_policy))
-
-            curr_block = block
-
-        # check timestamps are newer than the existing edges
-        if curr_block.size > 0:
-            if timestamps[0] <= curr_block.timestamps[curr_block.size - 1]:
-                raise ValueError(
-                    "Timestamps must be newer than the existing edges")
-
-        # add the edges to the current block
-        curr_block.add_edges(target_vertices, timestamps)
-
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   timestamps: torch.Tensor):
         """
-        Add edges to the graph. 
+        Add edges to the graph.
 
         Arguments:
             source_vertices: 1D tensor, the source vertices of the edges.
@@ -149,8 +86,8 @@ class DynamicGraph:
             target_vertices_i = target_vertices_i[sorted_idx]
             timestamps_i = timestamps_i[sorted_idx]
 
-            self.add_edges_for_one_vertex(source_vertex, target_vertices_i,
-                                          timestamps_i)
+            self._add_edges_for_one_vertex(source_vertex, target_vertices_i,
+                                           timestamps_i)
 
     def add_vertices(self, max_vertex: int):
         """
@@ -159,36 +96,93 @@ class DynamicGraph:
         Arguments:
             max_vertex: the maximum vertex id to add.
         """
-        assert max_vertex >= self._num_vertex, "max_vertex must be greater than or equal to num_vertex"
+        assert max_vertex >= self._num_vertices, "max_vertex must be greater " \
+            "than or equal to num_vertex"
 
-        diff = max_vertex - self._num_vertex + 1
+        diff = max_vertex - self._num_vertices + 1
         self._vertex_table.extend([None for _ in range(diff)])
-        self._num_vertex = max_vertex + 1
+        self._num_vertices = max_vertex + 1
 
-    def num_vertices(self) -> int:
+    def _add_edges_for_one_vertex(self, source_vertex: int,
+                                  target_vertices: torch.Tensor,
+                                  timestamps: torch.Tensor):
         """
-        Return the number of vertices in the graph.
-        """
-        return self._num_vertex
+        Add edges for a specified vertex. Assume that target_vertices have been
+        sorted in ascending order of timestamps and that the timestamps are
+        newer than the existing edges.
 
-    def num_edges(self) -> int:
-        """
-        Return the number of edges in the graph.
-        """
-        num_edges = 0
-        for i in range(self._num_vertex):
-            curr_block = self._vertex_table[i]
-            while curr_block is not None:
-                num_edges += curr_block.size
-                curr_block = curr_block.next_block
+        Arguments:
+            source_vertex: the vertex to add edges for.
+            target_vertices: the target vertices of the edges.
+            timestamps: the timestamps of the edges.
 
-        return num_edges
+        Note that duplicate edges are allowed.
+        """
+        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
+        assert len(target_vertices.shape) == 1 and len(
+            timestamps.shape) == 1, "Target vertices and timestamps must be 1D"
+
+        if source_vertex < 0:
+            raise ValueError("source_vertex must be non-negative")
+
+        max_vertex = int(target_vertices.max().item())
+        max_vertex = max(max_vertex, source_vertex)
+        if max_vertex >= self._num_vertices:
+            # lazy initialization
+            self.add_vertices(max_vertex)
+
+        incoming_size = target_vertices.size(0)
+        if self._vertex_table[source_vertex] is None:
+            # lazy initialization
+            block = self._allocator.allocate_on_gpu(incoming_size)
+            self._vertex_table[source_vertex] = block
+
+        curr_block = self._vertex_table[source_vertex]
+        if curr_block.size + incoming_size > curr_block.capacity:
+            # if current block cannot hold the incoming edges, we need to
+            # reallocate the current block or create a new block based on
+            # the insertion policy.
+            if self._insertion_policy == "reallocate":
+                # reallocate
+                block = self._allocator.reallocate_on_gpu(
+                    curr_block, curr_block.size + incoming_size)
+                self._vertex_table[source_vertex] = block
+            elif self._insertion_policy == "new":
+                # create a new block
+                block = self._allocator.allocate_on_gpu(incoming_size)
+                block.next_block = curr_block
+                self._vertex_table[source_vertex] = block
+            else:
+                raise ValueError("Invalid insertion policy: {}".format(
+                    self._insertion_policy))
+
+            curr_block = block
+
+        # check timestamps are newer than the existing edges
+        if not curr_block.empty():
+            if timestamps[0] <= curr_block.end_timestamp():
+                raise ValueError(
+                    "Timestamps must be newer than the existing edges")
+
+        # add the edges to the current block
+        edges_ids = torch.arange(
+            self._num_edges, self._num_edges + incoming_size)
+        curr_block.add_edges(target_vertices, timestamps, edges_ids)
+        self._num_edges += incoming_size
+
+    @property
+    def num_vertices(self):
+        return self._num_vertices
+
+    @property
+    def num_edges(self):
+        return self._num_edges
 
     def out_degree(self, vertex: int) -> int:
         """
         Return the out degree of the specified vertex.
         """
-        assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
+        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
 
         out_degree = 0
         curr_block = self._vertex_table[vertex]
@@ -198,24 +192,194 @@ class DynamicGraph:
 
         return out_degree
 
-    def out_edges(self, vertex: int) -> Tuple[List, List]:
+    def get_temporal_neighbors(self, vertex: int, start_timestamp: float = float("-inf"),
+                               end_timestamp: float = float("inf")) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Return the out edges of the specified vertex. The edges are sorted by
-        timestamps in descending order (i.e., the newest edge is at the front 
-        of the list).
-        """
-        assert vertex >= 0 and vertex < self._num_vertex, "vertex must be in range"
+        Return the neighbors of the specified vertex (vertex ids, timestamps, edge ids)
+        in the specified time range [start_timestamp, end_timestamp].The neighbors 
+        are sorted by timestamps in decending order.
 
-        target_vertices = []
-        timestamps = []
+        Arguments:
+            vertex: the vertex to get neighbors for.
+            start_timestamp: the start timestamp. Default to float("-inf").
+            end_timestamp: the end timestamp. Default to float("inf").
+
+        Returns: A tuple of (target_vertices, timestamps, edge_ids)
+        """
+        assert vertex >= 0 and vertex < self._num_vertices, "vertex must be in range"
+        assert start_timestamp <= end_timestamp, "start_timestamp must be less" \
+            " than or equal to end_timestamp"
+
+        if start_timestamp == float("-inf") and end_timestamp == float("inf"):
+            # no need to filter
+            return self._get_neighbors(vertex)
+        elif start_timestamp == float("-inf") and end_timestamp < float("inf"):
+            # filter by end_timestamp
+            return self._get_neighbors_before_timestamp(vertex, end_timestamp)
+        elif start_timestamp > float("-inf") and end_timestamp == float("inf"):
+            # filter by start_timestamp
+            return self._get_neighbors_after_timestamp(vertex, start_timestamp)
+        else:
+            # filter by start_timestamp and end_timestamp
+            return self._get_neighbors_between_timestamps(vertex, start_timestamp, end_timestamp)
+
+    def _get_neighbors(self, vertex: int) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        target_vertices = torch.LongTensor()
+        timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
         curr_block = self._vertex_table[vertex]
         while curr_block is not None:
-            if curr_block.size > 0:
-                target_vertices.extend(
-                    curr_block.target_vertices.flip(dims=[0]).tolist())
-                timestamps.extend(
-                    curr_block.timestamps.flip(dims=[0]).tolist())
+            if not curr_block.empty():
+                target_vertices = torch.cat(
+                    (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                timestamps = torch.cat(
+                    (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                edge_ids = torch.cat(
+                    (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
 
             curr_block = curr_block.next_block
 
-        return target_vertices, timestamps
+        return target_vertices, timestamps, edge_ids
+
+    def _get_neighbors_before_timestamp(self, vertex: int, timestamp: float) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        target_vertices = torch.LongTensor()
+        timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
+        curr_block = self._vertex_table[vertex]
+        while curr_block is not None:
+            if not curr_block.empty():
+                if timestamp < curr_block.start_timestamp():
+                    # this block does not contain any edges before the timestamp
+                    pass
+                elif timestamp > curr_block.end_timestamp():
+                    # this block contains all edges before the timestamp
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+                else:
+                    # find the first edge before the timestamp
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
+                                             side='right')
+                    if idx > 0:
+                        target_vertices = torch.cat(
+                            (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
+                        timestamps = torch.cat(
+                            (timestamps, curr_block.timestamps[:idx].flip(dims=[0]).cpu()), dim=0)
+                        edge_ids = torch.cat(
+                            (edge_ids, curr_block.edge_ids[:idx].flip(dims=[0]).cpu()), dim=0)
+
+                curr_block = curr_block.next_block
+
+        return target_vertices, timestamps, edge_ids
+
+    def _get_neighbors_after_timestamp(self, vertex: int, timestamp: float) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        target_vertices = torch.LongTensor()
+        timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
+        curr_block = self._vertex_table[vertex]
+        while curr_block is not None:
+            if not curr_block.empty():
+                if timestamp > curr_block.end_timestamp():
+                    # this block does not contain any edges after the timestamp
+                    # no need to search in the next block
+                    break
+                elif timestamp < curr_block.start_timestamp():
+                    # this block contains all edges after the timestamp
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+                else:
+                    # find the first edge after the timestamp
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
+                                             side='left')
+                    if idx < curr_block.size:
+                        target_vertices = torch.cat(
+                            (target_vertices, curr_block.target_vertices[idx:].flip(dims=[0]).cpu()), dim=0)
+                        timestamps = torch.cat(
+                            (timestamps, curr_block.timestamps[idx:].flip(dims=[0]).cpu()), dim=0)
+                        edge_ids = torch.cat(
+                            (edge_ids, curr_block.edge_ids[idx:].flip(dims=[0]).cpu()), dim=0)
+
+                curr_block = curr_block.next_block
+
+        return target_vertices, timestamps, edge_ids
+
+    def _get_neighbors_between_timestamps(self, vertex: int, start_timestamp: float,
+                                          end_timestamp: float) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        target_vertices = torch.LongTensor()
+        timestamps = torch.FloatTensor()
+        edge_ids = torch.LongTensor()
+        curr_block = self._vertex_table[vertex]
+        while curr_block is not None:
+            if not curr_block.empty():
+                if end_timestamp < curr_block.start_timestamp():
+                    # search in the next block
+                    curr_block = curr_block.next_block
+                    continue
+
+                if start_timestamp > curr_block.end_timestamp():
+                    # no need to search in the next block
+                    break
+
+                # search in the current block
+                if start_timestamp >= curr_block.start_timestamp() and \
+                        end_timestamp <= curr_block.end_timestamp():
+                    # all edges are in the current block
+                    start_idx = torch.searchsorted(curr_block.timestamps, start_timestamp,
+                                                   side='left')
+                    end_idx = torch.searchsorted(curr_block.timestamps, end_timestamp,
+                                                 side='right')
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
+
+                    break
+                elif start_timestamp < curr_block.start_timestamp() and \
+                        end_timestamp <= curr_block.end_timestamp():
+                    # only the edges before end_timestamp are in the current block
+                    idx = torch.searchsorted(curr_block.timestamps, end_timestamp,
+                                             side='right')
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps[:idx].flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids[:idx].flip(dims=[0]).cpu()), dim=0)
+
+                    curr_block = curr_block.next_block
+                    continue
+                elif start_timestamp >= curr_block.start_timestamp() and \
+                        end_timestamp > curr_block.end_timestamp():
+                    # only the edges after start_timestamp are in the current block
+                    idx = torch.searchsorted(curr_block.timestamps, start_timestamp,
+                                             side='left')
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices[idx:].flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps[idx:].flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids[idx:].flip(dims=[0]).cpu()), dim=0)
+
+                    break
+                else:
+                    assert False, "should not reach here"
+
+        return target_vertices, timestamps, edge_ids
