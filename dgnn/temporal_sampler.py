@@ -18,7 +18,7 @@ class TemporalSampler:
         """
         Initialize the sampler.
 
-        Arguments:
+        Args:
             graph: the dynamic graph
             fanouts: fanouts of each layer
             strategy: sampling strategy, 'recent' or 'uniform'
@@ -54,11 +54,12 @@ class TemporalSampler:
         """
         Sample k-hop neighbors of given vertices.
 
-        Arguments:
+        Args:
             target_vertices: root vertices to sample
             timestamps: timestamps of target vertices
 
-        Returns: list of message flow graphs (# of graphs = # of snapshots) for
+        Returns: 
+            list of message flow graphs (# of graphs = # of snapshots) for
             each layer.
         """
         assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"

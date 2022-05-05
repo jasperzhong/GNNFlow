@@ -27,7 +27,7 @@ class TemporalBlock:
         """
         Create a new temporal block. The block is initially empty.
 
-        Arguments:
+        Args:
             capacity: The maximum number of edges that can be stored in the block.
             device: The device to store the block on.
         """
@@ -44,12 +44,13 @@ class TemporalBlock:
         """
         Add edges to the block. Assume that the edges are sorted by timestamp.
 
-        Arguments:
+        Args:
             target_vertices: Tensor of shape (N,), where N is the number of edges.
             timestamps: Tensor of shape (N,), where N is the number of edges.
             edge_ids: Tensor of shape (N,), where N is the number of edges.
 
-        Note: raise RuntimeError if the block cannot hold more edges.
+        Raises:
+            RuntimeError: If the block cannot hold more edges.
         """
         assert target_vertices.shape[0] == timestamps.shape[0] == edge_ids.shape[0], \
             "The number of edges must be the same."
@@ -103,7 +104,7 @@ class TemporalBlock:
         """
         Move the block to the specified device.
 
-        Arguments:
+        Args:
             device: The device to move the block to.
         """
         if not self.empty():
@@ -117,7 +118,7 @@ class TemporalBlock:
         """
         Copy the block to another block.
 
-        Arguments:
+        Args:
             other: The block to copy to.
             device: The device to copy the block to.
         """

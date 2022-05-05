@@ -29,7 +29,7 @@ class CachingAllocator:
     def __init__(self, device: Union[torch.device, str],
                  gpu_mem_threshold_in_bytes: int, block_size: int):
         """
-        Arguments:
+        Args:
             device: The GPU device.
             gpu_mem_threshold_in_bytes: The threshold of GPU memory usage.
             block_size: The size of temporal blocks.
@@ -57,8 +57,14 @@ class CachingAllocator:
         Allocates a temporal block on the GPU. If failed to allocate a temporal
         block, raise an exception.
 
-        Arguments:
+        Args:
             size: The size of the temporal block.
+
+        Returns:
+            The allocated temporal block.
+
+        Raises:
+            RuntimeError: If failed to allocate a temporal block.
         """
         capacity = align(size, self._block_size)
         requested_size_in_bytes = capacity_to_bytes(capacity)
@@ -89,7 +95,7 @@ class CachingAllocator:
         Deallocates a temporal block. The deallocated temporal block is
         marked as free for later reuse.
 
-        Arguments:
+        Args:
             temporal_block: The temporal block to be deallocated.
         """
         if temporal_block in self._used_gpu_blocks:
@@ -108,9 +114,15 @@ class CachingAllocator:
         """
         Reallocates a temporal block on the GPU.
 
-        Arguments:
+        Args:
             temporal_block: The temporal block to be reallocated.
             size: The size of the temporal block.
+
+        Returns:
+            The reallocated temporal block.
+
+        Raises:
+            RuntimeError: If failed to reallocate a temporal block.
         """
         # save device because this block may swap to cpu
         device = temporal_block.device
@@ -124,7 +136,13 @@ class CachingAllocator:
         """
         Swaps old and unused temporal blocks on the GPU to the CPU if the 
         minimum_swap_size_in_bytes is  reached. If failed to swap enough 
-        temporal blocks,  raise an exception.
+        temporal blocks, raise an exception.
+
+        Args:
+            minimum_swap_size_in_bytes: The minimum size of temporal blocks
+
+        Raises:
+            RuntimeError: If failed to swap enough temporal blocks.
         """
         # TODO:may also need sort
         for capacity, blocks in self._free_gpu_blocks.items():
@@ -165,7 +183,10 @@ class CachingAllocator:
 
     def get_gpu_memory_usage_in_bytes(self) -> int:
         """
-        Returns the GPU memory usage in bytes.
+        Get the GPU memory usage in bytes.
+
+        Returns:
+            the GPU memory usage in bytes.
         """
         return self._gpu_mem_usage_in_bytes
 
