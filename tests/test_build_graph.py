@@ -1,8 +1,5 @@
-from distutils.command.build import build
 import unittest
 import numpy as np
-import torch
-
 from dgnn.build_graph import build_dynamic_graph, load_graph
 
 class TestBuildGraph(unittest.TestCase):
@@ -11,8 +8,8 @@ class TestBuildGraph(unittest.TestCase):
         Test building a dynamic graph from edges.csv(REDDIT)
         Only use training data to build a graph
         """
-        dgraph = build_dynamic_graph("REDDIT")
-        df = load_graph("REDDIT")
+        dgraph = build_dynamic_graph(None, "REDDIT")
+        df = load_graph(None, "REDDIT")
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)
         srcs = np.unique(srcs)
