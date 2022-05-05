@@ -25,7 +25,7 @@ class DynamicGraph:
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
 
-        Arguments:
+        Args:
             source_vertices: optional, 1D tensor, the source vertices of the edges.
             target_vertices: optional, 1D tensor, the target vertices of the edges.
             timestamps: optional, 1D tensor, the timestamps of the edges.
@@ -54,17 +54,18 @@ class DynamicGraph:
     def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   timestamps: torch.Tensor):
         """
-        Add edges to the graph.
+        Add edges to the graph. The input tensors can be on CPU or GPU.
 
-        Arguments:
+        Note that we do not assume that the incoming edges are sorted by
+        timestamps. The function will sort the incoming edges by timestamps.
+
+        Args:
             source_vertices: 1D tensor, the source vertices of the edges.
             target_vertices: 1D tensor, the target vertices of the edges.
             timestamps: 1D tensor, the timestamps of the edges.
 
-        The input tensors can be on CPU or GPU.
-
-        Note that we do not assume that the incoming edges are sorted by
-        timestamps. The function will sort the incoming edges by timestamps.
+        Raises:
+            ValueError: if the timestamps are not in ascending order.
         """
         assert source_vertices.shape[0] == target_vertices.shape[0] == \
             timestamps.shape[0], "Number of edges must match"
@@ -93,7 +94,7 @@ class DynamicGraph:
         """
         Add vertices to the graph.
 
-        Arguments:
+        Args:
             max_vertex: the maximum vertex id to add.
         """
         assert max_vertex >= self._num_vertices, "max_vertex must be greater " \
@@ -111,7 +112,7 @@ class DynamicGraph:
         sorted in ascending order of timestamps and that the timestamps are
         newer than the existing edges.
 
-        Arguments:
+        Args:
             source_vertex: the vertex to add edges for.
             target_vertices: the target vertices of the edges.
             timestamps: the timestamps of the edges.
@@ -200,7 +201,7 @@ class DynamicGraph:
         in the specified time range [start_timestamp, end_timestamp].The neighbors 
         are sorted by timestamps in decending order.
 
-        Arguments:
+        Args:
             vertex: the vertex to get neighbors for.
             start_timestamp: the start timestamp. Default to float("-inf").
             end_timestamp: the end timestamp. Default to float("inf").

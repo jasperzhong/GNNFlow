@@ -8,13 +8,28 @@ Welcome to Dynamic Graph Neural Networks's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: API References
+   :hidden:
+
+   modules
 
 
+Dynamic Graph Neural Networks (DGNN) is a Python package for building and training
+dynamic graph neural networks. 
 
-Indices and tables
-==================
 
+Installation
+------------
+
+To install DGNN, run the following command:
+
+.. code:: bash
+
+    git clone https://github.com/yuchenzhong/dynamic-graph-neural-network.git
+    cd dynamic-graph-neural-network
+    pip install -e .
+
+
+Index
+-----
 * :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
