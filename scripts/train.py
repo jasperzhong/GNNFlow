@@ -1,10 +1,11 @@
 import argparse
 import torch
 import time
-from dgnn.build_graph import build_dynamic_graph, load_graph, get_batch
+from dgnn.build_graph import build_dynamic_graph, load_graph, get_batch, load_feat
 from dgnn.model.memory_updater import MailBox
 from dgnn.model.tgn import TGN
 from dgnn.temporal_sampler import TemporalSampler
+from dgnn.utils import prepare_input
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
@@ -56,6 +57,7 @@ gnn_dim_node = 0
 gnn_dim_edge = 0
 
 # Build Graph, block_size = 1024
+node_feats, edge_feats = load_feat(None, 'REDDIT')
 df = load_graph(None, 'REDDIT')
 dgraph = build_dynamic_graph(df)
 
@@ -89,9 +91,10 @@ for e in range(args.epoch):
         mfgs = sampler.sample(target_nodes, ts)
         
         sample_end = time.time()
-        # TODO: put features into mfgs
-
+        
+        # TODO: where to put features? cuda or cpu. TGL in cuda
         mfgs[0][0] = mfgs[0][0].to('cuda:0')
+        mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mailbox.prep_input_mails(mfgs[0])
         
         optimizer.zero_grad()
@@ -119,3 +122,5 @@ for e in range(args.epoch):
             print('Iteration:{}. Train loss:{:.4f}'.format(i, loss))
             print('Iteration time:{:.2f}s; sample time:{:.2f}s; train time:{:.2f}s.'
                   .format(iteration_time / (i + 1), sample_time / (i + 1), train_time / (i + 1)))
+            
+# TODO: Validation
