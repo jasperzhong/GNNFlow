@@ -81,8 +81,12 @@ test_sampler = TemporalSampler(test_graph, [10], 'recent')
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=train_param['lr'])
 
+best_ap = 0
+best_e = 0
+
 for e in range(args.epoch):
     print("Epoch {}".format(e))
+    epoch_time_start = time.time()
     total_loss = 0
     iteration_time = 0
     sample_time = 0
@@ -130,12 +134,18 @@ for e in range(args.epoch):
             print('Iteration time:{:.2f}s; sample time:{:.2f}s; train time:{:.2f}s.'
                   .format(iteration_time / (i + 1), sample_time / (i + 1), train_time / (i + 1)))
 
-            
-    # TODO: Validation
+    epoch_time_end = time.time()
+    epoch_time = epoch_time_end - epoch_time_start
+    
+    # Validation
     print("***Start validation at epoch {}***".format(e))
+    val_start = time.time()
     ap, auc = val(df[1], val_sampler, mailbox, model, node_feats, 
         edge_feats, creterion, mode='val')
-    print("val ap:{:4f}  val auc:{:4f}".format(ap, auc))
+    val_end = time.time()
+    val_time = val_end - val_start
+    print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
+          .format(epoch_time, val_time, ap, auc))
     if e > 2 and ap > best_ap:
         best_e = e
         best_ap = ap
