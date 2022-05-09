@@ -63,6 +63,7 @@ class MailBox():
                 torch.index_select(self.mailbox_ts, 0, dst_idx, out=self.pinned_mailbox_ts_buffs[i][:dst_idx.shape[0]])
                 b.dstdata['mail_ts'] = self.pinned_mailbox_ts_buffs[i][:dst_idx.shape[0]].cuda(non_blocking=True)
             else:
+                # TODO: Check whether it is right!!!
                 dst_id = b.srcdata['ID'][:b.num_dst_nodes()].long()
                 b.srcdata['mem'] = self.node_memory[b.srcdata['ID'].long()].cuda()
                 b.dstdata['mem_ts'] = self.node_memory_ts[dst_id].cuda()
@@ -184,6 +185,9 @@ class GRUMemeoryUpdater(torch.nn.Module):
     def forward(self, mfg):
         for b in mfg:
             if self.dim_time > 0:
+                print(b.srcdata['ts'][:b.num_dst_nodes()])
+                print(b.dstdata['mem_ts'])
+                print(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
                 time_feat = self.time_enc(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
                 b.dstdata['mem_input'] = torch.cat([b.dstdata['mem_input'], time_feat], dim=1)
             # updater take two inputs: input_size = msg_dim & hidden_size = mem_dim
