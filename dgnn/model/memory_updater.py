@@ -185,9 +185,6 @@ class GRUMemeoryUpdater(torch.nn.Module):
     def forward(self, mfg):
         for b in mfg:
             if self.dim_time > 0:
-                print(b.srcdata['ts'][:b.num_dst_nodes()])
-                print(b.dstdata['mem_ts'])
-                print(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
                 time_feat = self.time_enc(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
                 b.dstdata['mem_input'] = torch.cat([b.dstdata['mem_input'], time_feat], dim=1)
             # updater take two inputs: input_size = msg_dim & hidden_size = mem_dim
