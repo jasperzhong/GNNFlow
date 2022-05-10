@@ -54,7 +54,8 @@ train_param = {
         }
 
 # Build Graph, block_size = 1024
-path_saver = 'models/{}.pt'.format(args.model)
+path_saver = '../models/{}.pt'.format(args.model)
+path_saver_2 = '../models/tgn_best.pt'
 node_feats, edge_feats = load_feat(None, 'REDDIT')
 df = load_graph(None, 'REDDIT')
 # df[0] consist train part of the data
@@ -69,8 +70,10 @@ model = TGN(gnn_dim_node, gnn_dim_edge,
           sample_param, memory_param,
           gnn_param, train_param).cuda()
 
+torch.save(model.state_dict(), path_saver)
+
 # TODO: MailBox. Check num_vertices
-mailbox = MailBox(memory_param, dgraph.num_vertices + 1, gnn_dim_edge)
+mailbox = MailBox(memory_param, dgraph.num_vertices + 3, gnn_dim_edge)
 mailbox.move_to_gpu()
 
 # this sampler only sample train part of the data
@@ -146,7 +149,7 @@ for e in range(args.epoch):
     val_time = val_end - val_start
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
           .format(epoch_time, val_time, ap, auc))
-    if e > 2 and ap > best_ap:
+    if e > 1 and ap > best_ap:
         best_e = e
         best_ap = ap
         torch.save(model.state_dict(), path_saver)
