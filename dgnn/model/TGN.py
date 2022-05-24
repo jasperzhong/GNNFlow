@@ -1,5 +1,4 @@
 import torch
-import dgl
 from .memory_updater import *
 from .layers import *
 
@@ -30,7 +29,7 @@ class TGN(torch.nn.Module):
         
         self.edge_predictor = EdgePredictor(gnn_param['dim_out'])
     
-    def forward(self, mfgs):
+    def forward(self, mfgs, neg_samples=1):
         self.memory_updater(mfgs[0])
         
         out = list()
@@ -47,7 +46,7 @@ class TGN(torch.nn.Module):
         else:
             out = torch.stack(out, dim=0)
             out = self.combiner(out)[0][-1, :, :]
-        return self.edge_predictor(out)
+        return self.edge_predictor(out, neg_samples=neg_samples)
 
     def get_emb(self, mfgs):
         self.memory_updater(mfgs[0])
