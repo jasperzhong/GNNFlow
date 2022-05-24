@@ -161,3 +161,24 @@ class IdentityNormLayer(torch.nn.Module):
 
     def forward(self, b):
         return self.norm(b.srcdata['h'])
+     
+class JODIETimeEmbedding(torch.nn.Module):
+
+    def __init__(self, dim_out):
+        super(JODIETimeEmbedding, self).__init__()
+        self.dim_out = dim_out
+
+        class NormalLinear(torch.nn.Linear):
+        # From Jodie code
+            def reset_parameters(self):
+                stdv = 1. / math.sqrt(self.weight.size(1))
+                self.weight.data.normal_(0, stdv)
+                if self.bias is not None:
+                    self.bias.data.normal_(0, stdv)
+
+        self.time_emb = NormalLinear(1, dim_out)
+    
+    def forward(self, h, mem_ts, ts):
+        time_diff = (ts - mem_ts) / (ts + 1)
+        rst = h * (1 + self.time_emb(time_diff.unsqueeze(1)))
+        return rst
