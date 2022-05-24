@@ -1,7 +1,7 @@
 import itertools
 import unittest
 import parameterized as parameterized
-from dgnn.model.tgn import TGN
+from dgnn.model.TGN import TGN
 import torch
 import numpy as np
 

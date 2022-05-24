@@ -3,7 +3,7 @@ import torch
 import time
 from dgnn.build_graph import build_dynamic_graph, load_graph, get_batch, load_feat
 from dgnn.model.memory_updater import MailBox
-from dgnn.model.tgn import TGN
+from dgnn.model.TGN import TGN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import prepare_input
 from scripts.validation import val
