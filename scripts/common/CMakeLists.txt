@@ -3,8 +3,10 @@ project(common)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../dgnn/common)
 
+list(APPEND SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../dgnn/common/logging.cc")
+
 file(GLOB common_sources "*.cc")
 foreach (source ${common_sources})
     get_filename_component(target ${source} NAME_WLE)
-    add_executable(${target} ${source})
+    add_executable(${target} ${source} ${SOURCES})
 endforeach()

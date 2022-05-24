@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.18)
 project(dgnn CXX)
 enable_language(CUDA)
 
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_ARCHITECTURES "60")
 
 set(TARGET_LIB "dgnn")
 
@@ -17,11 +18,11 @@ else()
 endif()
 message(STATUS "Using command ${PY_EXE}")
 
-# Thrust
-find_package(Thrust REQUIRED CONFIG)
-thrust_create_target(Thrust)
+# rmm
+find_package(rmm REQUIRED)
 
 include_directories(${PROJECT_SOURCE_DIR}/dgnn/common)
+include_directories($ENV{CONDA_PREFIX}/include)
 include_directories(/usr/local/cuda/include)
 
 # Get Python suffix
@@ -29,9 +30,12 @@ execute_process(COMMAND ${PY_EXE} -c "import sysconfig; print(next(x for x in [s
     OUTPUT_VARIABLE Python_SUFFIX OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 message(STATUS "Python suffix is ${Python_SUFFIX}")
 
-list(APPEND SOURCES "${PROJECT_SOURCE_DIR}/dgnn/common/dynamic_graph.cc")
+list(APPEND SOURCES "${PROJECT_SOURCE_DIR}/dgnn/common/dynamic_graph.cc"
+    "${PROJECT_SOURCE_DIR}/dgnn/common/logging.cc"
+    "${PROJECT_SOURCE_DIR}/dgnn/common/allocator.cc",
+    "${PROJECT_SOURCE_DIR}/dgnn/common/logging.cc")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++14 -fPIC -Wall -ftree-vectorize")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fPIC -Wall -ftree-vectorize")
 set(ARCH_FLAGS "-march=native -mtune=native")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")
 
@@ -40,6 +44,4 @@ add_library(${TARGET_LIB} SHARED ${SOURCES})
 set_target_properties(${TARGET_LIB} PROPERTIES SUFFIX "${Python_SUFFIX}")
 set_target_properties(${TARGET_LIB} PROPERTIES PREFIX "")
 set_target_properties(${TARGET_LIB} PROPERTIES OUTPUT_NAME "")
-
-
 
