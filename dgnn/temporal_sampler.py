@@ -1,5 +1,3 @@
-import concurrent.futures
-import threading
 import warnings
 from typing import List, Optional
 
@@ -55,8 +53,8 @@ class TemporalSampler:
         Sample k-hop neighbors of given vertices.
 
         Args:
-            target_vertices: root vertices to sample
-            timestamps: timestamps of target vertices
+            target_vertices: root vertices to sample. CPU tensor. 
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
 
         Returns: 
             list of message flow graphs (# of graphs = # of snapshots) for
@@ -100,34 +98,30 @@ class TemporalSampler:
                 (self._num_snapshots - snapshot - 1)
             end_timestamps -= offset
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self._num_workers) as executor:
-                futures = []
-                for i in range(len(target_vertices)):
-                    vertex = int(target_vertices[i])
-                    end_timestamp = float(end_timestamps[i])
-                    start_timestamp = end_timestamp - self._snapshot_time_window \
-                        if self._snapshot_time_window != 0 else float("-inf")
+            for i in range(len(target_vertices)):
+                vertex = int(target_vertices[i])
+                end_timestamp = float(end_timestamps[i])
+                start_timestamp = end_timestamp - self._snapshot_time_window \
+                    if self._snapshot_time_window != 0 else float("-inf")
 
-                    future = executor.submit(
-                        self._sample_layer_helper, fanout, i, vertex,
-                        start_timestamp, end_timestamp)
-                    futures.append(future)
+                result = self._sample_layer_helper(fanout, i, vertex,
+                                                   start_timestamp, end_timestamp)
+                if result:
+                    rows = torch.cat(
+                        [rows, result[0]])
+                    source_vertices = torch.cat(
+                        [source_vertices, result[1]])
+                    source_timestamps = torch.cat(
+                        [source_timestamps, result[2]])
+                    edge_ids = torch.cat([edge_ids, result[3]])
+                    delta_timestamp = torch.full_like(
+                        result[2], timestamps[i].item()) - result[2]
+                    delta_timestamps = torch.cat(
+                        [delta_timestamps, delta_timestamp])
 
-                for future in concurrent.futures.as_completed(futures):
-                    result = future.result()
-                    if result is not None:
-                        rows = torch.cat(
-                            [rows, result[0]])
-                        source_vertices = torch.cat(
-                            [source_vertices, result[1]])
-                        source_timestamps = torch.cat(
-                            [source_timestamps, result[2]])
-                        delta_timestamps = torch.cat(
-                            [delta_timestamps, result[3]])
-                        edge_ids = torch.cat([edge_ids, result[4]])
             all_vertices = torch.cat((target_vertices, source_vertices), dim=0)
             all_timestamps = torch.cat(
-                (end_timestamps, source_timestamps), dim=0)
+                (timestamps, source_timestamps), dim=0)
             cols = torch.arange(len(target_vertices), len(all_vertices))
             block = dgl.create_block((cols, rows),
                                      num_src_nodes=len(all_vertices),
@@ -154,9 +148,8 @@ class TemporalSampler:
             delta_timestamps = torch.FloatTensor()
             edge_ids = torch.LongTensor()
 
-            start_index = prev_blocks[snapshot].num_dst_nodes()
-            target_vertices = prev_blocks[snapshot].srcdata['ID'][start_index:]
-            timestamps = prev_blocks[snapshot].srcdata['ts'][start_index:]
+            target_vertices = prev_blocks[snapshot].srcdata['ID']
+            timestamps = prev_blocks[snapshot].srcdata['ts']
 
             end_timestamps = timestamps.clone()
 
@@ -165,35 +158,29 @@ class TemporalSampler:
                 (self._num_snapshots - snapshot - 1)
             end_timestamps -= offset
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self._num_workers) as executor:
-                futures = []
-
-                for i in range(len(target_vertices)):
-                    vertex = int(target_vertices[i])
-                    end_timestamp = float(end_timestamps[i])
-                    start_timestamp = end_timestamp - self._snapshot_time_window \
-                        if self._snapshot_time_window != 0 else float("-inf")
-                    future = executor.submit(
-                        self._sample_layer_helper, fanout, i, vertex,
-                        start_timestamp, end_timestamp)
-                    futures.append(future)
-
-                for future in concurrent.futures.as_completed(futures):
-                    result = future.result()
-                    if result is not None:
-                        rows = torch.cat(
-                            [rows, result[0]])
-                        source_vertices = torch.cat(
-                            [source_vertices, result[1]])
-                        source_timestamps = torch.cat(
-                            [source_timestamps, result[2]])
-                        delta_timestamps = torch.cat(
-                            [delta_timestamps, result[3]])
-                        edge_ids = torch.cat([edge_ids, result[4]])
+            for i in range(len(target_vertices)):
+                vertex = int(target_vertices[i])
+                end_timestamp = float(end_timestamps[i])
+                start_timestamp = end_timestamp - self._snapshot_time_window \
+                    if self._snapshot_time_window != 0 else float("-inf")
+                result = self._sample_layer_helper(fanout, i, vertex,
+                                                   start_timestamp, end_timestamp)
+                if result:
+                    rows = torch.cat(
+                        [rows, result[0]])
+                    source_vertices = torch.cat(
+                        [source_vertices, result[1]])
+                    source_timestamps = torch.cat(
+                        [source_timestamps, result[2]])
+                    edge_ids = torch.cat([edge_ids, result[3]])
+                    delta_timestamp = torch.full_like(
+                        result[2], timestamps[i].item()) - result[2]
+                    delta_timestamps = torch.cat(
+                        [delta_timestamps, delta_timestamp])
 
             all_vertices = torch.cat((target_vertices, source_vertices), dim=0)
             all_timestamps = torch.cat(
-                (end_timestamps, source_timestamps), dim=0)
+                (timestamps, source_timestamps), dim=0)
             cols = torch.arange(len(target_vertices), len(all_vertices))
             block = dgl.create_block((cols, rows),
                                      num_src_nodes=len(all_vertices),
@@ -229,8 +216,4 @@ class TemporalSampler:
         rows = torch.full((len(source_vertices), ),
                           vertex_index, dtype=torch.long)
 
-        delta_timestamps = torch.full_like(
-            timestamps, end_timestamp) - timestamps
-
-        return [rows, source_vertices, timestamps,
-                delta_timestamps, edge_ids]
+        return [rows, source_vertices, timestamps, edge_ids]
