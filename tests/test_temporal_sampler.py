@@ -243,13 +243,11 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[0].tolist(), [9, 10, 11, 12, 13, 14])
         self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
 
-        # root -> layer 0, timestamp range: [2, 3]
+        # root -> layer 0, timestamp range: [3, 4]
         block = blocks[0][0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2, 5, 4, 5, 4, 5, 4,
             5, 4, 5, 4, 5, 4])
-        # NB: this is the tricky part. The timestamps should deduct by 1 because
-        # it is the second snapshot.
         self.assertEqual(block.srcdata['ts'].tolist(), [
             5, 5, 5, 4, 3, 4, 3, 4, 3,
             4, 3, 4, 3, 4, 3])
