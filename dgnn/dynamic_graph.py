@@ -381,6 +381,15 @@ class DynamicGraph:
 
                     break
                 else:
-                    assert False, "should not reach here"
+                    # the whole block is in the range
+                    target_vertices = torch.cat(
+                        (target_vertices, curr_block.target_vertices.flip(dims=[0]).cpu()), dim=0)
+                    timestamps = torch.cat(
+                        (timestamps, curr_block.timestamps.flip(dims=[0]).cpu()), dim=0)
+                    edge_ids = torch.cat(
+                        (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
+
+                    curr_block = curr_block.next_block
+                    continue
 
         return target_vertices, timestamps, edge_ids
