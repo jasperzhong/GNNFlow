@@ -15,7 +15,12 @@ namespace dgnn {
 /**
  * @brief Allocate device memory for temporal blocks.
  *
- * This class is used to allocate device memory for temporal blocks.
+ *  The allocator allocates temporal blocks on the GPU. When the GPU memory
+ *  usage reaches a threshold, the allocator swaps old and unused temporal
+ *  blocks on the GPU to the host. The allocator keeps track of the temporal
+ *  blocks that are currently in use.
+ *
+ *  Note that each GPU device has its own allocator.
  */
 class TemporalBlockAllocator {
  public:
@@ -25,7 +30,6 @@ class TemporalBlockAllocator {
   /**
    * @brief Constructor.
    *
-   * @param memory_manager The memory manager used to allocate device memory.
    * @param alignment The minimum alignment of the block. Default is 16.
    */
   explicit TemporalBlockAllocator(std::size_t alignment = kDefaultAlignment);
@@ -48,7 +52,7 @@ class TemporalBlockAllocator {
    *
    * @param block The pointer to the block to free.
    */
-  void Deallocate(TemporalBlock* block);
+  void Deallocate(TemporalBlock *block);
 
   /**
    * @brief Reallocate a TemporalBlock on device.
@@ -66,8 +70,8 @@ class TemporalBlockAllocator {
 
   std::size_t alignment_;
   // block raw pointer (device/host) -> sequence number (how old the block is)
-  std::map<TemporalBlock*, std::size_t> on_device_blocks_;
-  std::map<TemporalBlock*, std::size_t> on_host_blocks_;
+  std::map<TemporalBlock *, std::size_t> on_device_blocks_;
+  std::map<TemporalBlock *, std::size_t> on_host_blocks_;
 
   // a monotonically increasing sequence number
   std::size_t sequence_number_;

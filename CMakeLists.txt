@@ -30,10 +30,8 @@ execute_process(COMMAND ${PY_EXE} -c "import sysconfig; print(next(x for x in [s
     OUTPUT_VARIABLE Python_SUFFIX OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 message(STATUS "Python suffix is ${Python_SUFFIX}")
 
-list(APPEND SOURCES "${PROJECT_SOURCE_DIR}/dgnn/common/dynamic_graph.cc"
-    "${PROJECT_SOURCE_DIR}/dgnn/common/logging.cc"
-    "${PROJECT_SOURCE_DIR}/dgnn/common/allocator.cc",
-    "${PROJECT_SOURCE_DIR}/dgnn/common/logging.cc")
+list(APPEND SOURCES "${PROJECT_SOURCE_DIR}/dgnn/src/temporal_block.cc"
+    "${PROJECT_SOURCE_DIR}/dgnn/src/logging.cc")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fPIC -Wall -ftree-vectorize")
 set(ARCH_FLAGS "-march=native -mtune=native")

@@ -24,22 +24,9 @@ def get_cmake_bin():
     return cmake_bin
 
 
-def get_thrust_home():
-    path = os.path.join(curdir, 'third_party/thrust/thrust/cmake')
-    if os.path.exists(path):
-        return path
-    else:
-        raise RuntimeError(
-            "Cannot find thrust home. Please run"
-            "`git submodule sync && git submodule update --init --recursive`"
-            "and try again."
-        )
-
-
 class CustomBuildExt(build_ext):
     def build_extensions(self):
         cmake_bin = get_cmake_bin()
-        thrust_home = get_thrust_home()
 
         config = 'RelWithDebInfo'
 
@@ -50,7 +37,6 @@ class CustomBuildExt(build_ext):
         cmake_args = [
             "-DCMAKE_BUILD_TYPE={}".format(config),
             "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-            "-DThrust_DIR={}".format(thrust_home),
             "-DPYTHON_EXECUTABLE:FILEPATH={}".format(sys.executable),
             "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(build_dir)
         ]

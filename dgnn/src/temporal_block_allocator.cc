@@ -1,21 +1,14 @@
 #include "temporal_block_allocator.h"
 
-#include <thrust/device_delete.h>
-#include <thrust/device_new.h>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-
 namespace dgnn {
-
-TemporalBlockAllocator::TemporalBlockAllocator(std::size_t alignment)
-    : alignment_(alignment),
-      memory_manager_ptr_(rmm::mr::get_current_device_resource()),
-      sequence_number_(0) {}
+TemporalBlockAllocator::TemporalBlockAllocator(
+    std::size_t alignment)
+    : alignment_(alignment), sequence_number_(0) {}
 
 thrust::device_ptr<TemporalBlock> TemporalBlockAllocator::Allocate(
     std::size_t size) {
   std::size_t capacity = AlignUp(size);
-  TemporalBlock block_on_host(capacity);
+  TemporalBlock block_on_host(capacity, Device::CPU);
 
   try {
     // allocate device memory for the block
@@ -90,7 +83,4 @@ std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
   // round up to the next power of two
   return 1 << (64 - __builtin_clzl(size - 1));
 }
-
-void CopyBlock(thrust::device_ptr<TemporalBlock> &dst,
-               thrust::device_ptr<TemporalBlock> &src);
-}  // namespace dgnn
+}
