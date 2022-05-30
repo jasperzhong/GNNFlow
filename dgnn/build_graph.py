@@ -31,7 +31,7 @@ def load_feat(data_dir: str = None, dataset: str = 'REDDIT', rand_de=0, rand_dn=
     node_feats = None
     if data_dir is None:
         data_dir = os.path.dirname(__file__)
-        
+        data_dir = os.path.join(data_dir, 'data')
     dataset_path = os.path.join(data_dir, dataset)
 
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
@@ -39,7 +39,7 @@ def load_feat(data_dir: str = None, dataset: str = 'REDDIT', rand_de=0, rand_dn=
         node_feats = torch.load(node_feat_path)
         if node_feats.dtyep == torch.bool:
             node_feats = node_feats.type(torch.float32)
-    edge_feat_path = os.path.join(dataset_path, 'node_features.pt')
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
     
     edge_feats = None
     if os.path.exists(edge_feat_path):
@@ -69,21 +69,21 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600, mode='train') -> Tuple[to
         # np.random.randint(self.num_nodes, size=n)
         # TODO: wrap a neglink sampler
         length = np.max(np.array(df['dst'], dtype=int))
-        # TODO: eliminate np to tensor
-        target_nodes = np.concatenate([rows.src.values, rows.dst.values, np.random.randint(length, size=len(rows.src.values))]).astype(int)
+
+        target_nodes = np.concatenate([rows.src.values, rows.dst.values, np.random.randint(length, size=len(rows.src.values))]).astype(np.long)
         ts = np.concatenate([rows.time.values, rows.time.values, rows.time.values]).astype(np.float32)
         # TODO: align with our edge id
         eid = rows['Unnamed: 0'].values
-        yield torch.tensor(target_nodes, dtype=torch.long), torch.tensor(ts, dtype=torch.float32), eid
-        
-    
-def build_dynamic_graph(df: pd.DataFrame, block_size: int = 1024) -> DynamicGraph:
 
-    src = torch.tensor(df['src'].to_numpy(), dtype=torch.long)
-    dst = torch.tensor(df['dst'].to_numpy(), dtype=torch.long)
-    ts = torch.tensor(df['time'].to_numpy(), dtype=torch.float32)
+        yield target_nodes, ts, eid
+    
+def build_dynamic_graph(df: pd.DataFrame, block_size: int = 1024, add_reverse: bool = True) -> DynamicGraph:
+
+    src = df['src'].to_numpy()
+    dst = df['dst'].to_numpy()
+    ts = df['time'].to_numpy()
 
     dgraph = DynamicGraph(block_size=block_size)
-    dgraph.add_edges(src, dst, ts)
+    dgraph.add_edges(src, dst, ts, add_reverse=add_reverse)
 
     return dgraph

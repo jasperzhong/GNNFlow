@@ -3,6 +3,7 @@ from typing import List, Optional
 
 import dgl
 import torch
+import numpy as np
 from dgl.heterograph import DGLBlock
 
 from .dynamic_graph import DynamicGraph
@@ -47,7 +48,7 @@ class TemporalSampler:
         self._snapshot_time_window = snapshot_time_window
         self._num_workers = num_workers
 
-    def sample(self, target_vertices: torch.Tensor, timestamps: torch.Tensor) \
+    def sample(self, target_vertices: np.array, timestamps: np.array) \
             -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
@@ -60,6 +61,10 @@ class TemporalSampler:
             list of message flow graphs (# of graphs = # of snapshots) for
             each layer.
         """
+        # np to cpu tensor
+        target_vertices = torch.tensor(target_vertices)
+        timestamps = torch.tensor(timestamps)
+
         assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
         assert len(target_vertices.shape) == 1 and len(
             timestamps.shape) == 1, "Target vertices and timestamps must be 1D tensors"
@@ -203,7 +208,7 @@ class TemporalSampler:
         if len(source_vertices) == 0:
             return None
 
-        if self._strategy == 'recent':
+        if self._strategy == 'recent' or len(source_vertices) < fanout:
             source_vertices = source_vertices[: fanout]
             timestamps = timestamps[: fanout]
             edge_ids = edge_ids[: fanout]

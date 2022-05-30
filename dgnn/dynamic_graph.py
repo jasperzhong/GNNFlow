@@ -1,6 +1,8 @@
+from os import times
 from typing import Optional, Tuple, Union
 
 import torch
+import numpy as np
 
 from .caching_allocator import CachingAllocator
 
@@ -14,9 +16,9 @@ class DynamicGraph:
     a list of edges. Each edge is a tuple of (target_vertex, timestamp).
     """
 
-    def __init__(self, source_vertices: Optional[torch.Tensor] = None,
-                 target_vertices: Optional[torch.Tensor] = None,
-                 timestamps: Optional[torch.Tensor] = None,
+    def __init__(self, source_vertices: Optional[np.array] = None,
+                 target_vertices: Optional[np.array] = None,
+                 timestamps: Optional[np.array] = None,
                  device: Union[torch.device, str] = "cuda",
                  gpu_mem_threshold_in_bytes: int = 50 * 1024 * 1024,
                  block_size: int = 1024,
@@ -51,8 +53,8 @@ class DynamicGraph:
         if source_vertices is not None and target_vertices is not None and timestamps is not None:
             self.add_edges(source_vertices, target_vertices, timestamps)
 
-    def add_edges(self, source_vertices: torch.Tensor, target_vertices: torch.Tensor,
-                  timestamps: torch.Tensor):
+    def add_edges(self, source_vertices: np.array, target_vertices: np.array,
+                  timestamps: np.array, add_reverse: bool = True):
         """
         Add edges to the graph. The input tensors can be on CPU or GPU.
 
@@ -67,28 +69,69 @@ class DynamicGraph:
         Raises:
             ValueError: if the timestamps are not in ascending order.
         """
+        # np to tensor
+        source_vertices = torch.tensor(source_vertices)
+        target_vertices = torch.tensor(target_vertices)
+        timestamps = torch.tensor(timestamps)
+
         assert source_vertices.shape[0] == target_vertices.shape[0] == \
             timestamps.shape[0], "Number of edges must match"
         assert len(source_vertices.shape) == 1 and len(
             target_vertices.shape) == 1 and len(timestamps.shape) == 1, \
             "Source vertices, target vertices and timestamps must be 1D"
+        edge_ids = torch.arange(self._num_edges, self._num_edges + len(source_vertices))
 
-        # group by source vertex
-        sorted_idx = torch.argsort(source_vertices)
-        unique, counts = torch.unique(
-            source_vertices, sorted=True, return_counts=True)
-        split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
-        for i, indices in enumerate(split_idx):
-            source_vertex = unique[i]
-            target_vertices_i = target_vertices[indices]
-            timestamps_i = timestamps[indices]
-            # sorted target_vertices_i by timestamps_i
-            sorted_idx = torch.argsort(timestamps_i)
-            target_vertices_i = target_vertices_i[sorted_idx]
-            timestamps_i = timestamps_i[sorted_idx]
+        if add_reverse:
+            # first cat the src & dst together
+            source_vertices = torch.cat((source_vertices, target_vertices))
+            target_vertices = torch.cat((target_vertices, source_vertices))
+            timestamps = timestamps.repeat(2)
+            edge_ids = edge_ids.repeat(2)
+            # then group by source vertex and add
+            _, sorted_idx = torch.sort(source_vertices, stable=True)
+            unique, counts = torch.unique(
+                source_vertices, sorted=True, return_counts=True)
+            split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
+            for i, indices in enumerate(split_idx):
+                source_vertex = unique[i]
+                target_vertices_i = target_vertices[indices]
+                timestamps_i = timestamps[indices]
+                edge_ids_i = edge_ids[indices]
+                # print("indices: {}".format(indices))
+                # print("edge_ids:{}".format(edge_ids))
+                # print("edge_ids_i:{}".format(edge_ids_i))
+                # sorted target_vertices_i by timestamps_i
+                _, sorted_idx = torch.sort(timestamps_i, stable=True)
+                target_vertices_i = target_vertices_i[sorted_idx]
+                timestamps_i = timestamps_i[sorted_idx]
+                edge_ids_i = edge_ids_i[sorted_idx]
 
-            self._add_edges_for_one_vertex(source_vertex, target_vertices_i,
-                                           timestamps_i)
+                self._add_edges_for_one_vertex(source_vertex, target_vertices_i,
+                                            timestamps_i, edge_ids_i)
+
+        else:
+            # group by source vertex
+            _, sorted_idx = torch.sort(source_vertices, stable=True)
+            unique, counts = torch.unique(
+                source_vertices, sorted=True, return_counts=True)
+            split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
+            for i, indices in enumerate(split_idx):
+                source_vertex = unique[i]
+                target_vertices_i = target_vertices[indices]
+                timestamps_i = timestamps[indices]
+                edge_ids_i = edge_ids[indices]
+                # print("indices: {}".format(indices))
+                # print("edge_ids:{}".format(edge_ids))
+                # print("edge_ids_i:{}".format(edge_ids_i))
+                # sorted target_vertices_i by timestamps_i
+                _, sorted_idx = torch.sort(timestamps_i, stable=True)
+                target_vertices_i = target_vertices_i[sorted_idx]
+                timestamps_i = timestamps_i[sorted_idx]
+                edge_ids_i = edge_ids_i[sorted_idx]
+
+                self._add_edges_for_one_vertex(source_vertex, target_vertices_i,
+                                            timestamps_i, edge_ids_i)
+
 
     def add_vertices(self, max_vertex: int):
         """
@@ -105,8 +148,8 @@ class DynamicGraph:
         self._num_vertices = max_vertex + 1
 
     def _add_edges_for_one_vertex(self, source_vertex: int,
-                                  target_vertices: torch.Tensor,
-                                  timestamps: torch.Tensor):
+                                  target_vertices: np.array,
+                                  timestamps: np.array, edges_ids:  np.array):
         """
         Add edges for a specified vertex. Assume that target_vertices have been
         sorted in ascending order of timestamps and that the timestamps are
@@ -116,10 +159,16 @@ class DynamicGraph:
             source_vertex: the vertex to add edges for.
             target_vertices: the target vertices of the edges.
             timestamps: the timestamps of the edges.
+            edge_ids: the ids of the edges
 
         Note that duplicate edges are allowed.
         """
-        assert target_vertices.shape[0] == timestamps.shape[0], "Number of edges must match"
+        # np to tensor
+        target_vertices = torch.tensor(target_vertices)
+        timestamps = torch.tensor(timestamps)
+        edges_ids = torch.tensor(edges_ids)
+
+        assert target_vertices.shape[0] == timestamps.shape[0] and target_vertices.shape[0] == edges_ids.shape[0], "Number of edges must match"
         assert len(target_vertices.shape) == 1 and len(
             timestamps.shape) == 1, "Target vertices and timestamps must be 1D"
 
@@ -166,8 +215,7 @@ class DynamicGraph:
                     "Timestamps must be newer than the existing edges")
 
         # add the edges to the current block
-        edges_ids = torch.arange(
-            self._num_edges, self._num_edges + incoming_size)
+
         curr_block.add_edges(target_vertices, timestamps, edges_ids)
         self._num_edges += incoming_size
 
@@ -267,8 +315,7 @@ class DynamicGraph:
                         (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
                 else:
                     # find the first edge before the timestamp
-                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
-                                             right=True)
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp)
                     if idx > 0:
                         target_vertices = torch.cat(
                             (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
@@ -304,8 +351,7 @@ class DynamicGraph:
                         (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
                 else:
                     # find the first edge after the timestamp
-                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
-                                             side='left')
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp)
                     if idx < curr_block.size:
                         target_vertices = torch.cat(
                             (target_vertices, curr_block.target_vertices[idx:].flip(dims=[0]).cpu()), dim=0)
@@ -341,10 +387,8 @@ class DynamicGraph:
                 if start_timestamp >= curr_block.start_timestamp() and \
                         end_timestamp <= curr_block.end_timestamp():
                     # all edges are in the current block
-                    start_idx = torch.searchsorted(curr_block.timestamps, start_timestamp,
-                                                   side='left')
-                    end_idx = torch.searchsorted(curr_block.timestamps, end_timestamp,
-                                                 side='right')
+                    start_idx = torch.searchsorted(curr_block.timestamps, start_timestamp)
+                    end_idx = torch.searchsorted(curr_block.timestamps, end_timestamp)
                     target_vertices = torch.cat(
                         (target_vertices, curr_block.target_vertices[start_idx:end_idx].flip(dims=[0]).cpu()), dim=0)
                     timestamps = torch.cat(
@@ -356,8 +400,7 @@ class DynamicGraph:
                 elif start_timestamp < curr_block.start_timestamp() and \
                         end_timestamp <= curr_block.end_timestamp():
                     # only the edges before end_timestamp are in the current block
-                    idx = torch.searchsorted(curr_block.timestamps, end_timestamp,
-                                             side='right')
+                    idx = torch.searchsorted(curr_block.timestamps, end_timestamp)
                     target_vertices = torch.cat(
                         (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
                     timestamps = torch.cat(
@@ -370,8 +413,7 @@ class DynamicGraph:
                 elif start_timestamp >= curr_block.start_timestamp() and \
                         end_timestamp > curr_block.end_timestamp():
                     # only the edges after start_timestamp are in the current block
-                    idx = torch.searchsorted(curr_block.timestamps, start_timestamp,
-                                             side='left')
+                    idx = torch.searchsorted(curr_block.timestamps, start_timestamp)
                     target_vertices = torch.cat(
                         (target_vertices, curr_block.target_vertices[idx:].flip(dims=[0]).cpu()), dim=0)
                     timestamps = torch.cat(
@@ -391,5 +433,6 @@ class DynamicGraph:
 
                     curr_block = curr_block.next_block
                     continue
+
 
         return target_vertices, timestamps, edge_ids
