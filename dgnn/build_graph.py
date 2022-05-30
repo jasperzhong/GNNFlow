@@ -32,6 +32,7 @@ def load_feat(data_dir: str = None, dataset: str = 'REDDIT', rand_de=0, rand_dn=
     if data_dir is None:
         data_dir = os.path.dirname(__file__)
         data_dir = os.path.join(data_dir, 'data')
+
     dataset_path = os.path.join(data_dir, dataset)
 
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
@@ -39,6 +40,7 @@ def load_feat(data_dir: str = None, dataset: str = 'REDDIT', rand_de=0, rand_dn=
         node_feats = torch.load(node_feat_path)
         if node_feats.dtyep == torch.bool:
             node_feats = node_feats.type(torch.float32)
+
     edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
     
     edge_feats = None

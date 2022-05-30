@@ -315,7 +315,12 @@ class DynamicGraph:
                         (edge_ids, curr_block.edge_ids.flip(dims=[0]).cpu()), dim=0)
                 else:
                     # find the first edge before the timestamp
+<<<<<<< HEAD
                     idx = torch.searchsorted(curr_block.timestamps, timestamp)
+=======
+                    idx = torch.searchsorted(curr_block.timestamps, timestamp,
+                                             right=True)
+>>>>>>> f036e5a5b00c5eca65f5945e83a3c55bc1a50da6
                     if idx > 0:
                         target_vertices = torch.cat(
                             (target_vertices, curr_block.target_vertices[:idx].flip(dims=[0]).cpu()), dim=0)
