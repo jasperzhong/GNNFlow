@@ -2,9 +2,9 @@
 #define DGNN_DYNAMIC_GRAPH_H_
 
 #include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
 
 #include <map>
+#include <memory>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -30,9 +30,10 @@ class DynamicGraph {
 
   ~DynamicGraph();
 
-  void AddEdges(const std::vector<NIDType>& src_nodes,
-                const std::vector<NIDType>& dst_nodes,
-                const std::vector<TimestampType>& timestamps);
+  void AddEdges(std::vector<NIDType>& src_nodes,
+                std::vector<NIDType>& dst_nodes,
+                std::vector<TimestampType>& timestamps,
+                bool add_reverse_edges = true);
 
   void AddNodes(NIDType max_node);
 
@@ -41,37 +42,31 @@ class DynamicGraph {
   std::size_t num_edges() const;
 
  private:
-  struct Edge {
-    NIDType dst_node;
-    TimestampType timestamp;
-
-    Edge(NIDType dst_node, TimestampType timestamp)
-        : dst_node(dst_node), timestamp(timestamp) {}
-
-    bool operator<(const Edge& other) const {
-      return timestamp < other.timestamp;
-    }
-  };
-
-  void AddEdgesForOneNode(NIDType src_node, const std::vector<Edge>& edges);
+  void AddEdgesForOneNode(NIDType src_node,
+                          const std::vector<NIDType>& dst_nodes,
+                          const std::vector<TimestampType>& timestamps,
+                          const std::vector<EIDType>& eids);
 
   std::size_t AlignUp(std::size_t size);
 
-  TemporalBlock AllocateTemporalBlock(std::size_t size);
+  std::shared_ptr<TemporalBlock> AllocateTemporalBlock(std::size_t size);
 
-  void DeallocateTemporalBlock(thrust::device_ptr<TemporalBlock> block);
+  void DeallocateTemporalBlock(std::shared_ptr<TemporalBlock> block);
 
-  TemporalBlock ReallocateTemporalBlock(thrust::device_ptr<TemporalBlock> block,
-                                        std::size_t size);
+  std::shared_ptr<TemporalBlock> ReallocateTemporalBlock(
+      std::shared_ptr<TemporalBlock> block, std::size_t size);
 
-  TemporalBlock AllocateInternal(std::size_t size) noexcept(false);
+  void AllocateInternal(std::shared_ptr<TemporalBlock> block,
+                        std::size_t size) noexcept(false);
 
-  void CopyTemporalBlock(thrust::device_ptr<TemporalBlock> dst,
-                         thrust::device_ptr<TemporalBlock> src);
+  void DeallocateInternal(std::shared_ptr<TemporalBlock> block);
+
+  void CopyTemporalBlock(std::shared_ptr<TemporalBlock> dst,
+                         std::shared_ptr<TemporalBlock> src);
 
   void SwapOldBlocksToHost(std::size_t requested_size_to_swap);
 
-  TemporalBlock* SwapBlockToHost(thrust::device_ptr<TemporalBlock> block);
+  void SwapBlockToHost(std::shared_ptr<TemporalBlock> block);
 
  private:
   std::size_t max_gpu_mem_pool_size_;
@@ -79,15 +74,11 @@ class DynamicGraph {
   InsertionPolicy insertion_policy_;
 
   // sequence number (how old the block is) -> block raw pointer
-  std::map<std::size_t, TemporalBlock*> blocks_on_device_;
-  std::map<std::size_t, TemporalBlock*> blocks_on_host_;
+  std::map<std::size_t, std::shared_ptr<TemporalBlock>> blocks_on_device_;
+  std::map<std::size_t, std::shared_ptr<TemporalBlock>> blocks_on_host_;
 
-  // block raw pointer -> sequence number (how old the block is)
-  std::unordered_map<TemporalBlock*, std::size_t> all_blocks_;
-
-  // block raw pointer -> (size, capacity)
-  std::unordered_map<TemporalBlock*, std::pair<std::size_t, std::size_t>>
-      blocks_info_;
+  std::unordered_map<std::shared_ptr<TemporalBlock>, std::size_t>
+      block_to_sequence_number_;
 
   // a monotonically increasing sequence number
   std::size_t block_sequence_number_;
@@ -97,7 +88,13 @@ class DynamicGraph {
 
   thrust::device_vector<thrust::device_ptr<TemporalBlock>>
       node_table_on_device_;
-  std::vector<TemporalBlock> node_table_on_host_;
+
+  std::vector<std::shared_ptr<TemporalBlock>> node_table_on_device_host_copy_;
+
+  std::map<std::shared_ptr<TemporalBlock>, thrust::device_ptr<TemporalBlock>>
+      node_table_on_device_host_copy_map_;
+
+  std::vector<std::shared_ptr<TemporalBlock>> node_table_on_host_;
 };
 
 }  // namespace dgnn

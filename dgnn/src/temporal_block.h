@@ -20,9 +20,9 @@ using TimestampType = float;
  *  number of edges. The block can be moved to a different device.
  */
 struct TemporalBlock {
-  NIDType* neighbor_nodes;
-  EIDType* neighbor_edges;
+  NIDType* dst_nodes;
   TimestampType* timestamps;
+  EIDType* eids;
 
   std::size_t size;
   std::size_t capacity;
