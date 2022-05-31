@@ -2,7 +2,9 @@
 #define DGNN_DYNAMIC_GRAPH_H_
 
 #include <thrust/device_vector.h>
+
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -26,7 +28,7 @@ class DynamicGraph {
   DynamicGraph(std::size_t max_gpu_mem_pool_size,
                std::size_t alignment = kDefaultAlignment,
                InsertionPolicy insertion_policy = kDefaultInsertionPolicy);
-  ~DynamicGraph();
+  ~DynamicGraph() = default;
 
   void AddEdges(std::vector<NIDType>& src_nodes,
                 std::vector<NIDType>& dst_nodes,
@@ -38,6 +40,9 @@ class DynamicGraph {
   std::size_t num_nodes() const;
 
   std::size_t num_edges() const;
+
+  const std::vector<std::shared_ptr<TemporalBlock>>&
+  node_table_on_device_host_copy() const;
 
  private:
   void AddEdgesForOneNode(NIDType src_node,

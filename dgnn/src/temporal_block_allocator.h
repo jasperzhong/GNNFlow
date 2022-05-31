@@ -3,11 +3,10 @@
 
 #include <map>
 #include <memory>
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 #include <stack>
 #include <unordered_map>
 
-#include "rmm/mr/device/device_memory_resource.hpp"
 #include "temporal_block.h"
 
 namespace dgnn {
@@ -18,8 +17,6 @@ class TemporalBlockAllocator {
                          std::size_t alignment);
   ~TemporalBlockAllocator();
 
-  std::size_t AlignUp(std::size_t size);
-
   std::shared_ptr<TemporalBlock> AllocateTemporalBlock(std::size_t size);
 
   void DeallocateTemporalBlock(std::shared_ptr<TemporalBlock> block);
@@ -27,16 +24,18 @@ class TemporalBlockAllocator {
   std::shared_ptr<TemporalBlock> ReallocateTemporalBlock(
       std::shared_ptr<TemporalBlock> block, std::size_t size);
 
-  void AllocateInternal(std::shared_ptr<TemporalBlock> block,
-                        std::size_t size) noexcept(false);
-
-  void DeallocateInternal(std::shared_ptr<TemporalBlock> block);
-
   void CopyTemporalBlock(std::shared_ptr<TemporalBlock> dst,
                          std::shared_ptr<TemporalBlock> src);
 
   void Print() const;  // for debug
  private:
+  std::size_t AlignUp(std::size_t size);
+
+  void AllocateInternal(std::shared_ptr<TemporalBlock> block,
+                        std::size_t size) noexcept(false);
+
+  void DeallocateInternal(std::shared_ptr<TemporalBlock> block);
+
   std::size_t alignment_;
   std::stack<rmm::mr::device_memory_resource*> gpu_resources_;
 

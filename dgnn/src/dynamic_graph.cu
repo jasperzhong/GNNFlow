@@ -1,5 +1,3 @@
-#include "dynamic_graph.h"
-
 #include <thrust/copy.h>
 #include <thrust/device_delete.h>
 #include <thrust/device_new.h>
@@ -11,6 +9,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
+#include "dynamic_graph.h"
 #include "logging.h"
 #include "temporal_block.h"
 #include "utils.h"
@@ -115,7 +114,8 @@ void DynamicGraph::AddEdgesForOneNode(
       node_table_on_device_host_copy_[src_node] = new_block;
     } else if (insertion_policy_ == InsertionPolicy::kInsertionPolicyReplace) {
       // reallocate a new block to replace the old one
-      auto new_block = allocator_.ReallocateTemporalBlock(block, block->size + num_edges);
+      auto new_block =
+          allocator_.ReallocateTemporalBlock(block, block->size + num_edges);
       node_table_on_device_host_copy_[src_node] = new_block;
 
       // delete the old block on device
@@ -131,10 +131,12 @@ void DynamicGraph::AddEdgesForOneNode(
 
   // copy the edges to the device
   thrust::copy(dst_nodes.begin(), dst_nodes.end(),
-               block->dst_nodes + block->size);
-  thrust::copy(timestamps.begin(), timestamps.end(),
-               block->timestamps + block->size);
-  thrust::copy(eids.begin(), eids.end(), block->eids + block->size);
+               thrust::device_ptr<NIDType>(block->dst_nodes) + block->size);
+  thrust::copy(
+      timestamps.begin(), timestamps.end(),
+      thrust::device_ptr<TimestampType>(block->timestamps) + block->size);
+  thrust::copy(eids.begin(), eids.end(),
+               thrust::device_ptr<EIDType>(block->eids) + block->size);
 
   block->size += num_edges;
 
@@ -156,6 +158,11 @@ void DynamicGraph::AddEdgesForOneNode(
   } else {
     *node_table_on_device_host_copy_map_[block] = *block;
   }
+}
+
+const std::vector<std::shared_ptr<TemporalBlock>>&
+DynamicGraph::node_table_on_device_host_copy() const {
+    return node_table_on_device_host_copy_;
 }
 
 // void DynamicGraph::SwapOldBlocksToHost(std::size_t requested_size_to_swap) {
