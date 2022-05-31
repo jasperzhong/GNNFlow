@@ -28,7 +28,7 @@ class CustomBuildExt(build_ext):
     def build_extensions(self):
         cmake_bin = get_cmake_bin()
 
-        config = 'RelWithDebInfo'
+        config = 'Debug'
 
         ext_name = self.extensions[0].name
         build_dir = self.get_ext_fullpath(ext_name).replace(self.get_ext_filename(ext_name), '')

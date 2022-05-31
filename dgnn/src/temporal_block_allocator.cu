@@ -1,5 +1,3 @@
-#include "temporal_block_allocator.h"
-
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 
@@ -7,16 +5,28 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-namespace dgnn {
+#include "logging.h"
+#include "temporal_block_allocator.h"
 
+namespace dgnn {
 TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t max_gpu_mem_pool_size, std::size_t alignment)
     : alignment_(alignment) {
-  // Create a pool memory resource for each GPU
-  rmm::mr::cuda_memory_resource mem_res;
-  rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource> pool_res(
-      &mem_res, max_gpu_mem_pool_size, max_gpu_mem_pool_size);
-  rmm::mr::set_current_device_resource(&pool_res);
+  // Create a pool memory resource
+  auto mem_res = new rmm::mr::cuda_memory_resource();
+  gpu_resources_.push(mem_res);
+  auto pool_res =
+      new rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>(
+          mem_res, max_gpu_mem_pool_size, max_gpu_mem_pool_size);
+  gpu_resources_.push(pool_res);
+  rmm::mr::set_current_device_resource(pool_res);
+}
+
+TemporalBlockAllocator::~TemporalBlockAllocator() {
+  while (!gpu_resources_.empty()) {
+    delete gpu_resources_.top();
+    gpu_resources_.pop();
+  }
 }
 
 std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
@@ -33,11 +43,11 @@ std::shared_ptr<TemporalBlock> TemporalBlockAllocator::AllocateTemporalBlock(
 
   try {
     AllocateInternal(block, size);
-  } catch (rmm::bad_alloc&) {
+  } catch (rmm::bad_alloc &) {
     // failed to allocate memory
     DeallocateInternal(block);
 
-    //    // swap old blocks to the host
+    //    TODO:  swap old blocks to the host
     //    std::size_t requested_size_to_swap =
     //    GetBlockMemorySize(AlignUp(size));
     //    SwapOldBlocksToHost(requested_size_to_swap);
@@ -103,11 +113,13 @@ void TemporalBlockAllocator::AllocateInternal(
   block->next = nullptr;
 
   auto mr = rmm::mr::get_current_device_resource();
+
   block->dst_nodes =
-      static_cast<NIDType*>(mr->allocate(capacity * sizeof(NIDType)));
-  block->timestamps = static_cast<TimestampType*>(
+      static_cast<NIDType *>(mr->allocate(capacity * sizeof(NIDType)));
+  block->timestamps = static_cast<TimestampType *>(
       mr->allocate(capacity * sizeof(TimestampType)));
-  block->eids = static_cast<EIDType*>(mr->allocate(capacity * sizeof(EIDType)));
+  block->eids =
+      static_cast<EIDType *>(mr->allocate(capacity * sizeof(EIDType)));
 }
 
 void TemporalBlockAllocator::CopyTemporalBlock(
@@ -123,4 +135,33 @@ void TemporalBlockAllocator::CopyTemporalBlock(
   dst_block->size = src_block->size;
   dst_block->next = src_block->next;
 }
+
+void TemporalBlockAllocator::Print() const {
+  LOG(DEBUG) << "TemporalBlockAllocator:";
+  LOG(DEBUG) << "  blocks_on_device_: " << blocks_on_device_.size();
+  LOG(DEBUG) << "  blocks_on_host_: " << blocks_on_host_.size();
+  LOG(DEBUG) << "  block_to_sequence_number_: "
+             << block_to_sequence_number_.size();
+  LOG(DEBUG) << "  block_sequence_number_: " << block_sequence_number_;
+
+  LOG(DEBUG) << "  blocks_on_device_: ";
+  for (auto it = blocks_on_device_.begin(); it != blocks_on_device_.end();
+       ++it) {
+    LOG(DEBUG) << "  block: " << it->first << " " << it->second->size << " "
+               << it->second->capacity;
+  }
+
+  LOG(DEBUG) << "  blocks_on_host_: ";
+  for (auto it = blocks_on_host_.begin(); it != blocks_on_host_.end(); ++it) {
+    LOG(DEBUG) << "  block: " << it->first << " " << it->second->size << " "
+               << it->second->capacity;
+  }
+
+  LOG(DEBUG) << "  block_to_sequence_number_: ";
+  for (auto it = block_to_sequence_number_.begin();
+       it != block_to_sequence_number_.end(); ++it) {
+    LOG(DEBUG) << "  block: " << it->first << " " << it->second;
+  }
+}
+
 }  // namespace dgnn

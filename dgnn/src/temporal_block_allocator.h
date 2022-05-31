@@ -3,8 +3,11 @@
 
 #include <map>
 #include <memory>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <stack>
 #include <unordered_map>
 
+#include "rmm/mr/device/device_memory_resource.hpp"
 #include "temporal_block.h"
 
 namespace dgnn {
@@ -13,6 +16,7 @@ class TemporalBlockAllocator {
  public:
   TemporalBlockAllocator(std::size_t max_gpu_mem_pool_size,
                          std::size_t alignment);
+  ~TemporalBlockAllocator();
 
   std::size_t AlignUp(std::size_t size);
 
@@ -31,8 +35,10 @@ class TemporalBlockAllocator {
   void CopyTemporalBlock(std::shared_ptr<TemporalBlock> dst,
                          std::shared_ptr<TemporalBlock> src);
 
+  void Print() const;  // for debug
  private:
   std::size_t alignment_;
+  std::stack<rmm::mr::device_memory_resource*> gpu_resources_;
 
   // sequence number (how old the block is) -> block raw pointer
   std::map<std::size_t, std::shared_ptr<TemporalBlock>> blocks_on_device_;

@@ -2,7 +2,6 @@
 #define DGNN_DYNAMIC_GRAPH_H_
 
 #include <thrust/device_vector.h>
-
 #include <map>
 #include <utility>
 #include <vector>
@@ -21,6 +20,7 @@ class DynamicGraph {
 
   static constexpr InsertionPolicy kDefaultInsertionPolicy =
       InsertionPolicy::kInsertionPolicyInsert;
+
   static constexpr std::size_t kDefaultAlignment = 16;
 
   DynamicGraph(std::size_t max_gpu_mem_pool_size,
