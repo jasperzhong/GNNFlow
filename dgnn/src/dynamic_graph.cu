@@ -16,10 +16,6 @@
 
 namespace dgnn {
 
-std::size_t GetBlockMemorySize(std::size_t capacity) {
-  return capacity * (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
-}
-
 DynamicGraph::DynamicGraph(std::size_t max_gpu_mem_pool_size,
                            std::size_t alignment,
                            InsertionPolicy insertion_policy)
@@ -103,19 +99,19 @@ void DynamicGraph::AddEdgesForOneNode(
   bool new_block_created = true;
   if (block == nullptr) {
     // allocate memory for the block
-    auto block = allocator_.AllocateTemporalBlock(num_edges);
+    auto block = allocator_.Allocate(num_edges);
     node_table_on_device_host_copy_[src_node] = block;
   } else if (block->size + num_edges > block->capacity) {
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
       // create a new block and insert it to the head of the list
-      auto new_block = allocator_.AllocateTemporalBlock(num_edges);
+      auto new_block = allocator_.Allocate(num_edges);
       // get the block pointer on device
       new_block->next = block.get();
       node_table_on_device_host_copy_[src_node] = new_block;
     } else if (insertion_policy_ == InsertionPolicy::kInsertionPolicyReplace) {
       // reallocate a new block to replace the old one
       auto new_block =
-          allocator_.ReallocateTemporalBlock(block, block->size + num_edges);
+          allocator_.Reallocate(block, block->size + num_edges);
       node_table_on_device_host_copy_[src_node] = new_block;
 
       // delete the old block on device
@@ -184,8 +180,7 @@ DynamicGraph::node_table_on_device_host_copy() const {
 //   thrust::copy(block->timestamps, block->timestamps + block->size,
 //                block_on_host->timestamps);
 //   thrust::copy(block->eids, block->eids + block->size, block_on_host->eids);
-//
-//   auto sequence_number = block_to_sequence_number_[block];
+// auto sequence_number = block_to_sequence_number_[block];
 //   blocks_on_host_[sequence_number] = block_on_host;
 //   DeallocateTemporalBlock(block);
 //   block_to_sequence_number_[block_on_host] = sequence_number;
