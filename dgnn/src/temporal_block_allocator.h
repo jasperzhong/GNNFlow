@@ -7,7 +7,7 @@
 #include <stack>
 #include <unordered_map>
 
-#include "temporal_block.h"
+#include "common.h"
 
 namespace dgnn {
 /**

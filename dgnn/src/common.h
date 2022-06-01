@@ -1,5 +1,5 @@
-#ifndef DGNN_TEMPORAL_BLOCK_H_
-#define DGNN_TEMPORAL_BLOCK_H_
+#ifndef DGNN_COMMON_H_
+#define DGNN_COMMON_H_
 
 #include <cstddef>
 
@@ -34,5 +34,13 @@ struct TemporalBlock {
 static constexpr std::size_t kBlockSpaceSize =
     (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
 
+/**
+ * @brief InsertionPolicy is used to decide how to insert a new temporal block
+ * into the linked list.
+ *
+ * kInsertionPolicyInsert: insert the new block at the head of the list.
+ * kInsertionPolicyReplace: replace the head block with a larger block.
+ */
+enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
 }  // namespace dgnn
-#endif  // DGNN_TEMPORAL_BLOCK_H_
+#endif  // DGNN_COMMON_H_
