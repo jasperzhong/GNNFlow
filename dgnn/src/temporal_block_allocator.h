@@ -59,17 +59,6 @@ class TemporalBlockAllocator {
   void Deallocate(std::shared_ptr<TemporalBlock> block);
 
   /**
-   * @brief Reallocate a temporal block on the GPU.
-   *
-   * @param block The temporal block to reallocate.
-   * @param size The new size of the temporal block.
-   *
-   * @return A pointer to the temporal block.
-   */
-  std::shared_ptr<TemporalBlock> Reallocate(
-      std::shared_ptr<TemporalBlock> block, std::size_t size);
-
-  /**
    * @brief Copy a temporal block on the GPU to another block.
    *
    * The destination block should have a size greater than or equal to the

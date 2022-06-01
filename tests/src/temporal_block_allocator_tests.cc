@@ -59,32 +59,6 @@ TEST_F(TemporalBlockAllocatorTest, MultipleAllocateAndDeallocate) {
   EXPECT_EQ(allocator_->used_space_on_host(), 0);
 }
 
-TEST_F(TemporalBlockAllocatorTest, Reallocate) {
-  std::size_t size = 1024;
-  auto block = allocator_->Allocate(size);
-  EXPECT_EQ(allocator_->num_blocks_on_device(), 1);
-  EXPECT_EQ(allocator_->num_blocks_on_host(), 0);
-  EXPECT_EQ(allocator_->used_space_on_device(), size * dgnn::kBlockSpaceSize);
-  EXPECT_EQ(allocator_->used_space_on_host(), 0);
-
-  std::size_t new_size = 2048;
-  auto new_block = allocator_->Reallocate(block, new_size);
-  EXPECT_EQ(new_block->size, 0);
-  EXPECT_EQ(new_block->capacity, new_size);
-
-  EXPECT_EQ(allocator_->num_blocks_on_device(), 1);
-  EXPECT_EQ(allocator_->num_blocks_on_host(), 0);
-  EXPECT_EQ(allocator_->used_space_on_device(),
-            new_size * dgnn::kBlockSpaceSize);
-  EXPECT_EQ(allocator_->used_space_on_host(), 0);
-
-  allocator_->Deallocate(new_block);
-  EXPECT_EQ(allocator_->num_blocks_on_device(), 0);
-  EXPECT_EQ(allocator_->num_blocks_on_host(), 0);
-  EXPECT_EQ(allocator_->used_space_on_device(), 0);
-  EXPECT_EQ(allocator_->used_space_on_host(), 0);
-}
-
 TEST_F(TemporalBlockAllocatorTest, SwapBlockToHost) {
   std::size_t size = 1024;
   auto block = allocator_->Allocate(size);

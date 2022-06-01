@@ -91,20 +91,6 @@ void TemporalBlockAllocator::Deallocate(std::shared_ptr<TemporalBlock> block) {
   block_to_id_.erase(block);
 }
 
-std::shared_ptr<TemporalBlock> TemporalBlockAllocator::Reallocate(
-    std::shared_ptr<TemporalBlock> block, std::size_t size) {
-  CHECK_NOTNULL(block);
-  auto new_block = Allocate(size);
-  CHECK_GE(new_block->capacity, block->capacity);
-
-  Copy(block, new_block);
-
-  // release the old block
-  Deallocate(block);
-
-  return new_block;
-}
-
 void TemporalBlockAllocator::AllocateInternal(
     std::shared_ptr<TemporalBlock> block, std::size_t size) noexcept(false) {
   std::size_t capacity = AlignUp(size);
