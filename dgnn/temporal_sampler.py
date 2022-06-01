@@ -48,7 +48,7 @@ class TemporalSampler:
         self._snapshot_time_window = snapshot_time_window
         self._num_workers = num_workers
 
-    def sample(self, target_vertices: np.array, timestamps: np.array) \
+    def sample(self, target_vertices: np.array, timestamps: np.array, reverse: bool = False) \
             -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
@@ -73,7 +73,7 @@ class TemporalSampler:
         for layer, fanout in enumerate(self._fanouts):
             if layer == 0:
                 blocks_i = self._sample_layer_from_root(
-                    fanout, target_vertices, timestamps)
+                    fanout, target_vertices, timestamps, reverse)
             else:
                 blocks_i = self._sample_layer_from_previous_layer(
                     fanout, blocks[-1])
@@ -84,7 +84,7 @@ class TemporalSampler:
         return blocks
 
     def _sample_layer_from_root(self, fanout: int, target_vertices: torch.Tensor,
-                                timestamps: torch.Tensor) -> List[DGLBlock]:
+                                timestamps: torch.Tensor, reverse: bool = False) -> List[DGLBlock]:
 
         end_timestamps = timestamps.clone()
 
@@ -128,14 +128,24 @@ class TemporalSampler:
             all_timestamps = torch.cat(
                 (timestamps, source_timestamps), dim=0)
             cols = torch.arange(len(target_vertices), len(all_vertices))
-            block = dgl.create_block((cols, rows),
-                                     num_src_nodes=len(all_vertices),
-                                     num_dst_nodes=len(target_vertices))
-            block.srcdata['ID'] = all_vertices
-            block.srcdata['ts'] = all_timestamps
-            block.edata['dt'] = delta_timestamps
-            block.edata['ID'] = edge_ids
-            blocks[snapshot] = block
+            if not reverse:
+                block = dgl.create_block((cols, rows),
+                                        num_src_nodes=len(all_vertices),
+                                        num_dst_nodes=len(target_vertices))
+                block.srcdata['ID'] = all_vertices
+                block.srcdata['ts'] = all_timestamps
+                block.edata['dt'] = delta_timestamps
+                block.edata['ID'] = edge_ids
+                blocks[snapshot] = block
+            else:
+                block = dgl.create_block((rows, cols),
+                                        num_src_nodes=len(target_vertices),
+                                        num_dst_nodes=len(all_vertices))
+                block.dstdata['ID'] = all_vertices
+                block.dstdata['ts'] = all_timestamps
+                block.edata['dt'] = delta_timestamps
+                block.edata['ID'] = edge_ids
+                blocks[snapshot] = block
 
         return blocks
 

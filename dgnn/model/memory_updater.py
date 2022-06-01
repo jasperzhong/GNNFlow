@@ -89,10 +89,8 @@ class MailBox():
                 block = block.to(self.device)
             # TGN/JODIE
             if self.memory_param['deliver_to'] == 'self':
-                src = root_nodes[:root_nodes.shape[0] // 3].to(self.device)
-                dst = root_nodes[root_nodes.shape[0] // 3:root_nodes.shape[0] * 2 // 3].to(self.device)
-                # src = torch.from_numpy(root_nodes[:root_nodes.shape[0] // 3]).to(self.device)
-                # dst = torch.from_numpy(root_nodes[root_nodes.shape[0] // 3:root_nodes.shape[0] * 2 // 3]).to(self.device)
+                src = torch.from_numpy(root_nodes[:root_nodes.shape[0] // 3]).to(self.device)
+                dst = torch.from_numpy(root_nodes[root_nodes.shape[0] // 3:root_nodes.shape[0] * 2 // 3]).to(self.device)
                 mem_src = memory[:root_nodes.shape[0] // 3]
                 mem_dst = memory[root_nodes.shape[0] // 3:root_nodes.shape[0] * 2 // 3]
                 if self.dim_edge_feat > 0:
@@ -103,8 +101,7 @@ class MailBox():
                     dst_mail = torch.cat([mem_dst, mem_src], dim=1)
                 mail = torch.cat([src_mail, dst_mail], dim=1).reshape(-1, src_mail.shape[1])
                 nid = torch.cat([src.unsqueeze(1), dst.unsqueeze(1)], dim=1).reshape(-1)
-                mail_ts = ts[:ts.shape[0] * 2 // 3].to(self.device)
-                # mail_ts = torch.from_numpy(ts[:ts.shape[0] * 2 // 3]).to(self.device)
+                mail_ts = torch.from_numpy(ts[:ts.shape[0] * 2 // 3]).to(self.device)
                 # find unique nid to update mailbox
                 uni, inv = torch.unique(nid, return_inverse=True)
                 perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)

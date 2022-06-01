@@ -4,6 +4,7 @@ import torch
 
 from dgnn.dynamic_graph import DynamicGraph
 
+import numpy as np
 
 class TestDynamicGraph(unittest.TestCase):
     def test_add_edges_for_one_vertex(self):
@@ -12,10 +13,11 @@ class TestDynamicGraph(unittest.TestCase):
         """
         dgraph = DynamicGraph(block_size=1)
         source_vertex = 0
-        target_vertices = torch.tensor([1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2])
+        target_vertices = np.array([1, 2, 3])
+        timestamps = np.array([0, 1, 2])
+        edges_ids = torch.arange(0, 0 + len(target_vertices))
         dgraph._add_edges_for_one_vertex(
-            source_vertex, target_vertices, timestamps)
+            source_vertex, target_vertices, timestamps, edges_ids)
         self.assertEqual(dgraph.num_edges, 3)
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(source_vertex), 3)
@@ -35,10 +37,11 @@ class TestDynamicGraph(unittest.TestCase):
         """
         dgraph = DynamicGraph(block_size=1)
         source_vertex = 0
-        target_vertices = torch.tensor([1, 2, 3, 2])
-        timestamps = torch.tensor([0, 1, 2, 3])
+        target_vertices = np.array([1, 2, 3, 2])
+        timestamps = np.array([0, 1, 2, 3])
+        edges_ids = torch.arange(0, 0 + len(target_vertices))
         dgraph._add_edges_for_one_vertex(
-            source_vertex, target_vertices, timestamps)
+            source_vertex, target_vertices, timestamps, edges_ids)
         self.assertEqual(dgraph.num_edges, 4)
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(source_vertex), 4)
@@ -55,10 +58,10 @@ class TestDynamicGraph(unittest.TestCase):
         Test that adding edges sorted by timestamps works.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges, 9)
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(0), 3)
@@ -87,15 +90,52 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(edge_ids.tolist(), [])
         print("Test add edges sorted by timestamps passed.")
 
+    def test_add_edges_sorted_by_timestamps_add_reverse(self):
+        """
+        Test that adding edges sorted by timestamps works.
+        """
+        dgraph = DynamicGraph(block_size=1)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        self.assertEqual(dgraph.num_edges, 18)
+        self.assertEqual(dgraph.num_vertices, 4)
+        self.assertEqual(dgraph.out_degree(0), 3)
+        self.assertEqual(dgraph.out_degree(1), 6)
+        self.assertEqual(dgraph.out_degree(2), 6)
+        self.assertEqual(dgraph.out_degree(3), 3)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
+        self.assertEqual(target_vertices.tolist(), [3, 2, 1])
+        self.assertEqual(timestamps.tolist(), [2, 1, 0])
+        self.assertEqual(edge_ids.tolist(), [2, 1, 0])
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
+        self.assertEqual(target_vertices.tolist(), [3, 2, 2, 1, 0, 1])
+        self.assertEqual(timestamps.tolist(), [2, 1, 0, 0, 0, 0])
+        self.assertEqual(edge_ids.tolist(), [5, 4, 6, 3, 0, 3])
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
+        self.assertEqual(target_vertices.tolist(), [3, 2, 1, 0, 2, 1])
+        self.assertEqual(timestamps.tolist(), [2, 1, 1, 1, 1, 0])
+        self.assertEqual(edge_ids.tolist(), [8, 7, 4, 1, 7, 6])
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
+        self.assertEqual(target_vertices.tolist(), [2, 1, 0])
+        self.assertEqual(timestamps.tolist(), [2, 2, 2])
+        self.assertEqual(edge_ids.tolist(), [8, 5, 2])
+        print("Test add edges sorted by timestamps passed (add reverse).")
+
     def test_add_edges_unsorted(self):
         """
         Test that adding edges unsorted works.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([2, 1, 0, 2, 1, 0, 2, 1, 0])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([2, 1, 0, 2, 1, 0, 2, 1, 0])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
         self.assertEqual(dgraph.num_edges, 9)
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(0), 3)
@@ -106,17 +146,17 @@ class TestDynamicGraph(unittest.TestCase):
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
         self.assertEqual(target_vertices.tolist(), [1, 2, 3])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
-        self.assertEqual(edge_ids.tolist(), [2, 1, 0])
+        self.assertEqual(edge_ids.tolist(), [0, 1, 2]) 
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(1)
         self.assertEqual(target_vertices.tolist(), [1, 2, 3])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
-        self.assertEqual(edge_ids.tolist(), [5, 4, 3])
+        self.assertEqual(edge_ids.tolist(), [3, 4, 5])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(2)
         self.assertEqual(target_vertices.tolist(), [1, 2, 3])
         self.assertEqual(timestamps.tolist(), [2, 1, 0])
-        self.assertEqual(edge_ids.tolist(), [8, 7, 6])
+        self.assertEqual(edge_ids.tolist(), [6, 7, 8])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(3)
         self.assertEqual(target_vertices.tolist(), [])
@@ -129,10 +169,10 @@ class TestDynamicGraph(unittest.TestCase):
         Test that adding edges multiple times works.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
         self.assertEqual(dgraph.num_edges, 9)
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(0), 3)
@@ -161,10 +201,10 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(edge_ids.tolist(), [])
 
         # edges with newer timestamps should be added
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([3, 4, 5, 3, 4, 5, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
         self.assertEqual(dgraph.num_edges, 18)
         self.assertEqual(dgraph.num_vertices, 4)
         self.assertEqual(dgraph.out_degree(0), 6)
@@ -199,14 +239,14 @@ class TestDynamicGraph(unittest.TestCase):
         smaller than the current timestamps.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 1, 2])
-        target_vertices = torch.tensor([1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 1, 2])
+        target_vertices = np.array([1, 2, 3])
+        timestamps = np.array([0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
-        source_vertices = torch.tensor([0])
-        target_vertices = torch.tensor([1])
-        timestamps = torch.tensor([0])
+        source_vertices = np.array([0])
+        target_vertices = np.array([1])
+        timestamps = np.array([0])
         with self.assertRaises(ValueError):
             dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
@@ -217,15 +257,15 @@ class TestDynamicGraph(unittest.TestCase):
         Test if the "new" insertion policy works.
         """
         dgraph = DynamicGraph(block_size=1, insertion_policy="new")
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([3, 4, 5, 3, 4, 5, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         self.assertEqual(dgraph.num_edges, 18)
         self.assertEqual(dgraph.num_vertices, 4)
@@ -261,10 +301,10 @@ class TestDynamicGraph(unittest.TestCase):
         Test if get_neighbors_before_timestamp works.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, end_timestamp=1.5)
@@ -279,10 +319,10 @@ class TestDynamicGraph(unittest.TestCase):
         larger than the existing timestamps.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, end_timestamp=10)
@@ -297,10 +337,10 @@ class TestDynamicGraph(unittest.TestCase):
         smaller than the existing timestamps.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, end_timestamp=0)
@@ -314,10 +354,10 @@ class TestDynamicGraph(unittest.TestCase):
         Test if get_neighbors_after_timestamp works.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, start_timestamp=1.5)
@@ -331,10 +371,10 @@ class TestDynamicGraph(unittest.TestCase):
         Test if get_neighbors_between_timestamps works.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, 1.5, 2.5)
@@ -343,19 +383,19 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(edge_ids.tolist(), [2])
 
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor(
+        source_vertices = np.array(
             [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
-        target_vertices = torch.tensor(
+        target_vertices = np.array(
             [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
-        timestamps = torch.tensor(
+        timestamps = np.array(
             [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, 3, 4)
-        self.assertEqual(target_vertices.tolist(), [5, 4])
-        self.assertEqual(timestamps.tolist(), [4, 3])
-        self.assertEqual(edge_ids.tolist(), [4, 3])
+        self.assertEqual(target_vertices.tolist(), [4])
+        self.assertEqual(timestamps.tolist(), [3.])
+        self.assertEqual(edge_ids.tolist(), [3])
 
         print("Test add edges between timestamps passed.")
 
@@ -365,10 +405,10 @@ class TestDynamicGraph(unittest.TestCase):
         out of range.
         """
         dgraph = DynamicGraph(block_size=1)
-        source_vertices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
-        target_vertices = torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3])
-        timestamps = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0, 1.5, 3.5)
@@ -378,3 +418,5 @@ class TestDynamicGraph(unittest.TestCase):
 
         print("Test add edges between timestamps out of range passed.")
 
+if __name__ == '__main__':
+    unittest.main()

@@ -1,5 +1,6 @@
 import torch
 import dgl
+import numpy as np
 
 def prepare_input(mfgs, node_feats, edge_feats, combine_first=False, pinned=False, nfeat_buffs=None, efeat_buffs=None, nids=None, eids=None):
     if combine_first:
@@ -52,3 +53,30 @@ def prepare_input(mfgs, node_feats, edge_feats, combine_first=False, pinned=Fals
                         srch = edge_feats[b.edata['ID'].long()].float()
                         b.edata['f'] = srch.cuda()
     return mfgs
+
+def mfgs_to_cuda(mfgs):
+    for mfg in mfgs:
+        for i in range(len(mfg)):
+            mfg[i] = mfg[i].to('cuda:0')
+    return mfgs
+
+def node_to_dgl_blocks(target_nodes, ts, cuda=True):
+    target_nodes = torch.tensor(target_nodes)
+    ts = torch.tensor(ts)
+    mfgs = list()
+    b = dgl.create_block(([],[]), num_src_nodes=target_nodes.shape[0], num_dst_nodes=target_nodes.shape[0])
+    b.srcdata['ID'] = target_nodes
+    b.srcdata['ts'] = ts
+    if cuda:
+        mfgs.insert(0, [b.to('cuda:0')])
+    else:
+        mfgs.insert(0, [b])
+    return mfgs
+
+class NegLinkSampler:
+
+    def __init__(self, num_nodes):
+        self.num_nodes = num_nodes
+
+    def sample(self, n):
+        return np.random.randint(self.num_nodes, size=n)

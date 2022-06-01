@@ -25,7 +25,7 @@ def load_graph(data_dir: str = None, dataset: str = 'REDDIT') -> Tuple[pd.DataFr
     val_df = df[train_edge_end:val_edge_end]
     test_df = df[val_edge_end:]
     
-    return train_df, val_df, test_df
+    return train_df, val_df, test_df, df
 
 def load_feat(data_dir: str = None, dataset: str = 'REDDIT', rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
     node_feats = None
@@ -81,9 +81,9 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600, mode='train') -> Tuple[to
     
 def build_dynamic_graph(df: pd.DataFrame, block_size: int = 1024, add_reverse: bool = True) -> DynamicGraph:
 
-    src = df['src'].to_numpy()
-    dst = df['dst'].to_numpy()
-    ts = df['time'].to_numpy()
+    src = df['src'].to_numpy(dtype=np.long)
+    dst = df['dst'].to_numpy(dtype=np.long)
+    ts = df['time'].to_numpy(dtype=np.float32)
 
     dgraph = DynamicGraph(block_size=block_size)
     dgraph.add_edges(src, dst, ts, add_reverse=add_reverse)
