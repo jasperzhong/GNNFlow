@@ -12,6 +12,15 @@
 
 namespace dgnn {
 /**
+ * @brief InsertionPolicy is used to decide how to insert a new temporal block
+ * into the linked list.
+ *
+ * kInsertionPolicyInsert: insert the new block at the head of the list.
+ * kInsertionPolicyReplace: replace the head block with a larger block.
+ */
+enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
+
+/**
  * @brief A dynamic graph is a graph that can be modified at runtime.
  *
  * The dynamic graph is implemented as block adjacency list. It has a vertex
@@ -21,8 +30,11 @@ class DynamicGraph {
  public:
   static constexpr std::size_t kDefaultMaxGpuMemPoolSize = 1 << 30;  // 1 GiB
   static constexpr InsertionPolicy kDefaultInsertionPolicy =
-      InsertionPolicy::kInsertionPolicyReplace;
+      InsertionPolicy::kInsertionPolicyInsert;
   static constexpr std::size_t kDefaultAlignment = 16;
+
+  typedef thrust::device_vector<DoublyLinkedList> DeviceNodeTable;
+  typedef std::vector<DoublyLinkedList> HostNodeTable;
 
   DynamicGraph(std::size_t max_gpu_mem_pool_size = kDefaultMaxGpuMemPoolSize,
                std::size_t alignment = kDefaultAlignment,
@@ -57,6 +69,8 @@ class DynamicGraph {
 
   std::size_t num_edges() const;
 
+  const HostNodeTable& h_copy_of_d_node_table() const;
+
  private:
   void AddEdgesForOneNode(NIDType src_node,
                           const std::vector<NIDType>& dst_nodes,
@@ -65,36 +79,16 @@ class DynamicGraph {
 
   std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size);
 
-  std::shared_ptr<TemporalBlock> AllocateBlock(std::size_t num_edges);
+  TemporalBlock* AllocateBlock(std::size_t num_edges);
 
-  std::shared_ptr<TemporalBlock> ReallocateBlock(
-      std::shared_ptr<TemporalBlock> block, std::size_t num_edges);
+  TemporalBlock* ReallocateBlock(
+      TemporalBlock* block, std::size_t num_edges);
 
-  void InitilizeDoublyLinkedList(NIDType node_id);
+  void InsertBlock(NIDType node_id, TemporalBlock* block);
 
-  void InsertBlockToDoublyLinkedList(NIDType node_id,
-                                     std::shared_ptr<TemporalBlock> block);
-  void ReplaceBlockInDoublyLinkedList(NIDType node_id,
-                                      std::shared_ptr<TemporalBlock> block);
+  void ReplaceBlock(NIDType node_id, TemporalBlock* block);
 
  private:
-  TemporalBlockAllocator allocator_;
-  InsertionPolicy insertion_policy_;
-
-  std::size_t num_nodes_;  // the maximum node id + 1
-  std::size_t num_edges_;
-
-  // doubly linked list. pair<head, tail>
-  typedef thrust::pair<thrust::device_ptr<TemporalBlock>,
-                       thrust::device_ptr<TemporalBlock>>
-      DeviceDoublyLinkedList;
-  typedef thrust::device_vector<DeviceDoublyLinkedList> DeviceNodeTable;
-
-  typedef std::pair<std::shared_ptr<TemporalBlock>,
-                    std::shared_ptr<TemporalBlock>>
-      HostDoublyLinkedList;
-  typedef std::vector<HostDoublyLinkedList> HostNodeTable;
-
   // The device node table. Blocks are allocated in the GPU memory pool.
   // Pointers in each block also point to GPU buffers.
   DeviceNodeTable d_node_table_;
@@ -109,9 +103,13 @@ class DynamicGraph {
   HostNodeTable h_copy_of_d_node_table_;
 
   // mapping from the copied block on the CPU to the original block on the GPU
-  std::unordered_map<std::shared_ptr<TemporalBlock>,
-                     thrust::device_ptr<TemporalBlock>>
-      h2d_mapping_;
+  std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
+
+  TemporalBlockAllocator allocator_;
+  InsertionPolicy insertion_policy_;
+
+  std::size_t num_nodes_;  // the maximum node id + 1
+  std::size_t num_edges_;
 };
 
 }  // namespace dgnn

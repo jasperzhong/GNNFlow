@@ -1,13 +1,10 @@
-#include <thrust/copy.h>
-#include <thrust/device_ptr.h>
-
-#include <memory>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include "logging.h"
 #include "temporal_block_allocator.h"
+#include "utils.h"
 
 namespace dgnn {
 
@@ -27,6 +24,7 @@ TemporalBlockAllocator::TemporalBlockAllocator(
 TemporalBlockAllocator::~TemporalBlockAllocator() {
   for (auto &block : blocks_on_device_) {
     DeallocateInternal(block.second);
+    delete block.second;
   }
 
   // release the memory pool
@@ -47,6 +45,8 @@ TemporalBlockAllocator::~TemporalBlockAllocator() {
     if (block.second->eids != nullptr) {
       delete[] block.second->eids;
     }
+
+    delete block.second;
   }
 
   blocks_on_device_.clear();
@@ -62,9 +62,9 @@ std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
   return 1 << (64 - __builtin_clzl(size - 1));
 }
 
-std::shared_ptr<TemporalBlock> TemporalBlockAllocator::Allocate(
-    std::size_t size) noexcept(false) {
-  auto block = std::make_shared<TemporalBlock>();
+TemporalBlock *TemporalBlockAllocator::Allocate(std::size_t size) noexcept(
+    false) {
+  auto block = new TemporalBlock();
 
   try {
     AllocateInternal(block, size);
@@ -77,22 +77,28 @@ std::shared_ptr<TemporalBlock> TemporalBlockAllocator::Allocate(
     throw;
   }
 
-  blocks_on_device_[block_id_counter_] = block;
-  block_to_id_[block] = block_id_counter_;
-  block_id_counter_++;
-
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    blocks_on_device_[block_id_counter_] = block;
+    block_to_id_[block] = block_id_counter_;
+    block_id_counter_++;
+  }
   return block;
 }
 
-void TemporalBlockAllocator::Deallocate(std::shared_ptr<TemporalBlock> block) {
+void TemporalBlockAllocator::Deallocate(TemporalBlock *block) {
   CHECK_NOTNULL(block);
   DeallocateInternal(block);
-  blocks_on_device_.erase(block_to_id_[block]);
-  block_to_id_.erase(block);
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    blocks_on_device_.erase(block_to_id_[block]);
+    block_to_id_.erase(block);
+  }
 }
 
 void TemporalBlockAllocator::AllocateInternal(
-    std::shared_ptr<TemporalBlock> block, std::size_t size) noexcept(false) {
+    TemporalBlock *block, std::size_t size) noexcept(false) {
   std::size_t capacity = AlignUp(size);
 
   block->size = 0;  // empty block
@@ -101,6 +107,7 @@ void TemporalBlockAllocator::AllocateInternal(
   block->next = nullptr;
 
   // allocate GPU memory for the block
+  // NB: rmm is thread-safe
   auto mr = rmm::mr::get_current_device_resource();
   block->dst_nodes =
       static_cast<NIDType *>(mr->allocate(capacity * sizeof(NIDType)));
@@ -110,8 +117,7 @@ void TemporalBlockAllocator::AllocateInternal(
       static_cast<EIDType *>(mr->allocate(capacity * sizeof(EIDType)));
 }
 
-void TemporalBlockAllocator::DeallocateInternal(
-    std::shared_ptr<TemporalBlock> block) {
+void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block) {
   auto mr = rmm::mr::get_current_device_resource();
   if (block->dst_nodes != nullptr) {
     mr->deallocate(block->dst_nodes, block->capacity * sizeof(NIDType));
@@ -131,29 +137,7 @@ void TemporalBlockAllocator::DeallocateInternal(
   block->next = nullptr;
 }
 
-void TemporalBlockAllocator::Copy(std::shared_ptr<TemporalBlock> src,
-                                  std::shared_ptr<TemporalBlock> dst) {
-  CHECK_NOTNULL(src);
-  CHECK_NOTNULL(dst);
-  CHECK_GE(dst->capacity, src->capacity);
-
-  // assume that the src block is on the GPU
-  thrust::copy(thrust::device_ptr<NIDType>(src->dst_nodes),
-               thrust::device_ptr<NIDType>(src->dst_nodes) + src->size,
-               dst->dst_nodes);
-  thrust::copy(thrust::device_ptr<TimestampType>(src->timestamps),
-               thrust::device_ptr<TimestampType>(src->timestamps) + src->size,
-               dst->timestamps);
-  thrust::copy(thrust::device_ptr<EIDType>(src->eids),
-               thrust::device_ptr<EIDType>(src->eids + src->size), dst->eids);
-
-  dst->size = src->size;
-  dst->prev = src->prev;
-  dst->next = src->next;
-}
-
-std::shared_ptr<TemporalBlock> TemporalBlockAllocator::SwapBlockToHost(
-    std::shared_ptr<TemporalBlock> block) {
+TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block) {
   if (block_to_id_.find(block) == block_to_id_.end()) {
     LOG(WARNING) << "Block not found in block_to_id_";
     return nullptr;
@@ -172,19 +156,22 @@ std::shared_ptr<TemporalBlock> TemporalBlockAllocator::SwapBlockToHost(
   }
 
   // allocate CPU memory for the block
-  auto block_on_host = std::make_shared<TemporalBlock>();
+  auto block_on_host = new TemporalBlock();
   block_on_host->capacity = block->capacity;
   block_on_host->dst_nodes = new NIDType[block_on_host->capacity];
   block_on_host->timestamps = new TimestampType[block_on_host->capacity];
   block_on_host->eids = new EIDType[block_on_host->capacity];
 
-  Copy(block, block_on_host);
+  CopyTemporalBlock(block, block_on_host);
 
   // release GPU memory
   Deallocate(block);
 
-  blocks_on_host_[block_id] = block_on_host;
-  block_to_id_[block_on_host] = block_id;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    blocks_on_host_[block_id] = block_on_host;
+    block_to_id_[block_on_host] = block_id;
+  }
 
   return block_on_host;
 }

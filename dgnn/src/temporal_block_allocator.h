@@ -2,17 +2,17 @@
 #define DGNN_TEMPORAL_BLOCK_ALLOCATOR_H_
 
 #include <map>
-#include <memory>
+#include <mutex>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <stack>
 #include <unordered_map>
 
-#include "common.h"
+#include "temporal_block.h"
 
 namespace dgnn {
 /**
- * @brief This class implements a memory resource that allocates temporal
- * blocks for a GPU.
+ * @brief This class implements a thread-safe memory resource that allocates
+ * temporal blocks for a GPU.
  *
  * The allocator allocates temporal blocks on the GPU. Each block is attached
  * to a specified identifier. The allocator keeps track of the blocks on the
@@ -49,27 +49,14 @@ class TemporalBlockAllocator {
    *
    * @throw rmm::bad_alloc If the allocation fails.
    */
-  std::shared_ptr<TemporalBlock> Allocate(std::size_t size) noexcept(false);
+  TemporalBlock* Allocate(std::size_t size) noexcept(false);
 
   /**
    * @brief Deallocates a temporal block on the GPU.
    *
    * @param block The temporal block to deallocate.
    */
-  void Deallocate(std::shared_ptr<TemporalBlock> block);
-
-  /**
-   * @brief Copy a temporal block on the GPU to another block.
-   *
-   * The destination block should have a size greater than or equal to the
-   * source block. It assumes that the source block is on the GPU. But the
-   * destination block can be on the CPU or on the GPU.
-   *
-   * @param dst The destination temporal block.
-   * @param src The source temporal block.
-   */
-  void Copy(std::shared_ptr<TemporalBlock> src,
-            std::shared_ptr<TemporalBlock> dst);
+  void Deallocate(TemporalBlock* block);
 
   /**
    * @brief Copy a temporal block from GPU to CPU.
@@ -78,8 +65,7 @@ class TemporalBlockAllocator {
    *
    * @return A pointer to the temporal block on the CPU.
    */
-  std::shared_ptr<TemporalBlock> SwapBlockToHost(
-      std::shared_ptr<TemporalBlock> block);
+  TemporalBlock* SwapBlockToHost(TemporalBlock* block);
 
   /**
    * @brief Align up a size to the alignment.
@@ -100,22 +86,23 @@ class TemporalBlockAllocator {
   std::size_t used_space_on_host() const;
 
  private:
-  void AllocateInternal(std::shared_ptr<TemporalBlock> block,
-                        std::size_t size) noexcept(false);
+  void AllocateInternal(TemporalBlock* block, std::size_t size) noexcept(false);
 
-  void DeallocateInternal(std::shared_ptr<TemporalBlock> block);
+  void DeallocateInternal(TemporalBlock* block);
 
   std::size_t alignment_;
   std::stack<rmm::mr::device_memory_resource*> gpu_resources_;
 
   // id -> block raw pointer
-  std::map<uint64_t, std::shared_ptr<TemporalBlock>> blocks_on_device_;
-  std::map<uint64_t, std::shared_ptr<TemporalBlock>> blocks_on_host_;
+  std::map<uint64_t, TemporalBlock*> blocks_on_device_;
+  std::map<uint64_t, TemporalBlock*> blocks_on_host_;
 
-  std::unordered_map<std::shared_ptr<TemporalBlock>, uint64_t> block_to_id_;
+  std::unordered_map<TemporalBlock*, uint64_t> block_to_id_;
 
   // a monotonically increasing sequence number
   uint64_t block_id_counter_;
+
+  std::mutex mutex_;
 };
 
 }  // namespace dgnn

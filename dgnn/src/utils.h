@@ -5,6 +5,8 @@
 #include <numeric>
 #include <vector>
 
+#include "temporal_block.h"
+
 namespace dgnn {
 
 template <typename T>
@@ -31,6 +33,34 @@ std::vector<T> sort_vector(const std::vector<T>& v,
   }
   return sorted_v;
 }
+
+/**
+ * @brief Copy a temporal block on the GPU to another block.
+ *
+ * The destination block should have a size greater than or equal to the
+ * source block. It assumes that the source block is on the GPU. But the
+ * destination block can be on the CPU or on the GPU.
+ *
+ * @param dst The destination temporal block.
+ * @param src The source temporal block.
+ */
+void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst);
+
+/**
+ * @brief Copy edges on the CPU to the block on the GPU.
+ *
+ * The destination block should have a size greater than or equal to the
+ * incoming edges.
+ *
+ * @param block The destination temporal block.
+ * @param dst_nodes The destination nodes.
+ * @param timestamps The timestamps of the incoming edges.
+ * @param eids The ids of the incoming edges.
+ */
+void CopyEdgesToBlock(TemporalBlock* block,
+                      const std::vector<NIDType>& dst_nodes,
+                      const std::vector<TimestampType>& timestamps,
+                      const std::vector<EIDType>& eids);
 }  // namespace dgnn
 
 #endif  // DGNN_UTILS_H_

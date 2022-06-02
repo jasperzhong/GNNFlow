@@ -1,6 +1,9 @@
 #ifndef DGNN_COMMON_H_
 #define DGNN_COMMON_H_
 
+#include <thrust/device_ptr.h>
+#include <thrust/pair.h>
+
 #include <cstddef>
 
 #include "logging.h"
@@ -9,6 +12,9 @@ namespace dgnn {
 using NIDType = uint64_t;
 using EIDType = uint64_t;
 using TimestampType = float;
+
+static constexpr std::size_t kBlockSpaceSize =
+    (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
 
 /**
  * @brief This POD is used to store the temporal blocks in the graph.
@@ -31,16 +37,27 @@ struct TemporalBlock {
   TemporalBlock* next;
 };
 
-static constexpr std::size_t kBlockSpaceSize =
-    (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
-
 /**
- * @brief InsertionPolicy is used to decide how to insert a new temporal block
- * into the linked list.
- *
- * kInsertionPolicyInsert: insert the new block at the head of the list.
- * kInsertionPolicyReplace: replace the head block with a larger block.
+ * @brief This class is doubly linked list of temporal blocks.
  */
-enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
+struct DoublyLinkedList {
+  TemporalBlock head;
+  TemporalBlock tail;
+  std::size_t size;
+
+  DoublyLinkedList() : size(0) {
+    head.prev = nullptr;
+    head.next = &tail;
+    tail.prev = &head;
+    tail.next = nullptr;
+  }
+};
+
+__host__ __device__ void InsertBlockToDoublyLinkedList(
+    DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block);
+
+__global__ void InsertBlockToDoublyLinkedListKernel(
+    DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block);
+
 }  // namespace dgnn
 #endif  // DGNN_COMMON_H_

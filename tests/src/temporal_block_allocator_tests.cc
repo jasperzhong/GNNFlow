@@ -35,7 +35,7 @@ TEST_F(TemporalBlockAllocatorTest, SingleAllocateAndDeallocate) {
 
 TEST_F(TemporalBlockAllocatorTest, MultipleAllocateAndDeallocate) {
   std::vector<std::size_t> sizes = {1024, 2048, 4096, 8192};
-  std::vector<std::shared_ptr<dgnn::TemporalBlock>> blocks;
+  std::vector<dgnn::TemporalBlock*> blocks;
   std::size_t total_size = 0;
   for (std::size_t i = 0; i < sizes.size(); ++i) {
     auto block = allocator_->Allocate(sizes[i]);

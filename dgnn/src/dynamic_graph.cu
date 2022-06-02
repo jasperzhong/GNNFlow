@@ -90,9 +90,8 @@ std::size_t DynamicGraph::num_nodes() const { return num_nodes_; }
 
 std::size_t DynamicGraph::num_edges() const { return num_edges_; }
 
-std::shared_ptr<TemporalBlock> DynamicGraph::AllocateBlock(
-    std::size_t num_edges) {
-  std::shared_ptr<TemporalBlock> block;
+TemporalBlock* DynamicGraph::AllocateBlock(std::size_t num_edges) {
+  TemporalBlock* block;
   try {
     block = allocator_.Allocate(num_edges);
   } catch (rmm::bad_alloc) {
@@ -108,12 +107,12 @@ std::shared_ptr<TemporalBlock> DynamicGraph::AllocateBlock(
   return block;
 }
 
-std::shared_ptr<TemporalBlock> DynamicGraph::ReallocateBlock(
-    std::shared_ptr<TemporalBlock> block, std::size_t num_edges) {
+TemporalBlock* DynamicGraph::ReallocateBlock(TemporalBlock* block,
+                                             std::size_t num_edges) {
   CHECK_NOTNULL(block);
   auto new_block = AllocateBlock(num_edges);
 
-  allocator_.Copy(block, new_block);
+  CopyTemporalBlock(block, new_block);
 
   // release the old block
   allocator_.Deallocate(block);
@@ -121,76 +120,27 @@ std::shared_ptr<TemporalBlock> DynamicGraph::ReallocateBlock(
   return new_block;
 }
 
-void DynamicGraph::InitilizeDoublyLinkedList(NIDType node_id) {
-  // host
-  auto h_head = std::make_shared<TemporalBlock>();
-  auto h_tail = std::make_shared<TemporalBlock>();
-
-  h_head->next = h_tail.get();
-  h_tail->prev = h_head.get();
-
-  h_head->prev = nullptr;
-  h_tail->next = nullptr;
-
-  h_node_table_[node_id] = HostDoublyLinkedList(h_head, h_tail);
-
-  // device
-  thrust::device_ptr<TemporalBlock> d_head =
-      thrust::device_new<TemporalBlock>(1);
-  thrust::device_ptr<TemporalBlock> d_tail =
-      thrust::device_new<TemporalBlock>(1);
-
-  auto tmp_head = *h_head;
-  auto tmp_tail = *h_tail;
-
-  tmp_head.next = d_tail.get();
-  tmp_tail.prev = d_head.get();
-
-  tmp_head.prev = nullptr;
-  tmp_tail.next = nullptr;
-
-  *d_head = tmp_head;
-  *d_tail = tmp_tail;
-
-  d_node_table_[node_id] = DeviceDoublyLinkedList(d_head, d_tail);
-
-  // mapping
-  h2d_mapping_[h_head] = d_head;
-  h2d_mapping_[h_tail] = d_tail;
-}
-
-void DynamicGraph::InsertBlockToDoublyLinkedList(
-    NIDType node_id, std::shared_ptr<TemporalBlock> block) {
+void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
   CHECK_NOTNULL(block);
   // host
-  auto h_head = h_node_table_[node_id].first;
-
-  auto h_head_next = std::shared_ptr<TemporalBlock>(h_head->next);
-  h_head->next = block.get();
-  block->prev = h_head.get();
-  block->next = h_head_next.get();
-  h_head_next->prev = block.get();
+  InsertBlockToDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id, block);
 
   // device
   thrust::device_ptr<TemporalBlock> d_block =
       thrust::device_new<TemporalBlock>(1);
+  *d_block = *block;
 
-  auto d_head = h2d_mapping_[h_head];
-  auto d_head_next = h2d_mapping_[h_head_next];
+  InsertBlockToDoublyLinkedListKernel<<<1, 1>>>(
+      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
 
-  auto tmp_block = *block;
-  auto tmp_head = *h_head;
-  auto tmp_head_next = *h_head_next;
-
-  tmp_head.next = d_block.get();
-  tmp_block.prev = d_head.get();
-  tmp_block.next = d_head_next.get();
-  tmp_head_next.prev = d_block.get();
-  // TODO
+  // mapping
+  h2d_mapping_[block] = d_block.get();
 }
 
-void DynamicGraph::ReplaceBlockInDoublyLinkedList(
-    NIDType node_id, std::shared_ptr<TemporalBlock> block) {}
+void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
+  // TODO
+  LOG(FATAL) << "Not implemented yet";
+}
 
 void DynamicGraph::AddEdgesForOneNode(
     NIDType src_node, const std::vector<NIDType>& dst_nodes,
@@ -198,66 +148,45 @@ void DynamicGraph::AddEdgesForOneNode(
     const std::vector<EIDType>& eids) {
   std::size_t num_edges = dst_nodes.size();
 
-  auto block = h_copy_of_d_node_table_[src_node];
-  bool new_block_created = true;
-  if (block == nullptr) {
-    // allocate memory for the block
-    auto block = allocator_.Allocate(num_edges);
-    h_copy_of_d_node_table_[src_node] = block;
-  } else if (block->size + num_edges > block->capacity) {
+  auto& head = h_copy_of_d_node_table_[src_node].head;
+  auto& tail = h_copy_of_d_node_table_[src_node].tail;
+
+  if (head.next == &tail) {
+    // empty list
+    auto block = AllocateBlock(num_edges);
+    InsertBlock(src_node, block);
+  }
+
+  auto block = head.next;
+
+  if (block->size + num_edges > block->capacity) {
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
-      // create a new block and insert it to the head of the list
-      auto new_block = allocator_.Allocate(num_edges);
-      // get the block pointer on device
-      new_block->next = block.get();
-      h_copy_of_d_node_table_[src_node] = new_block;
-    } else if (insertion_policy_ == InsertionPolicy::kInsertionPolicyReplace) {
-      // reallocate a new block to replace the old one
-      auto new_block = allocator_.Reallocate(block, block->size + num_edges);
-      h_copy_of_d_node_table_[src_node] = new_block;
-
-      // delete the old block on device
-      auto old_block = h2d_mapping_[block];
-      thrust::device_delete(old_block);
-      h2d_mapping_.erase(block);
+      // insert new block
+      auto new_block = AllocateBlock(num_edges);
+      InsertBlock(src_node, new_block);
+      block = new_block;
+    } else {
+      // reallocate block
+      auto new_block = ReallocateBlock(block, num_edges);
+      ReplaceBlock(src_node, new_block);
+      block = new_block;
     }
-  } else {
-    new_block_created = false;
   }
 
-  block = h_copy_of_d_node_table_[src_node];
+  // copy data to block
+  CopyEdgesToBlock(block, dst_nodes, timestamps, eids);
 
-  // copy the edges to the device
-  thrust::copy(dst_nodes.begin(), dst_nodes.end(),
-               thrust::device_ptr<NIDType>(block->dst_nodes) + block->size);
-  thrust::copy(
-      timestamps.begin(), timestamps.end(),
-      thrust::device_ptr<TimestampType>(block->timestamps) + block->size);
-  thrust::copy(eids.begin(), eids.end(),
-               thrust::device_ptr<EIDType>(block->eids) + block->size);
+  // update
+}
 
-  block->size += num_edges;
-
-  // update the node table on device
-  if (new_block_created) {
-    auto block_on_device = thrust::device_new<TemporalBlock>(1);
-    TemporalBlock block_on_host = *block;
-    if (block->next != nullptr) {
-      std::shared_ptr<TemporalBlock> next_block(block->next);
-      CHECK_NE(h2d_mapping_.find(next_block), h2d_mapping_.end());
-      auto next_block_on_device = h2d_mapping_[next_block];
-      block_on_host.next = next_block_on_device.get();
-    }
-    *block_on_device = block_on_host;
-    h2d_mapping_[block] = block_on_device;
-    d_node_table_[src_node] = block_on_device;
-  } else {
-    *h2d_mapping_[block] = *block;
-  }
+const DynamicGraph::HostNodeTable& DynamicGraph::h_copy_of_d_node_table()
+    const {
+  return h_copy_of_d_node_table_;
 }
 
 std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
   // TODO
+  LOG(FATAL) << "Not implemented yet";
   return 0;
 }
 }  // namespace dgnn
