@@ -1,3 +1,4 @@
+from time import time
 import warnings
 from typing import List, Optional
 
@@ -48,7 +49,7 @@ class TemporalSampler:
         self._snapshot_time_window = snapshot_time_window
         self._num_workers = num_workers
 
-    def sample(self, target_vertices: np.array, timestamps: np.array, reverse: bool = False) \
+    def sample(self, target_vertices: np.array, timestamps: np.array, prop_time:bool = False, reverse: bool = False) \
             -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
@@ -71,12 +72,20 @@ class TemporalSampler:
 
         blocks = []
         for layer, fanout in enumerate(self._fanouts):
-            if layer == 0:
-                blocks_i = self._sample_layer_from_root(
-                    fanout, target_vertices, timestamps, reverse)
+            if prop_time:
+                if layer == 0:
+                    blocks_i, prop_time_list = self._sample_layer_from_root(
+                        fanout, target_vertices, timestamps, prop_time, reverse)
+                else:
+                    blocks_i = self._sample_layer_from_previous_layer(
+                        fanout, blocks[-1], prop_time_list)
             else:
-                blocks_i = self._sample_layer_from_previous_layer(
-                    fanout, blocks[-1])
+                if layer == 0:
+                    blocks_i = self._sample_layer_from_root(
+                        fanout, target_vertices, timestamps, reverse=reverse)
+                else:
+                    blocks_i = self._sample_layer_from_previous_layer(
+                        fanout, blocks[-1])
 
             blocks.append(blocks_i)
 
@@ -84,11 +93,12 @@ class TemporalSampler:
         return blocks
 
     def _sample_layer_from_root(self, fanout: int, target_vertices: torch.Tensor,
-                                timestamps: torch.Tensor, reverse: bool = False) -> List[DGLBlock]:
+                                timestamps: torch.Tensor, prop_time: bool = False, reverse: bool = False) -> List[DGLBlock]:
 
         end_timestamps = timestamps.clone()
 
         blocks = [None for _ in range(self._num_snapshots)]
+        prop_time_list = [None for _ in range(self._num_snapshots)] if prop_time else None
         for snapshot in reversed(range(self._num_snapshots)):
             # from the last snapshot, we sample the vertices with the largest
             # timestamps
@@ -97,6 +107,7 @@ class TemporalSampler:
             source_timestamps = torch.FloatTensor()
             delta_timestamps = torch.FloatTensor()
             edge_ids = torch.LongTensor()
+            prop_time_source_timestamps = torch.FloatTensor()
 
             # update the timestamps
             offset = self._snapshot_time_window * \
@@ -123,10 +134,15 @@ class TemporalSampler:
                         result[2], timestamps[i].item()) - result[2]
                     delta_timestamps = torch.cat(
                         [delta_timestamps, delta_timestamp])
+                    if prop_time:
+                        prop_time_source_timestamps = torch.cat(
+                            [prop_time_source_timestamps, torch.full((len(result[1]),), end_timestamp)]
+                        )
 
             all_vertices = torch.cat((target_vertices, source_vertices), dim=0)
             all_timestamps = torch.cat(
                 (timestamps, source_timestamps), dim=0)
+            prop_timestamps = torch.cat((timestamps, prop_time_source_timestamps), dim=0)
             cols = torch.arange(len(target_vertices), len(all_vertices))
             if not reverse:
                 block = dgl.create_block((cols, rows),
@@ -146,10 +162,16 @@ class TemporalSampler:
                 block.edata['dt'] = delta_timestamps
                 block.edata['ID'] = edge_ids
                 blocks[snapshot] = block
+            
+            if prop_time:
+                prop_time_list[snapshot] = prop_timestamps
 
-        return blocks
+        if prop_time:
+            return blocks, prop_time_list
+        else:
+            return blocks
 
-    def _sample_layer_from_previous_layer(self, fanout: int, prev_blocks: List[DGLBlock]) \
+    def _sample_layer_from_previous_layer(self, fanout: int, prev_blocks: List[DGLBlock], prop_time_list: List[torch.Tensor] = None) \
             -> List[DGLBlock]:
 
         assert len(
@@ -164,7 +186,10 @@ class TemporalSampler:
             edge_ids = torch.LongTensor()
 
             target_vertices = prev_blocks[snapshot].srcdata['ID']
-            timestamps = prev_blocks[snapshot].srcdata['ts']
+            if prop_time_list is None:
+                timestamps = prev_blocks[snapshot].srcdata['ts']
+            else:
+                timestamps = prop_time_list[snapshot]
 
             end_timestamps = timestamps.clone()
 
