@@ -4,7 +4,10 @@ from .layers import *
 
 class TGN(torch.nn.Module):
 
-    def __init__(self, dim_node, dim_edge, sample_param, memory_param, gnn_param, train_param, combined=False):
+    def __init__(self, dim_node, dim_edge, sample_param, memory_param, gnn_param, train_param,
+                sample_history = 1, memory_dim_out = 100, layer = 1, gnn_dim_out = 100,
+                gnn_dim_time = 100, gnn_attn_head = 2, dropout = 0.2, attn_dropout = 0.2,
+                combined=False):
         super(TGN, self).__init__()
         self.dim_node = dim_node
         self.dim_node_input = dim_node
@@ -14,6 +17,16 @@ class TGN(torch.nn.Module):
 
         self.gnn_param = gnn_param
         self.train_param = train_param
+
+        # self.sample_history = sample_history
+        # self.memory_dim_out = memory_dim_out
+        # self.gnn_dim_out = gnn_dim_out
+        # self.gnn_dim_time = gnn_dim_time
+        # self.gnn_attn_head = gnn_attn_head
+        # self.gnn_layer = layer
+        # self.dropout = dropout
+        # self.attn_dropout = attn_dropout
+
 
         # Memory updater
         self.memory_updater = GRUMemeoryUpdater(memory_param, 2 * memory_param['dim_out'] + dim_edge, memory_param['dim_out'], memory_param['dim_time'], dim_node)

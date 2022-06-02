@@ -12,6 +12,8 @@ class JODIE(torch.nn.Module):
         self.sample_param = sample_param
         self.memory_param = memory_param
 
+        # no dim_out in gnn_param
+        gnn_param['dim_out'] = memory_param['dim_out']
         self.gnn_param = gnn_param
         self.train_param = train_param
         
