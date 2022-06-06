@@ -132,6 +132,7 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
 
   InsertBlockToDoublyLinkedListKernel<<<1, 1>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
+  cudaDeviceSynchronize();
 
   // mapping
   h2d_mapping_[block] = d_block.get();

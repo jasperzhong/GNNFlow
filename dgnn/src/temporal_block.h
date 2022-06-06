@@ -45,7 +45,7 @@ struct DoublyLinkedList {
   TemporalBlock tail;
   std::size_t size;
 
-  DoublyLinkedList() : size(0) {
+  __host__ __device__ DoublyLinkedList() : size(0) {
     head.prev = nullptr;
     head.next = &tail;
     tail.prev = &head;
