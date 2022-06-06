@@ -9,9 +9,7 @@ namespace dgnn {
 #define CUDA_CALL(func)                                              \
   {                                                                  \
     cudaError_t e = (func);                                          \
-    if (e == cudaSuccess || e == cudaErrorCudartUnloading)           \
-      return;                                                        \
-    else                                                             \
+    if (e != cudaSuccess && e != cudaErrorCudartUnloading)           \
       throw thrust::system_error(e, thrust::cuda_category(), #func); \
   }
 
