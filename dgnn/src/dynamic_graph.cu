@@ -94,7 +94,7 @@ TemporalBlock* DynamicGraph::AllocateBlock(std::size_t num_edges) {
     block = allocator_.Allocate(num_edges);
   } catch (rmm::bad_alloc) {
     // if we can't allocate the block, we need to free some memory
-    std::size_t min_swap_size = allocator_.AlignUp(num_edges) * kBlockSpaceSize;
+    std::size_t min_swap_size = allocator_.AlignUp(num_edges);
     auto swapped_size = SwapOldBlocksToCPU(min_swap_size);
     LOG(INFO) << "Swapped " << swapped_size << " bytes to CPU";
 
@@ -136,10 +136,28 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
   h2d_mapping_[block] = d_block;
 }
 
+void DynamicGraph::DeleteTailBlock(NIDType node_id) {
+  // host
+  auto tail = h_copy_of_d_node_table_[node_id].tail.prev;
+  CHECK_NE(tail, &h_copy_of_d_node_table_[node_id].head);
+
+  DeleteTailFromDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id);
+
+  // device
+  DeleteTailFromDoublyLinkedListKernel<<<1, 1>>>(
+      thrust::raw_pointer_cast(d_node_table_.data()), node_id);
+  cudaDeviceSynchronize();
+
+  // delete
+  thrust::device_delete(h2d_mapping_[tail]);
+  h2d_mapping_.erase(tail);
+  delete tail;
+}
+
 void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
   CHECK_NOTNULL(block);
   // host
-  auto old_block = h_node_table_[node_id].head.next;
+  auto old_block = h_copy_of_d_node_table_[node_id].head.next;
   ReplaceBlockInDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id,
                                  block);
 
@@ -212,6 +230,30 @@ const DynamicGraph::HostNodeTable& DynamicGraph::h_copy_of_d_node_table()
 }
 
 std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
-  return 0;
+  std::size_t swapped_size = 0;
+
+  // iterate over the list of blocks
+  while (swapped_size < min_swap_size) {
+    for (std::size_t src_node = 0; src_node < num_nodes_; ++src_node) {
+      auto& list = h_copy_of_d_node_table_[src_node];
+      auto block = list.tail.prev;
+      if (block != &list.head && block->size > 0) {
+        // block is not empty
+        // copy to CPU
+        auto block_on_host = allocator_.SwapBlockToHost(block);
+        InsertBlockToDoublyLinkedList(h_node_table_.data(), src_node,
+                                      block_on_host);
+
+        DeleteTailBlock(src_node);
+        swapped_size += block->capacity;
+      }
+
+      if (swapped_size >= min_swap_size) {
+        break;
+      }
+    }
+  }
+
+  return swapped_size;
 }
 }  // namespace dgnn

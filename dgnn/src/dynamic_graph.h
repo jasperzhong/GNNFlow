@@ -86,6 +86,8 @@ class DynamicGraph {
 
   void InsertBlock(NIDType node_id, TemporalBlock* block);
 
+  void DeleteTailBlock(NIDType node_id);
+
   void ReplaceBlock(NIDType node_id, TemporalBlock* block);
 
   void SyncBlock(TemporalBlock* block);

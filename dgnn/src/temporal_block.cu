@@ -35,4 +35,18 @@ __global__ void ReplaceBlockInDoublyLinkedListKernel(
   ReplaceBlockInDoublyLinkedList(node_table, node_id, block);
 }
 
+__host__ __device__ void DeleteTailFromDoublyLinkedList(
+    DoublyLinkedList* node_table, NIDType node_id) {
+  auto& list = node_table[node_id];
+  auto tail = list.tail.prev;
+  tail->prev->next = &list.tail;
+  list.tail.prev = tail->prev;
+  list.size--;
+}
+
+__global__ void DeleteTailFromDoublyLinkedListKernel(
+    DoublyLinkedList* node_table, NIDType node_id) {
+  DeleteTailFromDoublyLinkedList(node_table, node_id);
+}
+
 }  // namespace dgnn

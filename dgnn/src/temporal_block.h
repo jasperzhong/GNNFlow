@@ -65,5 +65,11 @@ __host__ __device__ void ReplaceBlockInDoublyLinkedList(
 __global__ void ReplaceBlockInDoublyLinkedListKernel(
     DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block);
 
+__host__ __device__ void DeleteTailFromDoublyLinkedList(
+    DoublyLinkedList* node_table, NIDType node_id);
+
+__global__ void DeleteTailFromDoublyLinkedListKernel(
+    DoublyLinkedList* node_table, NIDType node_id);
+
 }  // namespace dgnn
 #endif  // DGNN_COMMON_H_
