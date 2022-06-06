@@ -130,7 +130,7 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
 
   InsertBlockToDoublyLinkedListKernel<<<1, 1>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
-  cudaDeviceSynchronize();
+  CUDA_CALL(cudaDeviceSynchronize());
 
   // mapping
   h2d_mapping_[block] = d_block;
@@ -146,7 +146,7 @@ void DynamicGraph::DeleteTailBlock(NIDType node_id) {
   // device
   DeleteTailFromDoublyLinkedListKernel<<<1, 1>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id);
-  cudaDeviceSynchronize();
+  CUDA_CALL(cudaDeviceSynchronize());
 
   // delete
   thrust::device_delete(h2d_mapping_[tail]);
@@ -168,7 +168,7 @@ void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
 
   ReplaceBlockInDoublyLinkedListKernel<<<1, 1>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
-  cudaDeviceSynchronize();
+  CUDA_CALL(cudaDeviceSynchronize());
 
   // delete
   thrust::device_delete(h2d_mapping_[old_block]);

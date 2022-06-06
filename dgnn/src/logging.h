@@ -6,6 +6,15 @@
 
 namespace dgnn {
 
+#define CUDA_CALL(func)                                              \
+  {                                                                  \
+    cudaError_t e = (func);                                          \
+    if (e == cudaSuccess || e == cudaErrorCudartUnloading)           \
+      return;                                                        \
+    else                                                             \
+      throw thrust::system_error(e, thrust::cuda_category(), #func); \
+  }
+
 enum class LogLevel { TRACE, DEBUG, INFO, WARNING, ERROR, FATAL };
 
 constexpr char LOG_LEVELS[] = "TDIWEF";
