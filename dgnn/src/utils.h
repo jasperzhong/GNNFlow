@@ -57,13 +57,13 @@ void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst);
  * @param timestamps The timestamps of the incoming edges.
  * @param eids The ids of the incoming edges.
  * @param start_idx The start index of the incoming edges.
- * @param end_idx The end index of the incoming edges.
+ * @param num_edges The number of incoming edges.
  */
 void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<NIDType>& dst_nodes,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
-                      std::size_t end_idx);
+                      std::size_t num_edges);
 }  // namespace dgnn
 
 #endif  // DGNN_UTILS_H_

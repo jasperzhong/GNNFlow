@@ -3,8 +3,6 @@
 #include <thrust/device_new.h>
 
 #include <algorithm>
-#include <cstdio>
-#include <numeric>
 #include <rmm/detail/error.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -183,12 +181,14 @@ void DynamicGraph::AddEdgesForOneNode(
     // not enough space in the current block
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
       // copy some to existing block
-      std::size_t copy_size = head.next->capacity - head.next->size;
-      CopyEdgesToBlock(head.next, dst_nodes, timestamps, eids, 0, copy_size);
+      std::size_t num_edges_to_existing_block =
+          head.next->capacity - head.next->size;
+      CopyEdgesToBlock(head.next, dst_nodes, timestamps, eids, 0,
+                       num_edges_to_existing_block);
       SyncBlock(head.next);
-      start_idx = copy_size;
+      start_idx = num_edges_to_existing_block;
 
-      num_edges -= copy_size;
+      num_edges -= num_edges_to_existing_block;
       // insert new block
       auto new_block = AllocateBlock(num_edges);
       InsertBlock(src_node, new_block);
@@ -212,8 +212,6 @@ const DynamicGraph::HostNodeTable& DynamicGraph::h_copy_of_d_node_table()
 }
 
 std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
-  // TODO
-  LOG(FATAL) << "Not implemented yet";
   return 0;
 }
 }  // namespace dgnn

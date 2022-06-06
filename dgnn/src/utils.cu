@@ -29,24 +29,25 @@ void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<NIDType>& dst_nodes,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
-                      std::size_t end_idx) {
+                      std::size_t num_edges) {
   CHECK_NOTNULL(block);
   CHECK_EQ(dst_nodes.size(), timestamps.size());
   CHECK_EQ(eids.size(), timestamps.size());
-  std::size_t size = end_idx - start_idx;
-  CHECK_LE(block->size + size, block->capacity);
+  CHECK_LE(block->size + num_edges, block->capacity);
   // assume that the block is on the GPU
 
-  thrust::copy(dst_nodes.begin() + start_idx, dst_nodes.begin() + end_idx,
+  thrust::copy(dst_nodes.begin() + start_idx,
+               dst_nodes.begin() + start_idx + num_edges,
                thrust::device_ptr<NIDType>(block->dst_nodes) + block->size);
 
   thrust::copy(
-      timestamps.begin() + start_idx, timestamps.begin() + end_idx,
+      timestamps.begin() + start_idx,
+      timestamps.begin() + start_idx + num_edges,
       thrust::device_ptr<TimestampType>(block->timestamps) + block->size);
 
-  thrust::copy(eids.begin() + start_idx, eids.begin() + end_idx,
+  thrust::copy(eids.begin() + start_idx, eids.begin() + start_idx + num_edges,
                thrust::device_ptr<EIDType>(block->eids) + block->size);
 
-  block->size += size;
+  block->size += num_edges;
 }
 }  // namespace dgnn
