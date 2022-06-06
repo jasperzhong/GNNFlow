@@ -59,5 +59,11 @@ __host__ __device__ void InsertBlockToDoublyLinkedList(
 __global__ void InsertBlockToDoublyLinkedListKernel(
     DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block);
 
+__host__ __device__ void ReplaceBlockInDoublyLinkedList(
+    DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block);
+
+__global__ void ReplaceBlockInDoublyLinkedListKernel(
+    DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block);
+
 }  // namespace dgnn
 #endif  // DGNN_COMMON_H_

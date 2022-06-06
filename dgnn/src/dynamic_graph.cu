@@ -139,8 +139,25 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
 }
 
 void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
-  // TODO
-  LOG(FATAL) << "Not implemented yet";
+  CHECK_NOTNULL(block);
+  // host
+  auto old_block = h_node_table_[node_id].head.next;
+  ReplaceBlockInDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id,
+                                 block);
+
+  // device
+  thrust::device_ptr<TemporalBlock> d_block =
+      thrust::device_new<TemporalBlock>(1);
+  *d_block = *block;
+
+  ReplaceBlockInDoublyLinkedListKernel<<<1, 1>>>(
+      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
+  cudaDeviceSynchronize();
+
+  // delete
+  thrust::device_delete(h2d_mapping_[old_block]);
+  h2d_mapping_.erase(old_block);
+  delete old_block;
 }
 
 void DynamicGraph::SyncBlock(TemporalBlock* block) {
