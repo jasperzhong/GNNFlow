@@ -135,12 +135,17 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
   cudaDeviceSynchronize();
 
   // mapping
-  h2d_mapping_[block] = d_block.get();
+  h2d_mapping_[block] = d_block;
 }
 
 void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
   // TODO
   LOG(FATAL) << "Not implemented yet";
+}
+
+void DynamicGraph::SyncBlock(TemporalBlock* block) {
+  CHECK_NE(h2d_mapping_.find(block), h2d_mapping_.end());
+  *h2d_mapping_[block] = *block;
 }
 
 void DynamicGraph::AddEdgesForOneNode(
@@ -152,32 +157,36 @@ void DynamicGraph::AddEdgesForOneNode(
   auto& head = h_copy_of_d_node_table_[src_node].head;
   auto& tail = h_copy_of_d_node_table_[src_node].tail;
 
+  std::size_t start_idx = 0;
   if (head.next == &tail) {
     // empty list
     auto block = AllocateBlock(num_edges);
     InsertBlock(src_node, block);
+  } else if (head.next->size + num_edges > head.next->capacity) {
+    // not enough space in the current block
+    if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
+      // copy some to existing block
+      std::size_t copy_size = head.next->capacity - head.next->size;
+      CopyEdgesToBlock(head.next, dst_nodes, timestamps, eids, 0, copy_size);
+      SyncBlock(head.next);
+      start_idx = copy_size;
+
+      num_edges -= copy_size;
+      // insert new block
+      auto new_block = AllocateBlock(num_edges);
+      InsertBlock(src_node, new_block);
+    } else {
+      // reallocate block
+      auto new_block = ReallocateBlock(head.next, num_edges);
+      ReplaceBlock(src_node, new_block);
+    }
   }
 
   auto block = head.next;
 
-  if (block->size + num_edges > block->capacity) {
-    if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
-      // insert new block
-      auto new_block = AllocateBlock(num_edges);
-      InsertBlock(src_node, new_block);
-      block = new_block;
-    } else {
-      // reallocate block
-      auto new_block = ReallocateBlock(block, num_edges);
-      ReplaceBlock(src_node, new_block);
-      block = new_block;
-    }
-  }
-
   // copy data to block
-  CopyEdgesToBlock(block, dst_nodes, timestamps, eids);
-
-  // update
+  CopyEdgesToBlock(block, dst_nodes, timestamps, eids, start_idx, num_edges);
+  SyncBlock(block);
 }
 
 const DynamicGraph::HostNodeTable& DynamicGraph::h_copy_of_d_node_table()

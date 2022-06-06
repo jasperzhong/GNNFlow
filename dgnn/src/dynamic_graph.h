@@ -1,6 +1,7 @@
 #ifndef DGNN_DYNAMIC_GRAPH_H_
 #define DGNN_DYNAMIC_GRAPH_H_
 
+#include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 
 #include <memory>
@@ -81,12 +82,13 @@ class DynamicGraph {
 
   TemporalBlock* AllocateBlock(std::size_t num_edges);
 
-  TemporalBlock* ReallocateBlock(
-      TemporalBlock* block, std::size_t num_edges);
+  TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges);
 
   void InsertBlock(NIDType node_id, TemporalBlock* block);
 
   void ReplaceBlock(NIDType node_id, TemporalBlock* block);
+
+  void SyncBlock(TemporalBlock* block);
 
  private:
   // The device node table. Blocks are allocated in the GPU memory pool.
@@ -103,7 +105,8 @@ class DynamicGraph {
   HostNodeTable h_copy_of_d_node_table_;
 
   // mapping from the copied block on the CPU to the original block on the GPU
-  std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
+  std::unordered_map<TemporalBlock*, thrust::device_ptr<TemporalBlock>>
+      h2d_mapping_;
 
   TemporalBlockAllocator allocator_;
   InsertionPolicy insertion_policy_;
