@@ -26,10 +26,10 @@ class TemporalBlockAllocator {
    * It creates a memory pool on the GPU.
    *
    * @param max_gpu_mem_pool_size The maximum size of the GPU memory pool.
-   * @param alignment The alignment of the temporal blocks.
+   * @param min_block_size The minimum size of the temporal block.
    */
   TemporalBlockAllocator(std::size_t max_gpu_mem_pool_size,
-                         std::size_t alignment);
+                         std::size_t min_block_size);
 
   /**
    * @brief Destructor.
@@ -68,9 +68,9 @@ class TemporalBlockAllocator {
   TemporalBlock* SwapBlockToHost(TemporalBlock* block);
 
   /**
-   * @brief Align up a size to the alignment.
+   * @brief Align up a size to the min_block_size.
    *
-   * If the size is less than the alignment, it returns the alignment. If not,
+   * If the size is less than the min_block_size, it returns the min_block_size. If not,
    * it rounds up the size to the next power of two.
    *
    * @param size The size to align up.
@@ -90,7 +90,7 @@ class TemporalBlockAllocator {
 
   void DeallocateInternal(TemporalBlock* block);
 
-  std::size_t alignment_;
+  std::size_t min_block_size_;
   std::stack<rmm::mr::device_memory_resource*> gpu_resources_;
 
   // id -> block raw pointer

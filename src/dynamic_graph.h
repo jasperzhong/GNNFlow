@@ -26,7 +26,7 @@ class DynamicGraph {
   typedef std::vector<DoublyLinkedList> HostNodeTable;
 
   DynamicGraph(std::size_t max_gpu_mem_pool_size = kDefaultMaxGpuMemPoolSize,
-               std::size_t alignment = kDefaultAlignment,
+               std::size_t min_block_size = kDefaultMinBlockSize,
                InsertionPolicy insertion_policy = kDefaultInsertionPolicy);
   ~DynamicGraph() = default;
 

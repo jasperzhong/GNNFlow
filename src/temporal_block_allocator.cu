@@ -9,8 +9,8 @@
 namespace dgnn {
 
 TemporalBlockAllocator::TemporalBlockAllocator(
-    std::size_t max_gpu_mem_pool_size, std::size_t alignment)
-    : alignment_(alignment), block_id_counter_(0) {
+    std::size_t max_gpu_mem_pool_size, std::size_t min_block_size)
+    : min_block_size_(min_block_size), block_id_counter_(0) {
   // create a memory pool
   auto mem_res = new rmm::mr::cuda_memory_resource();
   gpu_resources_.push(mem_res);
@@ -55,8 +55,8 @@ TemporalBlockAllocator::~TemporalBlockAllocator() {
 }
 
 std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
-  if (size < alignment_) {
-    return alignment_;
+  if (size < min_block_size_) {
+    return min_block_size_;
   }
   // round up to the next power of two
   return 1 << (64 - __builtin_clzl(size - 1));

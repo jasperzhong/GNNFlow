@@ -27,7 +27,7 @@ PYBIND11_MODULE(dgnn, m) {
       .def(
           py::init<std::size_t, std::size_t, InsertionPolicy>(),
           py::arg("max_gpu_pool_size") = kDefaultMaxGpuMemPoolSize,
-          py::arg("block_size") = kDefaultAlignment,
+          py::arg("min_block_size") = kDefaultMinBlockSize,
           py::arg("insertion_policy") = InsertionPolicy::kInsertionPolicyInsert)
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"),

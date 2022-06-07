@@ -15,9 +15,9 @@
 namespace dgnn {
 
 DynamicGraph::DynamicGraph(std::size_t max_gpu_mem_pool_size,
-                           std::size_t alignment,
+                           std::size_t min_block_size,
                            InsertionPolicy insertion_policy)
-    : allocator_(max_gpu_mem_pool_size, alignment),
+    : allocator_(max_gpu_mem_pool_size, min_block_size),
       insertion_policy_(insertion_policy),
       num_nodes_(0),
       num_edges_(0) {}
