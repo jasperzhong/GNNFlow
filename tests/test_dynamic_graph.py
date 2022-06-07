@@ -1,6 +1,5 @@
 import unittest
 
-import torch
 import numpy as np
 
 import dgnn
@@ -15,7 +14,7 @@ class TestDynamicGraph(unittest.TestCase):
                               dgnn.InsertionPolicy.insert)
 
         # Add Edges
-        source_vertices = [0, 0, 0, 1, 1, 1, 2, 2, 2]
-        target_vertices = [1, 2, 3, 1, 2, 3, 1, 2, 3]
-        timestamps = [0, 1, 2, 0, 1, 2, 0, 1, 2]
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2]).astype(np.int64)
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3]).astype(np.int64)
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2]).astype(np.float32)
         dgraph.add_edges(source_vertices, target_vertices, timestamps, True)
