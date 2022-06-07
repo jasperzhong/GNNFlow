@@ -5,7 +5,7 @@
 #include <numeric>
 #include <vector>
 
-#include "temporal_block.h"
+#include "common.h"
 
 namespace dgnn {
 

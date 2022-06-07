@@ -5,22 +5,15 @@
 #include <thrust/device_vector.h>
 
 #include <memory>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "doubly_linked_list.h"
 #include "temporal_block_allocator.h"
 
 namespace dgnn {
-/**
- * @brief InsertionPolicy is used to decide how to insert a new temporal block
- * into the linked list.
- *
- * kInsertionPolicyInsert: insert the new block at the head of the list.
- * kInsertionPolicyReplace: replace the head block with a larger block.
- */
-enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
-
 /**
  * @brief A dynamic graph is a graph that can be modified at runtime.
  *
@@ -29,11 +22,6 @@ enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
  */
 class DynamicGraph {
  public:
-  static constexpr std::size_t kDefaultMaxGpuMemPoolSize = 1 << 30;  // 1 GiB
-  static constexpr InsertionPolicy kDefaultInsertionPolicy =
-      InsertionPolicy::kInsertionPolicyInsert;
-  static constexpr std::size_t kDefaultAlignment = 16;
-
   typedef thrust::device_vector<DoublyLinkedList> DeviceNodeTable;
   typedef std::vector<DoublyLinkedList> HostNodeTable;
 
@@ -70,7 +58,14 @@ class DynamicGraph {
 
   std::size_t num_edges() const;
 
-  const HostNodeTable& h_copy_of_d_node_table() const;
+  std::size_t out_degree(NIDType node) const;
+
+  // it is inefficient to call this function every time for each node. Debug
+  // only.
+  typedef std::tuple<std::vector<NIDType>, std::vector<NIDType>,
+                     std::vector<TimestampType>>
+      NodeNeighborTuple;
+  NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
 
  private:
   void AddEdgesForOneNode(NIDType src_node,

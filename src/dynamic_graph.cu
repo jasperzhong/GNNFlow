@@ -32,7 +32,6 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
 
   std::vector<EIDType> eids(src_nodes.size());
   std::iota(eids.begin(), eids.end(), num_edges_);
-  num_edges_ += eids.size();
 
   // for undirected graphs, we need to add the reverse edges
   if (add_reverse_edges) {
@@ -41,6 +40,7 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
     timestamps.insert(timestamps.end(), timestamps.begin(), timestamps.end());
     eids.insert(eids.end(), eids.begin(), eids.end());
   }
+  num_edges_ += eids.size();
 
   // add nodes
   NIDType max_node =
@@ -224,11 +224,6 @@ void DynamicGraph::AddEdgesForOneNode(
   SyncBlock(block);
 }
 
-const DynamicGraph::HostNodeTable& DynamicGraph::h_copy_of_d_node_table()
-    const {
-  return h_copy_of_d_node_table_;
-}
-
 std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
   std::size_t swapped_size = 0;
 
@@ -256,4 +251,82 @@ std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
 
   return swapped_size;
 }
+
+std::size_t DynamicGraph::out_degree(NIDType node) const {
+  size_t out_degree = 0;
+  {
+    auto& list = h_copy_of_d_node_table_[node];
+    auto block = list.head.next;
+    while (block != &list.tail) {
+      out_degree += block->size;
+      block = block->next;
+    }
+  }
+
+  {
+    auto& list = h_node_table_[node];
+    auto block = list.head.next;
+    while (block != &list.tail) {
+      out_degree += block->size;
+      block = block->next;
+    }
+  }
+  return out_degree;
+}
+
+DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
+    NIDType node) const {
+  NodeNeighborTuple result;
+  {
+    // NB: reference is necessary
+    auto& list = h_copy_of_d_node_table_[node];
+    auto block = list.head.next;
+    while (block != &list.tail) {
+      std::vector<NIDType> dst_nodes(block->size);
+      std::vector<TimestampType> timestamps(block->size);
+      std::vector<EIDType> eids(block->size);
+
+      thrust::copy(thrust::device_ptr<NIDType>(block->dst_nodes),
+                   thrust::device_ptr<NIDType>(block->dst_nodes) + block->size,
+                   dst_nodes.begin());
+
+      thrust::copy(
+          thrust::device_ptr<TimestampType>(block->timestamps),
+          thrust::device_ptr<TimestampType>(block->timestamps) + block->size,
+          timestamps.begin());
+
+      thrust::copy(thrust::device_ptr<EIDType>(block->eids),
+                   thrust::device_ptr<EIDType>(block->eids) + block->size,
+                   eids.begin());
+
+      std::get<0>(result).insert(std::end(std::get<0>(result)),
+                                 std::rbegin(dst_nodes), std::rend(dst_nodes));
+      std::get<1>(result).insert(std::end(std::get<1>(result)),
+                                 std::rbegin(timestamps),
+                                 std::rend(timestamps));
+      std::get<2>(result).insert(std::end(std::get<2>(result)),
+                                 std::rbegin(eids), std::rend(eids));
+
+      block = block->next;
+    }
+  }
+
+  {
+    // NB: reference is necessary
+    auto& list = h_node_table_[node];
+    auto block = list.head.next;
+    while (block != &list.tail) {
+      std::reverse_copy(block->dst_nodes, block->dst_nodes + block->size,
+                        std::back_inserter(std::get<0>(result)));
+      std::reverse_copy(block->timestamps, block->timestamps + block->size,
+                        std::back_inserter(std::get<1>(result)));
+      std::reverse_copy(block->eids, block->eids + block->size,
+                        std::back_inserter(std::get<2>(result)));
+      block = block->next;
+    }
+  }
+
+  return result;
+}
+
 }  // namespace dgnn
