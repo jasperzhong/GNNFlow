@@ -25,13 +25,13 @@ class EdgePredictor(torch.nn.Module):
         self.dst_fc = torch.nn.Linear(dim_in, dim_in)
         self.out_fc = torch.nn.Linear(dim_in, 1)
 
-    def forward(self, h):
-        num_edge = h.shape[0] // 3
+    def forward(self, h, neg_samples=1):
+        num_edge = h.shape[0] // (neg_samples + 2)
         h_src = self.src_fc(h[:num_edge])
         h_pos_dst = self.dst_fc(h[num_edge:2 * num_edge])
         h_neg_dst = self.dst_fc(h[2 * num_edge:])
         h_pos_edge = torch.nn.functional.relu(h_src + h_pos_dst)
-        h_neg_edge = torch.nn.functional.relu(h_src + h_neg_dst)
+        h_neg_edge = torch.nn.functional.relu(h_src.tile(neg_samples, 1) + h_neg_dst)
         return self.out_fc(h_pos_edge), self.out_fc(h_neg_edge)
 
 
@@ -161,3 +161,24 @@ class IdentityNormLayer(torch.nn.Module):
 
     def forward(self, b):
         return self.norm(b.srcdata['h'])
+     
+class JODIETimeEmbedding(torch.nn.Module):
+
+    def __init__(self, dim_out):
+        super(JODIETimeEmbedding, self).__init__()
+        self.dim_out = dim_out
+
+        class NormalLinear(torch.nn.Linear):
+        # From Jodie code
+            def reset_parameters(self):
+                stdv = 1. / math.sqrt(self.weight.size(1))
+                self.weight.data.normal_(0, stdv)
+                if self.bias is not None:
+                    self.bias.data.normal_(0, stdv)
+
+        self.time_emb = NormalLinear(1, dim_out)
+    
+    def forward(self, h, mem_ts, ts):
+        time_diff = (ts - mem_ts) / (ts + 1)
+        rst = h * (1 + self.time_emb(time_diff.unsqueeze(1)))
+        return rst
