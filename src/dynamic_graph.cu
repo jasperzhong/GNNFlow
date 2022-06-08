@@ -1,3 +1,4 @@
+#include <cuda_runtime.h>
 #include <thrust/copy.h>
 #include <thrust/device_delete.h>
 #include <thrust/device_new.h>
@@ -178,7 +179,10 @@ void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
 
 void DynamicGraph::SyncBlock(TemporalBlock* block) {
   CHECK_NE(h2d_mapping_.find(block), h2d_mapping_.end());
-  *h2d_mapping_[block] = *block;
+  // update size
+  CUDA_CALL(cudaMemcpy(reinterpret_cast<char*>(h2d_mapping_[block].get()) + 24,
+                       reinterpret_cast<char*>(block) + 24, sizeof(std::size_t),
+                       cudaMemcpyHostToDevice));
 }
 
 void DynamicGraph::AddEdgesForOneNode(
