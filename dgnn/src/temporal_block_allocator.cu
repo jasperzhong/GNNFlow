@@ -131,10 +131,6 @@ void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block) {
     mr->deallocate(block->eids, block->capacity * sizeof(EIDType));
     block->eids = nullptr;
   }
-  block->size = 0;
-  block->capacity = 0;
-  block->prev = nullptr;
-  block->next = nullptr;
 }
 
 TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block) {
