@@ -45,7 +45,10 @@ enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
 static constexpr std::size_t kDefaultMaxGpuMemPoolSize = 1 << 30;  // 1 GiB
 static constexpr InsertionPolicy kDefaultInsertionPolicy =
     InsertionPolicy::kInsertionPolicyInsert;
-static constexpr std::size_t kDefaultMinBlockSize = 16;
+
+// 256 is the alignent size of rmm. 
+// 64 * sizeof(float) = 256 Bytes
+static constexpr std::size_t kDefaultMinBlockSize = 64;
 
 };  // namespace dgnn
 
