@@ -29,9 +29,9 @@ include_directories($ENV{CONDA_PREFIX}/include)
 include_directories(/usr/local/cuda/include)
 include_directories(third_party/pybind11/include)
 
-file(GLOB_RECURSE DGNN_SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cc)
-set_source_files_properties(${PROJECT_SOURCE_DIR}/src/api.cc PROPERTIES LANGUAGE CUDA)
-file(GLOB_RECURSE DGNN_SRC_CUDA_FILES ${PROJECT_SOURCE_DIR}/src/*.cu)
+file(GLOB_RECURSE DGNN_SRC_FILES ${PROJECT_SOURCE_DIR}/dgnn/src/*.cc)
+set_source_files_properties(${PROJECT_SOURCE_DIR}/dgnn/src/api.cc PROPERTIES LANGUAGE CUDA)
+file(GLOB_RECURSE DGNN_SRC_CUDA_FILES ${PROJECT_SOURCE_DIR}/dgnn/src/*.cu)
 set_source_files_properties(${DGNN_SRC_CUDA_FILES} PROPERTIES LANGUAGE CUDA)
 list(APPEND DGNN_SRC_FILES ${DGNN_SRC_CUDA_FILES})
 
