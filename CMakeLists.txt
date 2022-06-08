@@ -2,11 +2,20 @@ cmake_minimum_required(VERSION 3.18)
 project(dgnn CXX)
 enable_language(CUDA)
 
+set(TARGET_LIB "dgnn")
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_ARCHITECTURES "60")
 
-set(TARGET_LIB "dgnn")
+# set cuda arch
+include(FindCUDA/select_compute_arch)
+CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)
+string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
+string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
+string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
+SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
+message(STATUS "CUDA_ARCH_LIST: ${CUDA_ARCH_LIST}")
+
 
 # rmm
 find_package(rmm REQUIRED)
