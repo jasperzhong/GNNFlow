@@ -18,7 +18,7 @@ inline py::array vec2npy(const std::vector<T> &vec) {
   return py::array(v->size(), v->data(), capsule);
 }
 
-PYBIND11_MODULE(dgnn, m) {
+PYBIND11_MODULE(libdgnn, m) {
   py::enum_<InsertionPolicy>(m, "InsertionPolicy")
       .value("insert", InsertionPolicy::kInsertionPolicyInsert)
       .value("replace", InsertionPolicy::kInsertionPolicyReplace);
