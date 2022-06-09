@@ -385,7 +385,7 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(dgraph.out_degree(3), 0)
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(0)
-        self.assertEqual(target_vertices.tolist(), [3, 2, 1, 3, 2, 1])
+        self.assertEqual(target_vertices.tolist(), [4, 3, 2, 1, 3, 2, 1])
         self.assertEqual(timestamps.tolist(), [6, 5, 4, 3, 2, 1, 0])
         self.assertEqual(edge_ids.tolist(), [18, 11, 10, 9, 2, 1, 0])
 

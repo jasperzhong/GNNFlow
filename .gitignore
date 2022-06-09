@@ -181,3 +181,5 @@ _deps
 .vscode
 data/
 .clangd/
+
+rmm_log.txt
