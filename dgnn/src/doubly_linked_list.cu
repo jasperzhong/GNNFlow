@@ -7,12 +7,17 @@ namespace dgnn {
 __host__ __device__ void InsertBlockToDoublyLinkedList(
     DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block) {
   auto& list = node_table[node_id];
-  auto head_next = list.head.next;
-  list.head.next = block;
-  block->prev = &list.head;
-  block->next = head_next;
-  head_next->prev = block;
-  list.size++;
+  if (list.head == nullptr) {
+    list.head = block;
+    list.tail = block;
+    block->prev = nullptr;
+    block->next = nullptr;
+  } else {
+    block->prev = nullptr;
+    block->next = list.head;
+    list.head->prev = block;
+    list.head = block;
+  }
 }
 
 __global__ void InsertBlockToDoublyLinkedListKernel(
@@ -23,11 +28,14 @@ __global__ void InsertBlockToDoublyLinkedListKernel(
 __host__ __device__ void ReplaceBlockInDoublyLinkedList(
     DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block) {
   auto& list = node_table[node_id];
-  auto to_delete = list.head.next;
-  list.head.next = block;
-  block->prev = &list.head;
-  block->next = to_delete->next;
-  to_delete->next->prev = block;
+  block->prev = nullptr;
+  block->next = list.head->next;
+  if (list.head->next != nullptr) {
+    list.head->next->prev = block;
+  }
+  list.head->next = nullptr;
+  list.head->prev = nullptr;
+  list.head = block;
 }
 
 __global__ void ReplaceBlockInDoublyLinkedListKernel(
@@ -38,10 +46,14 @@ __global__ void ReplaceBlockInDoublyLinkedListKernel(
 __host__ __device__ void DeleteTailFromDoublyLinkedList(
     DoublyLinkedList* node_table, NIDType node_id) {
   auto& list = node_table[node_id];
-  auto tail = list.tail.prev;
-  tail->prev->next = &list.tail;
-  list.tail.prev = tail->prev;
-  list.size--;
+
+  if (list.tail->prev != nullptr) {
+    list.tail->prev->next = nullptr;
+    list.tail = list.tail->prev;
+  } else {
+    list.head = nullptr;
+    list.tail = nullptr;
+  }
 }
 
 __global__ void DeleteTailFromDoublyLinkedListKernel(

@@ -139,8 +139,7 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
 
 void DynamicGraph::DeleteTailBlock(NIDType node_id) {
   // host
-  auto tail = h_copy_of_d_node_table_[node_id].tail.prev;
-  CHECK_NE(tail, &h_copy_of_d_node_table_[node_id].head);
+  auto tail = h_copy_of_d_node_table_[node_id].tail;
 
   DeleteTailFromDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id);
 
@@ -158,7 +157,7 @@ void DynamicGraph::DeleteTailBlock(NIDType node_id) {
 void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
   CHECK_NOTNULL(block);
   // host
-  auto old_block = h_copy_of_d_node_table_[node_id].head.next;
+  auto old_block = h_copy_of_d_node_table_[node_id].head;
   ReplaceBlockInDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id,
                                  block);
 
@@ -192,40 +191,39 @@ void DynamicGraph::AddEdgesForOneNode(
   std::size_t num_edges = dst_nodes.size();
 
   auto& head = h_copy_of_d_node_table_[src_node].head;
-  auto& tail = h_copy_of_d_node_table_[src_node].tail;
 
   std::size_t start_idx = 0;
-  if (head.next == &tail) {
+  if (head == nullptr) {
     // empty list
     auto block = AllocateBlock(num_edges);
     InsertBlock(src_node, block);
-  } else if (head.next->size + num_edges > head.next->capacity) {
+  } else if (head->size + num_edges > head->capacity) {
     // not enough space in the current block
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
       // copy some to existing block
-      std::size_t num_edges_to_existing_block =
-          head.next->capacity - head.next->size;
-      CopyEdgesToBlock(head.next, dst_nodes, timestamps, eids, 0,
-                       num_edges_to_existing_block);
-      SyncBlock(head.next);
-      start_idx = num_edges_to_existing_block;
+      std::size_t num_edges_to_existing_block = head->capacity - head->size;
+      if (num_edges_to_existing_block > 0) {
+        CopyEdgesToBlock(head, dst_nodes, timestamps, eids, 0,
+                         num_edges_to_existing_block);
+        SyncBlock(head);
+        start_idx = num_edges_to_existing_block;
 
-      num_edges -= num_edges_to_existing_block;
+        num_edges -= num_edges_to_existing_block;
+      }
+
       // insert new block
       auto new_block = AllocateBlock(num_edges);
       InsertBlock(src_node, new_block);
     } else {
       // reallocate block
-      auto new_block = ReallocateBlock(head.next, num_edges);
+      auto new_block = ReallocateBlock(head, num_edges);
       ReplaceBlock(src_node, new_block);
     }
   }
 
-  auto block = head.next;
-
   // copy data to block
-  CopyEdgesToBlock(block, dst_nodes, timestamps, eids, start_idx, num_edges);
-  SyncBlock(block);
+  CopyEdgesToBlock(head, dst_nodes, timestamps, eids, start_idx, num_edges);
+  SyncBlock(head);
 }
 
 std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
@@ -235,8 +233,8 @@ std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
   while (swapped_size < min_swap_size) {
     for (std::size_t src_node = 0; src_node < num_nodes_; ++src_node) {
       auto& list = h_copy_of_d_node_table_[src_node];
-      auto block = list.tail.prev;
-      if (block != &list.head && block->size > 0) {
+      auto block = list.tail;
+      if (block != nullptr && block->size > 0) {
         // block is not empty
         // copy to CPU
         auto block_on_host = allocator_.SwapBlockToHost(block);
@@ -260,8 +258,8 @@ std::size_t DynamicGraph::out_degree(NIDType node) const {
   size_t out_degree = 0;
   {
     auto& list = h_copy_of_d_node_table_[node];
-    auto block = list.head.next;
-    while (block != &list.tail) {
+    auto block = list.head;
+    while (block != nullptr) {
       out_degree += block->size;
       block = block->next;
     }
@@ -269,8 +267,8 @@ std::size_t DynamicGraph::out_degree(NIDType node) const {
 
   {
     auto& list = h_node_table_[node];
-    auto block = list.head.next;
-    while (block != &list.tail) {
+    auto block = list.head;
+    while (block != nullptr) {
       out_degree += block->size;
       block = block->next;
     }
@@ -284,8 +282,8 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
   {
     // NB: reference is necessary
     auto& list = h_copy_of_d_node_table_[node];
-    auto block = list.head.next;
-    while (block != &list.tail) {
+    auto block = list.head;
+    while (block != nullptr) {
       std::vector<NIDType> dst_nodes(block->size);
       std::vector<TimestampType> timestamps(block->size);
       std::vector<EIDType> eids(block->size);
@@ -318,8 +316,8 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
   {
     // NB: reference is necessary
     auto& list = h_node_table_[node];
-    auto block = list.head.next;
-    while (block != &list.tail) {
+    auto block = list.head;
+    while (block != nullptr) {
       std::reverse_copy(block->dst_nodes, block->dst_nodes + block->size,
                         std::back_inserter(std::get<0>(result)));
       std::reverse_copy(block->timestamps, block->timestamps + block->size,

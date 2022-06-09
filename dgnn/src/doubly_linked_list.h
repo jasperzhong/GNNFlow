@@ -13,16 +13,10 @@ namespace dgnn {
  * @brief This class is doubly linked list of temporal blocks.
  */
 struct DoublyLinkedList {
-  TemporalBlock head;
-  TemporalBlock tail;
-  std::size_t size;
+  TemporalBlock* head;
+  TemporalBlock* tail;
 
-  __host__ __device__ DoublyLinkedList() : size(0) {
-    head.prev = nullptr;
-    head.next = &tail;
-    tail.prev = &head;
-    tail.next = nullptr;
-  }
+  __host__ __device__ DoublyLinkedList() : head(nullptr), tail(nullptr) {}
 };
 
 __host__ __device__ void InsertBlockToDoublyLinkedList(
