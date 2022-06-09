@@ -6,7 +6,7 @@ from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 
 dgnn_lib = Extension(
-    "dgnn", sources=[]
+    "libdgnn", sources=[]
 )
 
 curdir = os.path.dirname(os.path.abspath(__file__))
