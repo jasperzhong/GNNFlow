@@ -14,6 +14,8 @@
 #include "temporal_block_allocator.h"
 
 namespace dgnn {
+typedef thrust::device_vector<DoublyLinkedList> DeviceNodeTable;
+typedef std::vector<DoublyLinkedList> HostNodeTable;
 /**
  * @brief A dynamic graph is a graph that can be modified at runtime.
  *
@@ -22,9 +24,6 @@ namespace dgnn {
  */
 class DynamicGraph {
  public:
-  typedef thrust::device_vector<DoublyLinkedList> DeviceNodeTable;
-  typedef std::vector<DoublyLinkedList> HostNodeTable;
-
   DynamicGraph(std::size_t max_gpu_mem_pool_size = kDefaultMaxGpuMemPoolSize,
                std::size_t min_block_size = kDefaultMinBlockSize,
                InsertionPolicy insertion_policy = kDefaultInsertionPolicy);
@@ -66,6 +65,9 @@ class DynamicGraph {
                      std::vector<TimestampType>>
       NodeNeighborTuple;
   NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
+
+  const DeviceNodeTable& get_device_node_table() const;
+  const HostNodeTable& get_host_node_table() const;
 
  private:
   void AddEdgesForOneNode(NIDType src_node,

@@ -2,15 +2,41 @@
 #define DGNN_TEMPORAL_SAMPLER_H_
 
 #include "common.h"
-#include "doubly_linked_list.h"
+#include "dynamic_graph.h"
 
 namespace dgnn {
 
-__global__ void sample_layer_from_root(
-    NIDType* dst_nodes, TimestampType* timestamps, uint32_t fanout,
-    DoublyLinkedList* node_table, uint64_t num_nodes, NIDType* ret_src_nodes,
-    TimestampType* ret_timestamps, EIDType* ret_eids,
-    TimestampType* ret_delta_ts);
+class TemporalSampler {
+ public:
+  TemporalSampler(const DynamicGraph& graph,
+                  const std::vector<uint32_t>& fanouts,
+                  SamplingPolicy sample_policy, uint32_t num_snapshots = 1,
+                  float snapshot_time_window = 0.0f);
+  ~TemporalSampler() = default;
+
+  std::vector<std::vector<SamplingResult>> Sample(
+      const std::vector<NIDType>& dst_nodes,
+      const std::vector<TimestampType>& timestamps, bool prop_time = false,
+      bool reverse = false);
+
+  std::vector<SamplingResult> SampleLayerFromRoot(
+      const std::vector<NIDType>& dst_nodes,
+      const std::vector<TimestampType>& timestamps, bool prop_time = false,
+      bool reverse = false);
+
+  std::vector<SamplingResult> SampleLayerFromPreviousLayer(
+      const std::vector<NIDType>& dst_nodes,
+      const std::vector<TimestampType>& timestamps, bool prop_time = false,
+      bool reverse = false);
+
+ private:
+  const DynamicGraph& graph_;
+  const std::vector<uint32_t>& fanouts_;
+  SamplingPolicy sampling_policy_;
+  uint32_t num_snapshots_;
+  float snapshot_time_window_;
+  uint32_t num_layers_;
+};
 
 }  // namespace dgnn
 

@@ -2,7 +2,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "common.h"
 #include "dynamic_graph.h"
+#include "temporal_sampler.h"
 
 namespace py = pybind11;
 
@@ -23,6 +25,10 @@ PYBIND11_MODULE(libdgnn, m) {
       .value("insert", InsertionPolicy::kInsertionPolicyInsert)
       .value("replace", InsertionPolicy::kInsertionPolicyReplace);
 
+  py::enum_<SamplingPolicy>(m, "SamplingPolicy")
+      .value("recent", SamplingPolicy::kSamplingPolicyRecent)
+      .value("uniform", SamplingPolicy::kSamplingPolicyUniform);
+
   py::class_<DynamicGraph>(m, "DynamicGraph")
       .def(
           py::init<std::size_t, std::size_t, InsertionPolicy>(),
@@ -42,4 +48,12 @@ PYBIND11_MODULE(libdgnn, m) {
                                    vec2npy(std::get<1>(neighbors)),
                                    vec2npy(std::get<2>(neighbors)));
            });
+
+  py::class_<TemporalSampler>(m, "_TemporalSampler")
+      .def(py::init<const DynamicGraph &, const std::vector<uint32_t> &,
+                    SamplingPolicy, uint32_t, float>(),
+           py::arg("dgraph"), py::arg("fanouts"), py::arg("sampling_policy"),
+           py::arg("num_snapshots"), py::arg("snapshot_time_window"))
+      .def("sample", &TemporalSampler::Sample)
+      .def("_sample_layer_from_root", &TemporalSampler::SampleLayerFromRoot);
 }

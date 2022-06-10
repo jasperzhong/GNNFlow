@@ -332,4 +332,11 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
   return result;
 }
 
+const DeviceNodeTable& DynamicGraph::get_device_node_table() const {
+  return d_node_table_;
+}
+const HostNodeTable& DynamicGraph::get_host_node_table() const {
+  return h_node_table_;
+}
+
 }  // namespace dgnn
