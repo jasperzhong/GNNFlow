@@ -293,24 +293,25 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(edge_ids.tolist(), [])
         print("Test add edges multiple times passed. (replace policy)")
 
-    # def test_add_old_edges(self):
-    #     """
-    #     Test if raise an exception when adding edges with timestmaps that are
-    #     smaller than the current timestamps.
-    #     """
-    #     dgraph = DynamicGraph()
-    #     source_vertices = np.array([0, 1, 2])
-    #     target_vertices = np.array([1, 2, 3])
-    #     timestamps = np.array([0, 1, 2])
-    #     dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+    @unittest.skip("Not implemented yet")
+    def test_add_old_edges(self):
+        """
+        Test if raise an exception when adding edges with timestmaps that are
+        smaller than the current timestamps.
+        """
+        dgraph = DynamicGraph()
+        source_vertices = np.array([0, 1, 2])
+        target_vertices = np.array([1, 2, 3])
+        timestamps = np.array([0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
 
-    #     source_vertices = np.array([0])
-    #     target_vertices = np.array([1])
-    #     timestamps = np.array([0])
-    #     with self.assertRaises(ValueError):
-    #         dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        source_vertices = np.array([0])
+        target_vertices = np.array([1])
+        timestamps = np.array([0])
+        with self.assertRaises(ValueError):
+            dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
-    #     print("Test add old edges passed.")
+        print("Test add old edges passed.")
 
     def test_insertion_policy_replace(self):
         """
