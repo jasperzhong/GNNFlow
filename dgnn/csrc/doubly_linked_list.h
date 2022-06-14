@@ -15,8 +15,10 @@ namespace dgnn {
 struct DoublyLinkedList {
   TemporalBlock* head;
   TemporalBlock* tail;
+  uint32_t size;
 
-  __host__ __device__ DoublyLinkedList() : head(nullptr), tail(nullptr) {}
+  __host__ __device__ DoublyLinkedList()
+      : head(nullptr), tail(nullptr), size(0) {}
 };
 
 __host__ __device__ void InsertBlockToDoublyLinkedList(

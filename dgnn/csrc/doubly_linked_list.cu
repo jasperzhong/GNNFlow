@@ -18,6 +18,7 @@ __host__ __device__ void InsertBlockToDoublyLinkedList(
     list.head->prev = block;
     list.head = block;
   }
+  list.size++;
 }
 
 __global__ void InsertBlockToDoublyLinkedListKernel(
@@ -54,6 +55,7 @@ __host__ __device__ void DeleteTailFromDoublyLinkedList(
     list.head = nullptr;
     list.tail = nullptr;
   }
+  list.size--;
 }
 
 __global__ void DeleteTailFromDoublyLinkedListKernel(

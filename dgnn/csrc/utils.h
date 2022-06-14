@@ -2,6 +2,7 @@
 #define DGNN_UTILS_H_
 
 #include <algorithm>
+#include <cstddef>
 #include <numeric>
 #include <vector>
 
@@ -64,6 +65,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
                       std::size_t num_edges);
+
 }  // namespace dgnn
 
 #endif  // DGNN_UTILS_H_

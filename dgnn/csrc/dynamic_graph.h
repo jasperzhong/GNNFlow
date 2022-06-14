@@ -66,8 +66,8 @@ class DynamicGraph {
       NodeNeighborTuple;
   NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
 
-  const DeviceNodeTable& get_device_node_table() const;
-  const HostNodeTable& get_host_node_table() const;
+  const DoublyLinkedList* get_device_node_table() const;
+  const DoublyLinkedList* get_host_node_table() const;
 
  private:
   void AddEdgesForOneNode(NIDType src_node,

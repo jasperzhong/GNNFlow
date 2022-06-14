@@ -2,6 +2,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <functional>
+
 #include "common.h"
 #include "dynamic_graph.h"
 #include "temporal_sampler.h"
@@ -49,11 +51,36 @@ PYBIND11_MODULE(libdgnn, m) {
                                    vec2npy(std::get<2>(neighbors)));
            });
 
+  py::class_<SamplingResult>(m, "SamplingResult")
+      .def("row",
+           [](const SamplingResult &result) { return vec2npy(result.row); })
+      .def("col",
+           [](const SamplingResult &result) { return vec2npy(result.col); })
+      .def("all_nodes",
+           [](const SamplingResult &result) {
+             return vec2npy(result.all_nodes);
+           })
+      .def("all_timestamps",
+           [](const SamplingResult &result) {
+             return vec2npy(result.all_timestamps);
+           })
+      .def("delta_timestamps",
+           [](const SamplingResult &result) {
+             return vec2npy(result.delta_timestamps);
+           })
+      .def("eids",
+           [](const SamplingResult &result) { return vec2npy(result.eids); })
+      .def("num_src_nodes",
+           [](const SamplingResult &result) { return result.num_src_nodes; })
+      .def("num_dst_nodes",
+           [](const SamplingResult &result) { return result.num_dst_nodes; });
+
   py::class_<TemporalSampler>(m, "_TemporalSampler")
       .def(py::init<const DynamicGraph &, const std::vector<uint32_t> &,
-                    SamplingPolicy, uint32_t, float>(),
+                    SamplingPolicy, uint32_t, float, bool, uint64_t>(),
            py::arg("dgraph"), py::arg("fanouts"), py::arg("sampling_policy"),
-           py::arg("num_snapshots"), py::arg("snapshot_time_window"))
+           py::arg("num_snapshots"), py::arg("snapshot_time_window"),
+           py::arg("prop_time"), py::arg("seed"))
       .def("sample", &TemporalSampler::Sample)
       .def("_sample_layer_from_root", &TemporalSampler::SampleLayerFromRoot);
 }
