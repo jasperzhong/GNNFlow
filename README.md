@@ -1,5 +1,22 @@
 # dynamic-graph-neural-network
 
+## Install
+
+Our environment:
+- Ubuntu 20.04LTS
+- g++ 9.4
+- CUDA 11.3
+
+Requriments:
+- `rmm` ([how to install](https://github.com/yuchenzhong/cs-notes/blob/main/CUDA/rmm/README.md))
+
+
+Compile and install: 
+```sh
+pip install -v -e .
+```
+
+
 ## TODO:
 
 - [ ] raise an exception when adding edges with timestmaps that are smaller than the current timestamps.
