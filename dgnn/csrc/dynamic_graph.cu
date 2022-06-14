@@ -37,7 +37,8 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
   // for undirected graphs, we need to add the reverse edges
   if (add_reverse_edges) {
     src_nodes.insert(src_nodes.end(), dst_nodes.begin(), dst_nodes.end());
-    dst_nodes.insert(dst_nodes.end(), src_nodes.begin(), src_nodes.end());
+    dst_nodes.insert(dst_nodes.end(), src_nodes.begin(),
+                     src_nodes.begin() + dst_nodes.size());
     timestamps.insert(timestamps.end(), timestamps.begin(), timestamps.end());
     eids.insert(eids.end(), eids.begin(), eids.end());
   }
