@@ -34,6 +34,7 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
 std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps) {
+  // host input
   std::vector<NIDType> root_nodes;
   std::vector<TimestampType> root_timestamps;
   std::vector<TimestampType> offsets(num_snapshots_ * dst_nodes.size());
@@ -49,6 +50,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
         time_offset);
   }
 
+  // device input
   thrust::device_vector<NIDType> d_root_nodes(root_nodes.begin(),
                                               root_nodes.end());
   thrust::device_vector<TimestampType> d_root_timestamps(
@@ -56,6 +58,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
   thrust::device_vector<TimestampType> d_offsets(offsets.begin(),
                                                  offsets.end());
 
+  // device output
   uint32_t num_root_nodes = root_nodes.size();
   thrust::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[0]);
   thrust::device_vector<TimestampType> d_timestamps(num_root_nodes *
@@ -76,6 +79,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
     rand_states = thrust::raw_pointer_cast(d_rand_states.data());
   }
 
+  // launch sampling kernel
   SampleLayerFromRootKernel<<<num_blocks, num_threads_per_block>>>(
       graph_.get_device_node_table(), graph_.num_nodes(), sampling_policy_,
       prop_time_, rand_states, seed_,
@@ -88,78 +92,62 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
       thrust::raw_pointer_cast(d_eids.data()),
       thrust::raw_pointer_cast(d_num_sampled.data()));
 
+  // host output
+  std::vector<NIDType> src_nodes(num_root_nodes * fanouts_[0]);
+  std::vector<TimestampType> timestamps(num_root_nodes * fanouts_[0]);
+  std::vector<TimestampType> delta_timestamps(num_root_nodes * fanouts_[0]);
+  std::vector<EIDType> eids(num_root_nodes * fanouts_[0]);
+  std::vector<uint32_t> num_sampled(num_root_nodes);
+
+  // copy output from device
+  thrust::copy(d_src_nodes.begin(), d_src_nodes.end(), src_nodes.begin());
+  thrust::copy(d_timestamps.begin(), d_timestamps.end(), timestamps.begin());
+  thrust::copy(d_delta_timestamps.begin(), d_delta_timestamps.end(),
+               delta_timestamps.begin());
+  thrust::copy(d_eids.begin(), d_eids.end(), eids.begin());
+  thrust::copy(d_num_sampled.begin(), d_num_sampled.end(), num_sampled.begin());
+
+  // convert to SamplingResult
   std::vector<SamplingResult> sampling_results(num_snapshots_);
   uint32_t num_dst_nodes_per_snapshot = dst_nodes.size();
   for (int snapshot = num_snapshots_ - 1; snapshot >= 0; snapshot--) {
-    uint32_t offset =
-        (num_snapshots_ - snapshot - 1) * num_dst_nodes_per_snapshot;
-
-    std::vector<NIDType> src_nodes(num_dst_nodes_per_snapshot * fanouts_[0]);
-    std::vector<TimestampType> timestamps(num_dst_nodes_per_snapshot *
-                                          fanouts_[0]);
-    std::vector<TimestampType> delta_timestamps(num_dst_nodes_per_snapshot *
-                                                fanouts_[0]);
-    std::vector<EIDType> eids(num_dst_nodes_per_snapshot * fanouts_[0]);
-
-    // copy result from GPU
-    thrust::copy(d_src_nodes.begin() + offset * fanouts_[0],
-                 d_src_nodes.begin() +
-                     (offset + num_dst_nodes_per_snapshot) * fanouts_[0],
-                 src_nodes.begin());
-
-    thrust::copy(d_timestamps.begin() + offset * fanouts_[0],
-                 d_timestamps.begin() +
-                     (offset + num_dst_nodes_per_snapshot) * fanouts_[0],
-                 timestamps.begin());
-
-    thrust::copy(d_delta_timestamps.begin() + offset * fanouts_[0],
-                 d_delta_timestamps.begin() +
-                     (offset + num_dst_nodes_per_snapshot) * fanouts_[0],
-                 delta_timestamps.begin());
-
-    thrust::copy(
-        d_eids.begin() + offset * fanouts_[0],
-        d_eids.begin() + (offset + num_dst_nodes_per_snapshot) * fanouts_[0],
-        eids.begin());
-
-    std::vector<uint32_t> num_sampled(num_dst_nodes_per_snapshot);
-    thrust::copy(d_num_sampled.begin() + offset,
-                 d_num_sampled.begin() + offset + num_dst_nodes_per_snapshot,
-                 num_sampled.begin());
-
-    // copy result to sampling result
     auto& sampling_result = sampling_results[snapshot];
+
+    uint32_t snapshot_offset =
+        (num_snapshots_ - snapshot - 1) * num_dst_nodes_per_snapshot;
 
     // copy dst nodes
     std::copy(dst_nodes.begin(), dst_nodes.end(),
               std::back_inserter(sampling_result.all_nodes));
-
     std::copy(dst_timestamps.begin(), dst_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
-    // copy src nodes
     uint32_t num_sampled_total = 0;
     for (uint32_t i = 0; i < num_dst_nodes_per_snapshot; i++) {
-      std::vector<NIDType> row(num_sampled[i]);
+      std::vector<NIDType> row(num_sampled[snapshot_offset + i]);
       std::fill(row.begin(), row.end(), i);
       std::copy(row.begin(), row.end(),
                 std::back_inserter(sampling_result.row));
 
-      std::copy(src_nodes.begin() + i * fanouts_[0],
-                src_nodes.begin() + num_sampled[i] + i * fanouts_[0],
+      std::copy(src_nodes.begin() + (snapshot_offset + i) * fanouts_[0],
+                src_nodes.begin() + num_sampled[i] +
+                    (snapshot_offset + i) * fanouts_[0],
                 std::back_inserter(sampling_result.all_nodes));
 
-      std::copy(timestamps.begin() + i * fanouts_[0],
-                timestamps.begin() + num_sampled[i] + i * fanouts_[0],
+      std::copy(timestamps.begin() + (snapshot_offset + i) * fanouts_[0],
+                timestamps.begin() + num_sampled[i] +
+                    (snapshot_offset + i) * fanouts_[0],
                 std::back_inserter(sampling_result.all_timestamps));
 
-      std::copy(delta_timestamps.begin() + i * fanouts_[0],
-                delta_timestamps.begin() + num_sampled[i] + i * fanouts_[0],
+      std::copy(delta_timestamps.begin() + (snapshot_offset + i) * fanouts_[0],
+                delta_timestamps.begin() + num_sampled[i] +
+                    (snapshot_offset + i) * fanouts_[0],
                 std::back_inserter(sampling_result.delta_timestamps));
 
-      std::copy(eids.begin() + i * fanouts_[0],
-                eids.begin() + num_sampled[i] + i * fanouts_[0],
-                std::back_inserter(sampling_result.eids));
+      std::copy(
+          eids.begin() + (snapshot_offset + i) * fanouts_[0],
+          eids.begin() + num_sampled[i] + (snapshot_offset + i) * fanouts_[0],
+          std::back_inserter(sampling_result.eids));
 
       num_sampled_total += num_sampled[i];
     }
