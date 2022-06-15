@@ -28,8 +28,8 @@ PYBIND11_MODULE(libdgnn, m) {
       .value("replace", InsertionPolicy::kInsertionPolicyReplace);
 
   py::enum_<SamplingPolicy>(m, "SamplingPolicy")
-      .value("recent", SamplingPolicy::kSamplingPolicyRecent)
-      .value("uniform", SamplingPolicy::kSamplingPolicyUniform);
+      .value("RECENT", SamplingPolicy::kSamplingPolicyRecent)
+      .value("UNIFORM", SamplingPolicy::kSamplingPolicyUniform);
 
   py::class_<DynamicGraph>(m, "DynamicGraph")
       .def(

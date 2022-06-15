@@ -10,7 +10,7 @@ from libdgnn import (DynamicGraph, SamplingPolicy, SamplingResult,
 
 
 class TemporalSampler:
-    def __init__(self, graph: DynamicGraph, fanouts: List[int], strategy: SamplingPolicy = SamplingPolicy.recent,
+    def __init__(self, graph: DynamicGraph, fanouts: List[int], strategy: str = "recent",
             num_snapshots: int = 1, snapshot_time_window: float = 0.0,
             prop_time: bool = False, reverse: bool = False, seed: int = 1234):
         """
@@ -23,6 +23,14 @@ class TemporalSampler:
             snapshot_time_window: time window every snapshot cover. It only makes
                 sense when num_snapshots > 1.
         """
+        if strategy not in ["recent", "uniform"]:
+            raise ValueError("strategy must be 'recent' or 'uniform'")
+
+        if strategy == "recent":
+            strategy = SamplingPolicy.RECENT
+        else:
+            strategy = SamplingPolicy.UNIFORM
+
         self._sampler = _TemporalSampler(graph, fanouts, strategy, num_snapshots,
                 snapshot_time_window, prop_time, seed)
         self._num_snapshots = num_snapshots
