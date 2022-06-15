@@ -1,4 +1,4 @@
-#include <curand_kernel.h>
+#include <math.h>
 
 #include "sampling_kernels.h"
 
@@ -65,19 +65,23 @@ struct SamplingRangeInBlock {
 
 __global__ void SampleLayerFromRootKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes,
-    SamplingPolicy sampling_policy, curandState_t* rand_states, uint64_t seed,
-    NIDType* root_nodes, TimestampType* start_timestamps,
-    TimestampType* end_timestamps, std::size_t num_dst_nodes, uint32_t fanout,
-    NIDType* src_nodes, TimestampType* timestamps,
-    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
+    SamplingPolicy sampling_policy, bool prop_time, curandState_t* rand_states,
+    uint64_t seed, NIDType* root_nodes, TimestampType* root_timestamps,
+    TimestampType* offsets, TimestampType snapshot_time_window,
+    std::size_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
+    TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
+    uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tid >= num_dst_nodes) {
+  if (tid >= num_root_nodes) {
     return;
   }
 
   NIDType nid = root_nodes[tid];
-  TimestampType start_timestamp = start_timestamps[tid];
-  TimestampType end_timestamp = end_timestamps[tid];
+  TimestampType root_timestamp = root_timestamps[tid];
+  TimestampType end_timestamp = root_timestamp - offsets[tid];
+  TimestampType start_timestamp = fabs(snapshot_time_window) > 1e-6
+                                      ? end_timestamp - snapshot_time_window
+                                      : 0;
 
   auto& list = node_table[nid];
   uint32_t num_candidates = 0;
@@ -177,9 +181,10 @@ __global__ void SampleLayerFromRootKernel(
       src_nodes[offset + j] =
           sampling_range[i].block->dst_nodes[end_idx - idx - 1];
       timestamps[offset + j] =
-          sampling_range[i].block->timestamps[end_idx - idx - 1];
+          prop_time ? root_timestamp
+                    : sampling_range[i].block->timestamps[end_idx - idx - 1];
       delta_timestamps[offset + j] =
-          end_timestamp -
+          root_timestamp -
           sampling_range[i].block->timestamps[end_idx - idx - 1];
       eids[offset + j] = sampling_range[i].block->eids[end_idx - idx - 1];
       idx = indices[++j] - cumsum;
