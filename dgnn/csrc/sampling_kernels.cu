@@ -35,22 +35,27 @@ __host__ __device__ void UpperBound(TimestampType* timestamps,
   }
   *idx = left;
 }
+template <typename T>
+__device__ void inline swap(T a, T b) {
+  T c(a);
+  a = b;
+  b = c;
+}
 
 __device__ void QuickSort(uint32_t* indices, int lo, int hi) {
-  if (lo >= hi || lo < 0 || hi < 0) return;
-  int i = lo, j = hi;
-  int mid = (lo + hi) / 2;
-  uint32_t pivot = indices[mid];
-  while (i <= j) {
-    while (indices[i] < pivot) i++;
-    while (indices[j] > pivot) j--;
-    if (i >= j) break;
-    uint32_t tmp = indices[i];
-    indices[i] = indices[j];
-    indices[j] = tmp;
+  if (lo >= hi || lo < 0) return;
+
+  uint32_t pivot = indices[hi];
+  int i = lo - 1;
+  for (int j = lo; j < hi; ++j) {
+    if (indices[j] < pivot) {
+      swap(indices[++i], indices[j]);
+    }
   }
-  QuickSort(indices, lo, j);
-  QuickSort(indices, j, hi);
+  swap(indices[++i], indices[hi]);
+
+  QuickSort(indices, lo, i - 1);
+  QuickSort(indices, i + 1, hi);
 }
 
 struct SamplingRangeInBlock {

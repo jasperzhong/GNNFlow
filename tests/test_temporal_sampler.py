@@ -48,14 +48,14 @@ class TestTemporalSampler(unittest.TestCase):
         dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
 
         # sample 1-hop neighbors
-        sampler = TemporalSampler(dgraph, [1], strategy='uniform')
+        sampler = TemporalSampler(dgraph, [2], strategy='uniform')
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([1.5, 1.5, 1.5]))
+                np.array([3, 3, 3]))
         blocks = blocks[0]
 
         block = blocks[0]
-        self.assertEqual(block.num_src_nodes(), 6)
+        self.assertEqual(block.num_src_nodes(), 9)
         self.assertEqual(block.num_dst_nodes(), 3)
 
         print("Test sample_layer uniform passed")
