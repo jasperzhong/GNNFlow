@@ -62,7 +62,7 @@ class TestTemporalSampler(unittest.TestCase):
 
     def test_sample_layer_with_multiple_blocks(self):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        dgraph = DynamicGraph(min_block_size=4)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
