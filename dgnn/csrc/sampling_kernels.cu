@@ -63,11 +63,11 @@ struct SamplingRangeInBlock {
       : block(nullptr), start_idx(0), end_idx(0) {}
 };
 
-__global__ void SampleLayerFromRootKernel(
+__global__ void SampleLayerKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes,
     SamplingPolicy sampling_policy, bool prop_time, curandState_t* rand_states,
     uint64_t seed, NIDType* root_nodes, TimestampType* root_timestamps,
-    TimestampType* offsets, TimestampType snapshot_time_window,
+    TimestampType* time_offsets, TimestampType snapshot_time_window,
     std::size_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
     TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
     uint32_t* num_sampled) {
@@ -78,7 +78,7 @@ __global__ void SampleLayerFromRootKernel(
 
   NIDType nid = root_nodes[tid];
   TimestampType root_timestamp = root_timestamps[tid];
-  TimestampType end_timestamp = root_timestamp - offsets[tid];
+  TimestampType end_timestamp = root_timestamp - time_offsets[tid];
   TimestampType start_timestamp = fabs(snapshot_time_window) > 1e-6
                                       ? end_timestamp - snapshot_time_window
                                       : 0;

@@ -42,27 +42,22 @@ class TemporalSampler:
                 target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
 
-    def _sample_layer_from_root(self, target_vertices: np.ndarray,
-            timestamps: np.ndarray) -> List[DGLBlock]:
-        sampling_results = self._sampler._sample_layer_from_root(
-                target_vertices, timestamps)
-        return self._to_dgl_block(sampling_results)[0]
-
     def _to_dgl_block(self, sampling_results: SamplingResult) -> List[List[DGLBlock]]:
         mfgs = list()
-        for r in sampling_results:
-            if not self._reverse:
-                b = dgl.create_block((r.col(), r.row()), num_src_nodes=r.num_src_nodes(), num_dst_nodes=r.num_dst_nodes())
-                b.srcdata['ID'] = torch.from_numpy(r.all_nodes())
-                b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
-                b.srcdata['ts'] = torch.from_numpy(r.all_timestamps())
-            else:
-                b = dgl.create_block((r.row(), r.col()), num_src_nodes=r.num_dst_nodes(), num_dst_nodes=r.num_src_nodes())
-                b.dstdata['ID'] = torch.from_numpy(r.all_nodes())
-                b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
-                b.dstdata['ts'] = torch.from_numpy(r.all_timestamps())
-            b.edata['ID'] = torch.from_numpy(r.eids())
-            mfgs.append(b)
+        for sampling_results_layer in sampling_results:
+            for r in sampling_results_layer:
+                if not self._reverse:
+                    b = dgl.create_block((r.col(), r.row()), num_src_nodes=r.num_src_nodes(), num_dst_nodes=r.num_dst_nodes())
+                    b.srcdata['ID'] = torch.from_numpy(r.all_nodes())
+                    b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
+                    b.srcdata['ts'] = torch.from_numpy(r.all_timestamps())
+                else:
+                    b = dgl.create_block((r.row(), r.col()), num_src_nodes=r.num_dst_nodes(), num_dst_nodes=r.num_src_nodes())
+                    b.dstdata['ID'] = torch.from_numpy(r.all_nodes())
+                    b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
+                    b.dstdata['ts'] = torch.from_numpy(r.all_timestamps())
+                b.edata['ID'] = torch.from_numpy(r.eids())
+                mfgs.append(b)
         mfgs = list(map(list, zip(*[iter(mfgs)] * self._num_snapshots)))
         mfgs.reverse()
         return mfgs

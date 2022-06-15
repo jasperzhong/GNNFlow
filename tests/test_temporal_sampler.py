@@ -18,8 +18,10 @@ class TestTemporalSampler(unittest.TestCase):
         # sample 1-hop neighbors
         sampler = TemporalSampler(dgraph, [2])
         target_vertices = np.array([0, 1, 2])
-        blocks = sampler._sample_layer_from_root(target_vertices,
+        blocks = sampler.sample(target_vertices,
                 np.array([1.5, 1.5, 1.5]))
+        blocks = blocks[0]
+
         block = blocks[0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2,
@@ -48,8 +50,10 @@ class TestTemporalSampler(unittest.TestCase):
         # sample 1-hop neighbors
         sampler = TemporalSampler(dgraph, [2])
         target_vertices = np.array([0, 1, 2, 0])
-        blocks = sampler._sample_layer_from_root(target_vertices,
+        blocks = sampler.sample(target_vertices,
                 np.array([1.5, 1.5, 1.5, 1.5]))
+        blocks = blocks[0]
+
         block = blocks[0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2, 0,
@@ -67,14 +71,13 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sampler_layer_with_duplicate_vertices passed")
 
-    @unittest.skip("Not implemented")
     def test_sample_multi_layers(self):
         # build the dynamic graph
         dgraph = DynamicGraph()
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
 
         # sample 2-hop neighbors
         sampler = TemporalSampler(dgraph, [2, 2])
@@ -132,8 +135,9 @@ class TestTemporalSampler(unittest.TestCase):
         sampler = TemporalSampler(dgraph, [2], num_snapshots=2,
                 snapshot_time_window=1)
         target_vertices = np.array([0, 1, 2])
-        blocks = sampler._sample_layer_from_root(target_vertices,
+        blocks = sampler.sample(target_vertices,
                 np.array([5, 5, 5]))
+        blocks = blocks[0]
 
         block = blocks[1]  # timestamp range: [4, 5]
         self.assertEqual(block.srcdata['ID'].tolist(), [
@@ -173,7 +177,6 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_snapshots passed")
 
-    @unittest.skip("Not implemented")
     def test_sample_multi_layers_multi_snapshots(self):
         # build the dynamic graph
         dgraph = DynamicGraph()
@@ -183,7 +186,7 @@ class TestTemporalSampler(unittest.TestCase):
                 [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
         timestamps = np.array(
                 [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
 
         # sample 2-hop neighbors with two snapshots
         sampler = TemporalSampler(dgraph, [2, 2], num_snapshots=2,

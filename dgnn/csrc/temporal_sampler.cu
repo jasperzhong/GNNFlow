@@ -31,23 +31,46 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
   }
 }
 
-std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
+std::vector<SamplingResult> TemporalSampler::RootInputToSamplingResult(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps) {
+  std::vector<SamplingResult> sampling_results(num_snapshots_);
+  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    auto& sampling_result = sampling_results[snapshot];
+    sampling_result.all_nodes.insert(sampling_result.all_nodes.end(),
+                                     dst_nodes.begin(), dst_nodes.end());
+    sampling_result.all_timestamps.insert(sampling_result.all_timestamps.end(),
+                                          dst_timestamps.begin(),
+                                          dst_timestamps.end());
+  }
+  return sampling_results;
+}
+
+std::vector<SamplingResult> TemporalSampler::SampleLayer(
+    uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results) {
+  CHECK_EQ(prev_sampling_results.size(), num_snapshots_);
   // host input
   std::vector<NIDType> root_nodes;
   std::vector<TimestampType> root_timestamps;
-  std::vector<TimestampType> offsets(num_snapshots_ * dst_nodes.size());
+  std::vector<TimestampType> time_offsets;
+  std::vector<uint32_t> num_nodes_per_snapshot;
 
-  for (int snapshot = num_snapshots_ - 1; snapshot >= 0; snapshot--) {
+  // from old to new
+  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    root_nodes.insert(root_nodes.end(),
+                      prev_sampling_results.at(snapshot).all_nodes.begin(),
+                      prev_sampling_results.at(snapshot).all_nodes.end());
+
+    root_timestamps.insert(
+        root_timestamps.end(),
+        prev_sampling_results.at(snapshot).all_timestamps.begin(),
+        prev_sampling_results.at(snapshot).all_timestamps.end());
+
+    uint32_t num_nodes = prev_sampling_results.at(snapshot).all_nodes.size();
+    num_nodes_per_snapshot.push_back(num_nodes);
+
     float time_offset = snapshot_time_window_ * (num_snapshots_ - snapshot - 1);
-    root_nodes.insert(root_nodes.end(), dst_nodes.begin(), dst_nodes.end());
-    root_timestamps.insert(root_timestamps.end(), dst_timestamps.begin(),
-                           dst_timestamps.end());
-    std::fill(
-        offsets.begin() + (num_snapshots_ - snapshot - 1) * dst_nodes.size(),
-        offsets.begin() + (num_snapshots_ - snapshot) * dst_nodes.size(),
-        time_offset);
+    time_offsets.insert(time_offsets.end(), num_nodes, time_offset);
   }
 
   // device input
@@ -55,17 +78,17 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
                                               root_nodes.end());
   thrust::device_vector<TimestampType> d_root_timestamps(
       root_timestamps.begin(), root_timestamps.end());
-  thrust::device_vector<TimestampType> d_offsets(offsets.begin(),
-                                                 offsets.end());
+  thrust::device_vector<TimestampType> d_time_offsets(time_offsets.begin(),
+                                                      time_offsets.end());
 
   // device output
   uint32_t num_root_nodes = root_nodes.size();
-  thrust::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[0]);
+  thrust::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[layer]);
   thrust::device_vector<TimestampType> d_timestamps(num_root_nodes *
-                                                    fanouts_[0]);
+                                                    fanouts_[layer]);
   thrust::device_vector<TimestampType> d_delta_timestamps(num_root_nodes *
-                                                          fanouts_[0]);
-  thrust::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[0]);
+                                                          fanouts_[layer]);
+  thrust::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[layer]);
   thrust::device_vector<uint32_t> d_num_sampled(num_root_nodes);
 
   uint32_t num_threads_per_block = 1024;
@@ -80,23 +103,24 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
   }
 
   // launch sampling kernel
-  SampleLayerFromRootKernel<<<num_blocks, num_threads_per_block>>>(
+  SampleLayerKernel<<<num_blocks, num_threads_per_block>>>(
       graph_.get_device_node_table(), graph_.num_nodes(), sampling_policy_,
       prop_time_, rand_states, seed_,
       thrust::raw_pointer_cast(d_root_nodes.data()),
       thrust::raw_pointer_cast(d_root_timestamps.data()),
-      thrust::raw_pointer_cast(d_offsets.data()), snapshot_time_window_,
-      num_root_nodes, fanouts_[0], thrust::raw_pointer_cast(d_src_nodes.data()),
+      thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
+      num_root_nodes, fanouts_[layer],
+      thrust::raw_pointer_cast(d_src_nodes.data()),
       thrust::raw_pointer_cast(d_timestamps.data()),
       thrust::raw_pointer_cast(d_delta_timestamps.data()),
       thrust::raw_pointer_cast(d_eids.data()),
       thrust::raw_pointer_cast(d_num_sampled.data()));
 
   // host output
-  std::vector<NIDType> src_nodes(num_root_nodes * fanouts_[0]);
-  std::vector<TimestampType> timestamps(num_root_nodes * fanouts_[0]);
-  std::vector<TimestampType> delta_timestamps(num_root_nodes * fanouts_[0]);
-  std::vector<EIDType> eids(num_root_nodes * fanouts_[0]);
+  std::vector<NIDType> src_nodes(num_root_nodes * fanouts_[layer]);
+  std::vector<TimestampType> timestamps(num_root_nodes * fanouts_[layer]);
+  std::vector<TimestampType> delta_timestamps(num_root_nodes * fanouts_[layer]);
+  std::vector<EIDType> eids(num_root_nodes * fanouts_[layer]);
   std::vector<uint32_t> num_sampled(num_root_nodes);
 
   // copy output from device
@@ -109,55 +133,58 @@ std::vector<SamplingResult> TemporalSampler::SampleLayerFromRoot(
 
   // convert to SamplingResult
   std::vector<SamplingResult> sampling_results(num_snapshots_);
-  uint32_t num_dst_nodes_per_snapshot = dst_nodes.size();
-  for (int snapshot = num_snapshots_ - 1; snapshot >= 0; snapshot--) {
+  uint32_t snapshot_offset = 0;
+  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
     auto& sampling_result = sampling_results[snapshot];
 
-    uint32_t snapshot_offset =
-        (num_snapshots_ - snapshot - 1) * num_dst_nodes_per_snapshot;
-
     // copy dst nodes
-    std::copy(dst_nodes.begin(), dst_nodes.end(),
+    std::copy(prev_sampling_results.at(snapshot).all_nodes.begin(),
+              prev_sampling_results.at(snapshot).all_nodes.end(),
               std::back_inserter(sampling_result.all_nodes));
-    std::copy(dst_timestamps.begin(), dst_timestamps.end(),
+    std::copy(prev_sampling_results.at(snapshot).all_timestamps.begin(),
+              prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
+    uint32_t num_nodes_this_snapshot = num_nodes_per_snapshot[snapshot];
+
     uint32_t num_sampled_total = 0;
-    for (uint32_t i = 0; i < num_dst_nodes_per_snapshot; i++) {
+    for (uint32_t i = 0; i < num_nodes_this_snapshot; i++) {
       std::vector<NIDType> row(num_sampled[snapshot_offset + i]);
       std::fill(row.begin(), row.end(), i);
       std::copy(row.begin(), row.end(),
                 std::back_inserter(sampling_result.row));
 
-      std::copy(src_nodes.begin() + (snapshot_offset + i) * fanouts_[0],
+      std::copy(src_nodes.begin() + (snapshot_offset + i) * fanouts_[layer],
                 src_nodes.begin() + num_sampled[i] +
-                    (snapshot_offset + i) * fanouts_[0],
+                    (snapshot_offset + i) * fanouts_[layer],
                 std::back_inserter(sampling_result.all_nodes));
 
-      std::copy(timestamps.begin() + (snapshot_offset + i) * fanouts_[0],
+      std::copy(timestamps.begin() + (snapshot_offset + i) * fanouts_[layer],
                 timestamps.begin() + num_sampled[i] +
-                    (snapshot_offset + i) * fanouts_[0],
+                    (snapshot_offset + i) * fanouts_[layer],
                 std::back_inserter(sampling_result.all_timestamps));
 
-      std::copy(delta_timestamps.begin() + (snapshot_offset + i) * fanouts_[0],
-                delta_timestamps.begin() + num_sampled[i] +
-                    (snapshot_offset + i) * fanouts_[0],
-                std::back_inserter(sampling_result.delta_timestamps));
-
       std::copy(
-          eids.begin() + (snapshot_offset + i) * fanouts_[0],
-          eids.begin() + num_sampled[i] + (snapshot_offset + i) * fanouts_[0],
-          std::back_inserter(sampling_result.eids));
+          delta_timestamps.begin() + (snapshot_offset + i) * fanouts_[layer],
+          delta_timestamps.begin() + num_sampled[i] +
+              (snapshot_offset + i) * fanouts_[layer],
+          std::back_inserter(sampling_result.delta_timestamps));
+
+      std::copy(eids.begin() + (snapshot_offset + i) * fanouts_[layer],
+                eids.begin() + num_sampled[i] +
+                    (snapshot_offset + i) * fanouts_[layer],
+                std::back_inserter(sampling_result.eids));
 
       num_sampled_total += num_sampled[i];
     }
     sampling_result.col.resize(num_sampled_total);
     std::iota(sampling_result.col.begin(), sampling_result.col.end(),
-              num_dst_nodes_per_snapshot);
+              num_nodes_this_snapshot);
 
-    sampling_result.num_dst_nodes = num_dst_nodes_per_snapshot;
-    sampling_result.num_src_nodes =
-        num_dst_nodes_per_snapshot + num_sampled_total;
+    sampling_result.num_dst_nodes = num_nodes_this_snapshot;
+    sampling_result.num_src_nodes = num_nodes_this_snapshot + num_sampled_total;
+
+    snapshot_offset += num_nodes_this_snapshot;
   }
 
   return sampling_results;
@@ -169,6 +196,14 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
   CHECK_EQ(dst_nodes.size(), timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
 
+  for (int layer = 0; layer < num_layers_; ++layer) {
+    if (layer == 0) {
+      results.push_back(
+          SampleLayer(layer, RootInputToSamplingResult(dst_nodes, timestamps)));
+    } else {
+      results.push_back(SampleLayer(layer, results.back()));
+    }
+  }
   return results;
 }
 }  // namespace dgnn

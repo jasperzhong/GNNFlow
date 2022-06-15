@@ -17,15 +17,15 @@ class TemporalSampler {
 
   std::vector<std::vector<SamplingResult>> Sample(
       const std::vector<NIDType>& dst_nodes,
-      const std::vector<TimestampType>& timestamps);
+      const std::vector<TimestampType>& dst_timestamps);
 
-  std::vector<SamplingResult> SampleLayerFromRoot(
-      const std::vector<NIDType>& dst_nodes,
-      const std::vector<TimestampType>& timestamps);
+ private:
+  std::vector<SamplingResult> SampleLayer(
+      uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results);
 
-  std::vector<SamplingResult> SampleLayerFromPreviousLayer(
+  std::vector<SamplingResult> RootInputToSamplingResult(
       const std::vector<NIDType>& dst_nodes,
-      const std::vector<TimestampType>& timestamps);
+      const std::vector<TimestampType>& dst_timestamps);
 
  private:
   const DynamicGraph& graph_;
