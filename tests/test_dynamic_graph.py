@@ -215,7 +215,6 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(edge_ids.tolist(), [])
         print("Test add edges multiple times passed. (insert policy)")
 
-    @unittest.skip("debug")
     def test_add_edges_multiple_times_replace(self):
         """
         Test that adding edges multiple times works.
@@ -313,7 +312,6 @@ class TestDynamicGraph(unittest.TestCase):
 
         print("Test add old edges passed.")
 
-    @unittest.skip("debug")
     def test_insertion_policy_replace(self):
         """
         Test if the "replace" insertion policy works.
