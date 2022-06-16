@@ -21,11 +21,28 @@ dynamic graph neural networks.
 Installation
 ------------
 
-To install DGNN, run the following command:
+We develop the package with the following environments:
+
+- Ubuntu 20.04LTS
+- gcc 9.4
+- CUDA 11.3
+- cmake 3.23
+- python 3.8
+
+Python dependencies:
+
+- `pytorch`
+- `dgl`
+
+C++ dependencies:
+
+- `rmm` (how_to_install_)
+
+.. _how_to_install: https://github.com/yuchenzhong/cs-notes/blob/main/CUDA/rmm/README.md
 
 .. code:: bash
 
-    git clone https://github.com/yuchenzhong/dynamic-graph-neural-network.git
+    git clone --recursive https://github.com/yuchenzhong/dynamic-graph-neural-network.git
     cd dynamic-graph-neural-network
     pip install -e .
 
