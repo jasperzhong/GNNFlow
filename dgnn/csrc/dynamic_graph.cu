@@ -171,6 +171,9 @@ void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
   CUDA_CALL(cudaDeviceSynchronize());
 
+  // mapping
+  h2d_mapping_[block] = d_block;
+
   // delete
   thrust::device_delete(h2d_mapping_[old_block]);
   h2d_mapping_.erase(old_block);
@@ -217,7 +220,7 @@ void DynamicGraph::AddEdgesForOneNode(
       InsertBlock(src_node, new_block);
     } else {
       // reallocate block
-      auto new_block = ReallocateBlock(head, num_edges);
+      auto new_block = ReallocateBlock(head, head->size + num_edges);
       ReplaceBlock(src_node, new_block);
     }
   }
