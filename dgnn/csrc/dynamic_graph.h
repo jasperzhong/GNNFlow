@@ -61,8 +61,8 @@ class DynamicGraph {
 
   // it is inefficient to call this function every time for each node. Debug
   // only.
-  typedef std::tuple<std::vector<NIDType>, std::vector<NIDType>,
-                     std::vector<TimestampType>>
+  typedef std::tuple<std::vector<NIDType>, std::vector<TimestampType>,
+                     std::vector<EIDType>>
       NodeNeighborTuple;
   NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
 

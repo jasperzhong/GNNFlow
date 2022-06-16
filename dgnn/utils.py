@@ -1,8 +1,135 @@
-import torch
+import os
+import random
+from typing import Optional, Tuple
+
 import dgl
 import numpy as np
+import pandas as pd
+import torch
 
-def prepare_input(mfgs, node_feats, edge_feats, combine_first=False, pinned=False, nfeat_buffs=None, efeat_buffs=None, nids=None, eids=None):
+from .dynamic_graph import DynamicGraph
+
+
+def get_project_root_dir() -> str:
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame,
+                                                                        pd.DataFrame, pd.DataFrame]:
+    """
+    Loads the dataset and returns the dataframes for the train, validation, test and
+
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+
+    Returns:
+        train_df: the dataframe for the train set.
+        val_df: the dataframe for the validation set.
+        test_df: the dataframe for the test set.
+        df: the dataframe for the whole dataset.
+    """
+    if data_dir is None:
+        data_dir = os.path.join(get_project_root_dir(), "data")
+
+    path = os.path.join(data_dir, dataset, 'edges.csv')
+    if os.path.exists(path):
+        df = pd.read_csv(path)
+    else:
+        raise ValueError('{} does not exist'.format(path))
+
+    train_edge_end = df[df['ext_roll'].gt(0)].index[0]
+    val_edge_end = df[df['ext_roll'].gt(1)].index[0]
+    train_df = df[:train_edge_end]
+    val_df = df[train_edge_end:val_edge_end]
+    test_df = df[val_edge_end:]
+
+    return train_df, val_df, test_df, df
+
+
+def load_feat(data_dir: str, dataset: str, rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
+    node_feats = None
+    if data_dir is None:
+        data_dir = os.path.dirname(__file__)
+        data_dir = os.path.join(data_dir, 'data')
+
+    dataset_path = os.path.join(data_dir, dataset)
+
+    node_feat_path = os.path.join(dataset_path, 'node_features.pt')
+    if os.path.exists(node_feat_path):
+        node_feats = torch.load(node_feat_path)
+        if node_feats.dtyep == torch.bool:
+            node_feats = node_feats.type(torch.float32)
+
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
+
+    edge_feats = None
+    if os.path.exists(edge_feat_path):
+        edge_feats = torch.load(edge_feat_path)
+        if edge_feats.dtype == torch.bool:
+            edge_feats = edge_feats.type(torch.float32)
+
+    if rand_de > 0:
+        if dataset == 'LASTFM':
+            edge_feats = torch.randn(1293103, rand_de)
+        elif dataset == 'MOOC':
+            edge_feats = torch.randn(411749, rand_de)
+    if rand_dn > 0:
+        if dataset == 'LASTFM':
+            node_feats = torch.randn(1980, rand_dn)
+        elif dataset == 'MOOC':
+            edge_feats = torch.randn(7144, rand_dn)
+
+    return node_feats, edge_feats
+
+
+def get_batch(df: pd.DataFrame, batch_size: int = 600, mode: str = 'train'):
+    group_indexes = list()
+
+    group_indexes.append(np.array(df.index // batch_size))
+    for _, rows in df.groupby(
+            group_indexes[random.randint(0, len(group_indexes) - 1)]):
+        # np.random.randint(self.num_nodes, size=n)
+        # TODO: wrap a neglink sampler
+        length = np.max(np.array(df['dst'], dtype=int))
+
+        target_nodes = np.concatenate(
+            [rows.src.values, rows.dst.values, np.random.randint(
+                length, size=len(rows.src.values))]).astype(
+            np.int64)
+        ts = np.concatenate(
+            [rows.time.values, rows.time.values, rows.time.values]).astype(
+            np.float32)
+        # TODO: align with our edge id
+        eid = rows['Unnamed: 0'].values
+
+        yield target_nodes, ts, eid
+
+
+def build_dynamic_graph(
+        dataset_df: pd.DataFrame, max_gpu_pool_size: int = 1 << 30,
+        min_block_size: int = 64, add_reverse: bool = False,
+        insertion_policy: str = "insert") -> DynamicGraph:
+    src = dataset_df['src'].to_numpy(dtype=np.int64)
+    dst = dataset_df['dst'].to_numpy(dtype=np.int64)
+    ts = dataset_df['time'].to_numpy(dtype=np.float32)
+
+    dgraph = DynamicGraph(
+        source_vertices=src,
+        target_vertices=dst,
+        timestamps=ts,
+        add_reverse=add_reverse,
+        max_gpu_pool_size=max_gpu_pool_size,
+        min_block_size=min_block_size,
+        insertion_policy=insertion_policy)
+
+    return dgraph
+
+
+def prepare_input(
+        mfgs, node_feats, edge_feats, combine_first=False, pinned=False,
+        nfeat_buffs=None, efeat_buffs=None, nids=None, eids=None):
     if combine_first:
         for i in range(len(mfgs[0])):
             if mfgs[0][i].num_src_nodes() > mfgs[0][i].num_dst_nodes():
@@ -14,9 +141,14 @@ def prepare_input(mfgs, node_feats, edge_feats, combine_first=False, pinned=Fals
                 uts = unts[:, 0]
                 unid = unts[:, 1]
                 # import pdb; pdb.set_trace()
-                b = dgl.create_block((idx + num_dst, mfgs[0][i].edges()[1]), num_src_nodes=unts.shape[0] + num_dst, num_dst_nodes=num_dst, device=torch.device('cuda:0'))
-                b.srcdata['ts'] = torch.cat([mfgs[0][i].srcdata['ts'][:num_dst], uts], dim=0)
-                b.srcdata['ID'] = torch.cat([mfgs[0][i].srcdata['ID'][:num_dst], unid], dim=0)
+                b = dgl.create_block(
+                    (idx + num_dst, mfgs[0][i].edges()[1]),
+                    num_src_nodes=unts.shape[0] + num_dst, num_dst_nodes=num_dst,
+                    device=torch.device('cuda:0'))
+                b.srcdata['ts'] = torch.cat(
+                    [mfgs[0][i].srcdata['ts'][:num_dst], uts], dim=0)
+                b.srcdata['ID'] = torch.cat(
+                    [mfgs[0][i].srcdata['ID'][:num_dst], unid], dim=0)
                 b.edata['dt'] = mfgs[0][i].edata['dt']
                 b.edata['ID'] = mfgs[0][i].edata['ID']
                 mfgs[0][i] = b
@@ -30,8 +162,11 @@ def prepare_input(mfgs, node_feats, edge_feats, combine_first=False, pinned=Fals
                     idx = nids[i]
                 else:
                     idx = b.srcdata['ID'].cpu().long()
-                torch.index_select(node_feats, 0, idx, out=nfeat_buffs[i][:idx.shape[0]])
-                b.srcdata['h'] = nfeat_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
+                torch.index_select(node_feats, 0, idx,
+                                   out=nfeat_buffs[i][:idx.shape[0]])
+                b.srcdata['h'] = nfeat_buffs[i][
+                    : idx.shape[0]].cuda(
+                    non_blocking=True)
                 i += 1
             else:
                 srch = node_feats[b.srcdata['ID'].long()].float()
@@ -46,13 +181,18 @@ def prepare_input(mfgs, node_feats, edge_feats, combine_first=False, pinned=Fals
                             idx = eids[i]
                         else:
                             idx = b.edata['ID'].cpu().long()
-                        torch.index_select(edge_feats, 0, idx, out=efeat_buffs[i][:idx.shape[0]])
-                        b.edata['f'] = efeat_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
+                        torch.index_select(
+                            edge_feats, 0, idx,
+                            out=efeat_buffs[i][: idx.shape[0]])
+                        b.edata['f'] = efeat_buffs[i][
+                            : idx.shape[0]].cuda(
+                            non_blocking=True)
                         i += 1
                     else:
                         srch = edge_feats[b.edata['ID'].long()].float()
                         b.edata['f'] = srch.cuda()
     return mfgs
+
 
 def mfgs_to_cuda(mfgs):
     for mfg in mfgs:
@@ -60,11 +200,16 @@ def mfgs_to_cuda(mfgs):
             mfg[i] = mfg[i].to('cuda:0')
     return mfgs
 
+
 def node_to_dgl_blocks(target_nodes, ts, cuda=True):
     target_nodes = torch.tensor(target_nodes)
     ts = torch.tensor(ts)
     mfgs = list()
-    b = dgl.create_block(([],[]), num_src_nodes=target_nodes.shape[0], num_dst_nodes=target_nodes.shape[0])
+    b = dgl.create_block(
+        ([],
+         []),
+        num_src_nodes=target_nodes.shape[0],
+        num_dst_nodes=target_nodes.shape[0])
     b.srcdata['ID'] = target_nodes
     b.srcdata['ts'] = ts
     if cuda:
@@ -72,6 +217,7 @@ def node_to_dgl_blocks(target_nodes, ts, cuda=True):
     else:
         mfgs.insert(0, [b])
     return mfgs
+
 
 class NegLinkSampler:
 
