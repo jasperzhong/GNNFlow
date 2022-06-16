@@ -50,4 +50,5 @@ void CopyEdgesToBlock(TemporalBlock* block,
 
   block->size += num_edges;
 }
+
 }  // namespace dgnn

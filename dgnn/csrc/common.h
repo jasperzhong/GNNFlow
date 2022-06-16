@@ -2,12 +2,17 @@
 #define DGNN_COMMON_H_
 
 #include <cstddef>
+#include <vector>
 
 namespace dgnn {
 
-using NIDType = uint64_t;
-using EIDType = uint64_t;
+// NIDType is the type of node ID.
+// TimestampType is the type of timestamp.
+// EIDType is the type of edge ID.
+// NB: PyTorch does not support converting uint64_t's numpy ndarray to int64_t.
+using NIDType = int64_t;
 using TimestampType = float;
+using EIDType = int64_t;
 
 static constexpr std::size_t kBlockSpaceSize =
     (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
@@ -33,6 +38,18 @@ struct TemporalBlock {
   TemporalBlock* next;
 };
 
+/** @brief This POD is used to store the sampling result. */
+struct SamplingResult {
+  std::vector<NIDType> row;
+  std::vector<NIDType> col;
+  std::vector<NIDType> all_nodes;
+  std::vector<TimestampType> all_timestamps;
+  std::vector<TimestampType> delta_timestamps;
+  std::vector<EIDType> eids;
+  std::size_t num_src_nodes;
+  std::size_t num_dst_nodes;
+};
+
 /**
  * @brief InsertionPolicy is used to decide how to insert a new temporal block
  * into the linked list.
@@ -42,11 +59,19 @@ struct TemporalBlock {
  */
 enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
 
+/**
+ * @brief SamplePolicy is used to decide how to sample the dynamic graph.
+ *
+ * kSamplePolicyRecent: sample the most recent edges.
+ * kSamplePolicyUniform: sample past edges uniformly.
+ */
+enum class SamplingPolicy { kSamplingPolicyRecent, kSamplingPolicyUniform };
+
 static constexpr std::size_t kDefaultMaxGpuMemPoolSize = 1 << 30;  // 1 GiB
 static constexpr InsertionPolicy kDefaultInsertionPolicy =
     InsertionPolicy::kInsertionPolicyInsert;
 
-// 256 is the alignent size of rmm. 
+// 256 is the alignent size of rmm.
 // 64 * sizeof(float) = 256 Bytes
 static constexpr std::size_t kDefaultMinBlockSize = 64;
 
