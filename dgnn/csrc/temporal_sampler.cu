@@ -91,7 +91,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   thrust::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[layer]);
   thrust::device_vector<uint32_t> d_num_sampled(num_root_nodes);
 
-  uint32_t num_threads_per_block = 1024;
+  uint32_t num_threads_per_block = 256;
   uint32_t num_blocks =
       (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
 
