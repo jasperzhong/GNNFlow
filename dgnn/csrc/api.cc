@@ -24,14 +24,14 @@ inline py::array vec2npy(const std::vector<T> &vec) {
 
 PYBIND11_MODULE(libdgnn, m) {
   py::enum_<InsertionPolicy>(m, "InsertionPolicy")
-      .value("insert", InsertionPolicy::kInsertionPolicyInsert)
-      .value("replace", InsertionPolicy::kInsertionPolicyReplace);
+      .value("INSERT", InsertionPolicy::kInsertionPolicyInsert)
+      .value("REPLACE", InsertionPolicy::kInsertionPolicyReplace);
 
   py::enum_<SamplingPolicy>(m, "SamplingPolicy")
       .value("RECENT", SamplingPolicy::kSamplingPolicyRecent)
       .value("UNIFORM", SamplingPolicy::kSamplingPolicyUniform);
 
-  py::class_<DynamicGraph>(m, "DynamicGraph")
+  py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(
           py::init<std::size_t, std::size_t, InsertionPolicy>(),
           py::arg("max_gpu_pool_size") = kDefaultMaxGpuMemPoolSize,
