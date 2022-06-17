@@ -28,7 +28,9 @@ class CustomBuildExt(build_ext):
     def build_extensions(self):
         cmake_bin = get_cmake_bin()
 
-        config = 'Debug'
+        debug = os.environ.get("DEBUG", "0")
+        config = 'Debug' if debug == "1" else 'Release'
+        print("Building with CMake config: {}".format(config))
 
         ext_name = self.extensions[0].name
         build_dir = self.get_ext_fullpath(ext_name).replace(self.get_ext_filename(ext_name), '')

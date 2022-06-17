@@ -183,3 +183,4 @@ data/
 .clangd/
 
 rmm_log.txt
+*.qdrep
