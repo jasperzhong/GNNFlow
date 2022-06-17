@@ -1,10 +1,10 @@
 #include <curand_kernel.h>
-#include <thrust/device_vector.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <rmm/device_vector.hpp>
 
 #include "common.h"
 #include "sampling_kernels.h"
@@ -74,22 +74,22 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   }
 
   // device input
-  thrust::device_vector<NIDType> d_root_nodes(root_nodes.begin(),
-                                              root_nodes.end());
-  thrust::device_vector<TimestampType> d_root_timestamps(
-      root_timestamps.begin(), root_timestamps.end());
-  thrust::device_vector<TimestampType> d_time_offsets(time_offsets.begin(),
-                                                      time_offsets.end());
+  rmm::device_vector<NIDType> d_root_nodes(root_nodes.begin(),
+                                           root_nodes.end());
+  rmm::device_vector<TimestampType> d_root_timestamps(root_timestamps.begin(),
+                                                      root_timestamps.end());
+  rmm::device_vector<TimestampType> d_time_offsets(time_offsets.begin(),
+                                                   time_offsets.end());
 
   // device output
   uint32_t num_root_nodes = root_nodes.size();
-  thrust::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[layer]);
-  thrust::device_vector<TimestampType> d_timestamps(num_root_nodes *
-                                                    fanouts_[layer]);
-  thrust::device_vector<TimestampType> d_delta_timestamps(num_root_nodes *
-                                                          fanouts_[layer]);
-  thrust::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[layer]);
-  thrust::device_vector<uint32_t> d_num_sampled(num_root_nodes);
+  rmm::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[layer]);
+  rmm::device_vector<TimestampType> d_timestamps(num_root_nodes *
+                                                 fanouts_[layer]);
+  rmm::device_vector<TimestampType> d_delta_timestamps(num_root_nodes *
+                                                       fanouts_[layer]);
+  rmm::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[layer]);
+  rmm::device_vector<uint32_t> d_num_sampled(num_root_nodes);
 
   uint32_t num_threads_per_block = 256;
   uint32_t num_blocks =
@@ -97,8 +97,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
   curandState_t* rand_states = nullptr;
   if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-    thrust::device_vector<curandState_t> d_rand_states(num_threads_per_block *
-                                                       num_blocks);
+    rmm::device_vector<curandState_t> d_rand_states(num_threads_per_block *
+                                                    num_blocks);
     rand_states = thrust::raw_pointer_cast(d_rand_states.data());
   }
 
