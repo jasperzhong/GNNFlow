@@ -1,216 +1,68 @@
 import argparse
 from random import sample
 import torch
+import torchvision
 import time
-from dgnn.build_graph import build_dynamic_graph, load_graph, get_batch, load_feat
-from dgnn.model.memory_updater import MailBox
-from dgnn.model.TGN import TGN
-from dgnn.model.TGAT import TGAT
-from dgnn.model.JODIE import JODIE
-from dgnn.model.APAN import APAN
-from dgnn.model.DySAT import DySAT
-from dgnn.model.test import GeneralModel
+import dgnn.models as models
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import prepare_input, mfgs_to_cuda, node_to_dgl_blocks
+from dgnn.utils import prepare_input, mfgs_to_cuda, node_to_dgl_blocks, build_dynamic_graph, load_dataset, load_feat, get_batch
 from scripts.validation import val
 
+model_names = sorted(name for name in models.__dict__
+    if name.islower() and not name.startswith("__")
+    and callable(models.__dict__[name]))
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", help="model name", type=str, default='apan')
+parser.add_argument("--model", choices=model_names, default='apan',
+                    help="model architecture" + 
+                    '|'.join(model_names) + 
+                    '(default: tgn)')
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
+parser.add_argument("--dropout", help="dropout", type=float, default=0.2)
+parser.add_argument("--attn-dropout", help="attention dropout", type=float, default=0.2)
+parser.add_argument("--deliver-to-neighbors", help='deliver to neighbors')
+parser.add_argument("--use-memory", help='use memory module')
+parser.add_argument("--no-sample", help='do not need sampling')
 parser.add_argument("--prop_time", help='use prop time')
 parser.add_argument("--no_neg", help='not using neg samples in sampling')
+parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
+parser.add_argument("--sample-strategy", help="sample strategy", type=str, default='recent')
+parser.add_argument("--sample-neighbor", help="how many neighbors to sample in each layer", type=list, default=[10])
+parser.add_argument("--sample-history", help="the number of snapshot", type=int, default=1)
+parser.add_argument("--sample-duration", help="snapshot duration", type=int, default=0)
 
 args = parser.parse_args()
 
 # TODO: Use args
-# APAN
+
+# TGN
 sample_param = {
             'layer': 1,
             'neighbor': [10],
-            'strategy': 'recent',
+            'strategy': 'uniform',
             'prop_time': False,
             'history': 1,
             'duration': 0,
-            'num_thread': 32,
-            'no_neg': True
             }
 
 memory_param = {
             'type': 'node',
             'dim_time': 100,
-            'deliver_to': 'neighbors',
+            'deliver_to': 'self',
             'mail_combine': 'last',
-            'memory_update': 'transformer',
-            'attention_head': 2,
-            'mailbox_size': 10,
-            'combine_node_feature': False,
+            'memory_update': 'gru',
+            'mailbox_size': 1,
+            'combine_node_feature': True,
             'dim_out': 100
             }
-
-gnn_param = {
-            'arch': 'identity'
-            }
-
-train_param = {
-            'epoch': 100,
-            'batch_size': 600,
-            # reorder: 16
-            'lr': 0.0001,
-            'dropout': 0.1,
-            'att_dropout': 0.1,
-            'all_on_gpu': True
-        }
-
-# #TGAT
-# sample_param = {
-#             'layer': 2,
-#             'neighbor': [10, 10],
-#             'strategy': 'uniform',
-#             'prop_time': False,
-#             'history': 1,
-#             'duration': 0,
-#             'num_thread': 32,
-#             # 'no_neg': True
-#             }
-
-# memory_param = {
-#             'type': 'none',
-#             'dim_out': 0
-#             }
-
-# gnn_param = {
-#             'arch': 'transformer_attention',
-#             'layer': 2,
-#             'att_head': 2,
-#             'dim_time': 100,
-#             'dim_out': 100
-#             }
-
-# train_param = {
-#             'epoch': 100,
-#             'batch_size': 600,
-#             # reorder: 16
-#             'lr': 0.0001,
-#             'dropout': 0.1,
-#             'att_dropout': 0.1,
-#             'all_on_gpu': True
-#         }
-
-# TGN
-# sample_param = {
-#             'layer': 1,
-#             'neighbor': [10],
-#             'strategy': 'uniform',
-#             'prop_time': False,
-#             'history': 1,
-#             'duration': 0,
-#             'num_thread': 32,
-#             'no_neg': True
-#             }
-
-# memory_param = {
-#             'type': 'node',
-#             'dim_time': 100,
-#             'deliver_to': 'self',
-#             'mail_combine': 'last',
-#             'memory_update': 'gru',
-#             'mailbox_size': 1,
-#             'combine_node_feature': True,
-#             'dim_out': 100
-#             }
-
-# gnn_param = {
-#             'arch': 'transformer_attention',
-#             'layer': 1,
-#             'att_head': 2,
-#             'dim_time': 100,
-#             'dim_out': 100
-#             }
-
-# train_param = {
-#             'epoch': 100,
-#             'batch_size': 600,
-#             # reorder: 16
-#             'lr': 0.0001,
-#             'dropout': 0.2,
-#             'att_dropout': 0.2,
-#             'all_on_gpu': True
-#         }
-
-# JODIE
-# sample_param = {
-#             'no_sample': True,
-#             'history': 1
-#             }
-
-# memory_param = {
-#             'type': 'node',
-#             'dim_time': 100,
-#             'deliver_to': 'self',
-#             'mail_combine': 'last',
-#             'memory_update': 'rnn',
-#             'mailbox_size': 1,
-#             'combine_node_feature': True,
-#             'dim_out': 100
-#             }
-
-# gnn_param = {
-#             'arch': 'identity',
-#             'time_transform': 'JODIE'
-#             }
-
-# train_param = {
-#             'epoch': 100,
-#             'batch_size': 600,
-#             # reorder: 16
-#             'lr': 0.0001,
-#             'dropout': 0.1,
-#             'all_on_gpu': True
-#         }
-
-# DySAT
-# sample_param = {
-#             'layer': 2,
-#             'neighbor': [10, 10],
-#             'strategy': 'uniform',
-#             'prop_time': True,
-#             'history': 3,
-#             'duration': 10000,
-#             'num_thread': 32,
-#             'no_neg': True
-#             }
-
-# memory_param = {
-#             'type': 'none',
-#             'dim_out': 0
-#             }
-
-# gnn_param = {
-#             'arch': 'transformer_attention',
-#             'layer': 2,
-#             'att_head': 2,
-#             'dim_time': 0,
-#             'dim_out': 100,
-#             'combine': 'rnn'
-#             }
-
-# train_param = {
-#             'epoch': 50,
-#             'batch_size': 600,
-#             # reorder: 16
-#             'lr': 0.0001,
-#             'dropout': 0.1,
-#             'att_dropout': 0.1,
-#             'all_on_gpu': True
-#         }
 
 # Build Graph, block_size = 1024
 path_saver = '../models/{}.pt'.format(args.model)
 path_saver_2 = '../models/apan_best.pt'
 node_feats, edge_feats = load_feat(None, 'REDDIT')
-df = load_graph(None, 'REDDIT')
+df = load_dataset(None, 'REDDIT')
 # df[0] consist train part of the data
 # df[3] is the full graph
 # use the full data to build graph
@@ -219,47 +71,31 @@ dgraph = build_dynamic_graph(df[3])
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-no_neg = ('no_neg' in sample_param and sample_param['no_neg'])
+model = models.__dict__[args.model](gnn_dim_node, gnn_dim_edge)
+model.cuda()
 
-# model = TGN(gnn_dim_node, gnn_dim_edge,
-#           sample_param, memory_param,
-#           gnn_param, train_param).cuda()
+args.arch_identity = args.model in ['jodie', 'apan']
 
-# model = TGAT(gnn_dim_node, gnn_dim_edge,
-#           sample_param, memory_param,
-#           gnn_param, train_param).cuda()
-
-# model = JODIE(gnn_dim_node, gnn_dim_edge,
-#           sample_param, memory_param,
-#           gnn_param, train_param).cuda()
-
-model = APAN(gnn_dim_node, gnn_dim_edge,
-          sample_param, memory_param,
-          gnn_param, train_param).cuda()
-
-# model = DySAT(gnn_dim_node, gnn_dim_edge,
-#           sample_param, memory_param,
-#           gnn_param, train_param).cuda()
-
-# model = GeneralModel(gnn_dim_node, gnn_dim_edge,
-#           sample_param, memory_param,
-#           gnn_param, train_param).cuda()
+# assert
+assert args.sample_layer == model.gnn_layer , "sample layers must match the gnn layers"
+assert args.sample_layer == len(args.sample_neighbor), "sample layer must match the length of sample_neighbors"
 
 
 # TODO: MailBox. Check num_vertices
-if memory_param['type'] != 'none':
+if args.use_memory:
     mailbox = MailBox(memory_param, dgraph.num_vertices + 3, gnn_dim_edge) 
     mailbox.move_to_gpu()
 else:
     mailbox = None
 
 sampler = None
-if not ('no_sample' in sample_param and sample_param['no_sample']):
-    sampler = TemporalSampler(dgraph, sample_param['neighbor'], sample_param['strategy'], 
-                                num_snapshots=sample_param['history'], snapshot_time_window=sample_param['duration'])
+
+if not args.no_sample:
+    sampler = TemporalSampler(dgraph, args.sample_neighbor, args.sample_strategy, 
+                                num_snapshots=args.sample_history, snapshot_time_window=args.sample_duration, reverse=args.deliver_to_neighbors)
 
 creterion = torch.nn.BCEWithLogitsLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=train_param['lr'])
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 best_ap = 0
 best_e = 0
@@ -272,29 +108,27 @@ for e in range(args.epoch):
     sample_time = 0
     train_time = 0
     
+    # TODO: we can overwrite train(): 
+    # a new class inherit torch.nn.Module which has self.mailbox = None.
+    # if mailbox is not None. reset!
     model.train()
+
     if mailbox is not None:
         mailbox.reset()
         model.memory_updater.last_updated_nid = None
-    
-    mfgs_reverse = False
-    if 'deliver_to' in memory_param and memory_param['deliver_to'] == 'neighbors':
-        mfgs_reverse = True
 
     for i, (target_nodes, ts, eid) in enumerate(get_batch(df[0])):
         time_start = time.time()
         mfgs = None
         if sampler is not None:
-            if 'no_neg' in sample_param and sample_param['no_neg']:
+            if args.no_neg:
                 pos_root_end = target_nodes.shape[0] * 2 // 3
-                mfgs = sampler.sample(target_nodes[:pos_root_end], ts[:pos_root_end], prop_time=sample_param['prop_time'], reverse=mfgs_reverse)
-                # mfgs = sampler.sample(target_nodes[584:585], ts[584:585])
-                # mfgs = sampler.sample(torch.Tensor([242]), torch.Tensor([48066.859]))
+                mfgs = sampler.sample(target_nodes[:pos_root_end], ts[:pos_root_end])
             else:
-                mfgs = sampler.sample(target_nodes, ts, prop_time=sample_param['prop_time'], reverse=mfgs_reverse)
+                mfgs = sampler.sample(target_nodes, ts)
         # if identity
         mfgs_deliver_to_neighbors = None
-        if gnn_param['arch'] == 'identity':
+        if args.arch_identity:
             mfgs_deliver_to_neighbors = mfgs
             mfgs = node_to_dgl_blocks(target_nodes, ts)
         
@@ -303,6 +137,8 @@ for e in range(args.epoch):
         # move mfgs to cuda
         mfgs_to_cuda(mfgs)
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+
+        # TODO: move this to forward()
         if mailbox is not None:
             mailbox.prep_input_mails(mfgs[0])
         
@@ -311,16 +147,17 @@ for e in range(args.epoch):
 
         loss = creterion(pred_pos, torch.ones_like(pred_pos))
         loss += creterion(pred_neg, torch.zeros_like(pred_neg))
-        total_loss += float(loss) * train_param['batch_size']
+        total_loss += float(loss) * args.batch_size
         loss.backward()
         
         optimizer.step()
         
         # MailBox Update: 
+        # TODO: use a new function in model
         if mailbox is not None:
             mem_edge_feats = edge_feats[eid] if edge_feats is not None else None
             block = None
-            if memory_param['deliver_to'] == 'neighbors':
+            if args.deliver_to_neighbors:
                 block = mfgs_deliver_to_neighbors[0][0]
             mailbox.update_mailbox(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, target_nodes, ts, mem_edge_feats, block)
             mailbox.update_memory(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, model.memory_updater.last_updated_ts)
@@ -345,10 +182,9 @@ for e in range(args.epoch):
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
     ap, auc = val(df[1], sampler, mailbox, model, node_feats, 
-        edge_feats, creterion, mode='val', no_neg=no_neg, 
-        identity=gnn_param['arch'] == 'identity', 
-        deliver_to_neighbor=memory_param['deliver_to'] == 'neighbors',
-        prop_time=sample_param['prop_time'])
+        edge_feats, creterion, no_neg=args.no_neg, 
+        identity=args.arch_identity, 
+        deliver_to_neighbor=args.deliver_to_neighbors)
     val_end = time.time()
     val_time = val_end - val_start
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
@@ -365,19 +201,16 @@ if mailbox is not None:
     mailbox.reset()
     model.memory_updater.last_updated_nid = None
     val(df[0], sampler, mailbox, model, node_feats, 
-        edge_feats, creterion, mode='val', no_neg=no_neg, 
-        identity=gnn_param['arch'] == 'identity', 
-        deliver_to_neighbor=memory_param['deliver_to'] == 'neighbors',
-        prop_time=sample_param['prop_time'])
+        edge_feats, creterion, no_neg=args.no_neg, 
+        identity=args.arch_identity, 
+        deliver_to_neighbor=args.deliver_to_neighbors)
     val(df[1], sampler, mailbox, model, node_feats, 
-        edge_feats, creterion, mode='val', no_neg=no_neg, 
-        identity=gnn_param['arch'] == 'identity', 
-        deliver_to_neighbor=memory_param['deliver_to'] == 'neighbors',
-        prop_time=sample_param['prop_time'])
+        edge_feats, creterion, no_neg=args.no_neg, 
+        identity=args.arch_identity, 
+        deliver_to_neighbor=args.deliver_to_neighbors)
 ap, auc = val(df[2], sampler, mailbox, model, node_feats, 
-        edge_feats, creterion, mode='val', no_neg=no_neg, 
-        identity=gnn_param['arch'] == 'identity', 
-        deliver_to_neighbor=memory_param['deliver_to'] == 'neighbors',
-        prop_time=sample_param['prop_time'])
+        edge_feats, creterion, no_neg=args.no_neg, 
+        identity=args.arch_identity, 
+        deliver_to_neighbor=args.deliver_to_neighbors)
 print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
             

@@ -236,11 +236,11 @@ class MailBox():
 
 class GRUMemeoryUpdater(torch.nn.Module):
 
-    def __init__(self, memory_param, dim_in, dim_hid, dim_time, dim_node_feat):
+    def __init__(self, combine_node_feature, dim_in, dim_hid, dim_time, dim_node_feat):
         super(GRUMemeoryUpdater, self).__init__()
         self.dim_hid = dim_hid
         self.dim_node_feat = dim_node_feat
-        self.memory_param = memory_param
+        self.combine_node_feature = combine_node_feature
         self.dim_time = dim_time
         self.updater = torch.nn.GRUCell(dim_in + dim_time, dim_hid)
         self.last_updated_memory = None
@@ -248,7 +248,7 @@ class GRUMemeoryUpdater(torch.nn.Module):
         self.last_updated_nid = None
         if dim_time > 0:
             self.time_enc = TimeEncode(dim_time)
-        if memory_param['combine_node_feature']:
+        if combine_node_feature:
             if dim_node_feat > 0 and dim_node_feat != dim_hid:
                 self.node_feat_map = torch.nn.Linear(dim_node_feat, dim_hid)
 
@@ -275,7 +275,7 @@ class GRUMemeoryUpdater(torch.nn.Module):
                 : b.num_dst_nodes()].detach().clone()
             new_memory = torch.cat(
                 [updated_memory, b.srcdata['mem'][b.num_dst_nodes():]], dim=0)
-            if self.memory_param['combine_node_feature']:
+            if self.combine_node_feature:
                 if self.dim_node_feat > 0:
                     if self.dim_node_feat == self.dim_hid:
                         b.srcdata['h'] += new_memory

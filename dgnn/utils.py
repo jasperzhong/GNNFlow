@@ -84,7 +84,7 @@ def load_feat(data_dir: str, dataset: str, rand_de=0, rand_dn=0) -> Tuple[torch.
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, batch_size: int = 600, mode: str = 'train'):
+def get_batch(df: pd.DataFrame, batch_size: int = 600):
     group_indexes = list()
 
     group_indexes.append(np.array(df.index // batch_size))

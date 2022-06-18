@@ -1,14 +1,12 @@
 import torch
 import pandas as pd
-from dgnn.build_graph import get_batch
-from dgnn.model.memory_updater import MailBox
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import prepare_input, mfgs_to_cuda, node_to_dgl_blocks
+from dgnn.utils import prepare_input, mfgs_to_cuda, node_to_dgl_blocks, get_batch
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 def val(df: pd.DataFrame, sampler: TemporalSampler, mailbox: MailBox, model: torch.nn.Module
         , node_feats: torch.Tensor, edge_feats: torch.Tensor, creterion: torch.nn.Module, 
-            mode='val', neg_samples=1, no_neg=False, identity=False, deliver_to_neighbor=False, prop_time=False):
+        neg_samples=1, no_neg=False, identity=False, deliver_to_neighbor=False):
     model.eval()
     val_losses = list()
     aps = list()
@@ -16,22 +14,16 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, mailbox: MailBox, model: tor
         
     with torch.no_grad():
         total_loss = 0
-        
-        mfgs_reverse = False
-        if deliver_to_neighbor:
-            mfgs_reverse = True
 
         mfgs = None
-        for i, (target_nodes, ts, eid) in enumerate(get_batch(df=df, mode=mode)):
+        for i, (target_nodes, ts, eid) in enumerate(get_batch(df)):
             
             if sampler is not None:
                 if no_neg:
                     pos_root_end = target_nodes.shape[0] * 2 // 3
-                    mfgs = sampler.sample(target_nodes[:pos_root_end], ts[:pos_root_end], prop_time=prop_time, reverse=mfgs_reverse)
-                    # mfgs = sampler.sample(target_nodes[584:585], ts[584:585])
-                    # mfgs = sampler.sample(torch.Tensor([242]), torch.Tensor([48066.859]))
+                    mfgs = sampler.sample(target_nodes[:pos_root_end], ts[:pos_root_end])
                 else:
-                    mfgs = sampler.sample(target_nodes, ts, prop_time=prop_time, reverse=mfgs_reverse)
+                    mfgs = sampler.sample(target_nodes, ts)
             # if identity
             mfgs_deliver_to_neighbors = None
             if identity:
@@ -64,8 +56,8 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, mailbox: MailBox, model: tor
                 mailbox.update_mailbox(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, target_nodes, ts, mem_edge_feats, block)
                 mailbox.update_memory(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, model.memory_updater.last_updated_ts)
 
-        if mode == 'val':
-            val_losses.append(float(total_loss))
+
+        val_losses.append(float(total_loss))
             
     ap = float(torch.tensor(aps).mean())
     if neg_samples > 1:
