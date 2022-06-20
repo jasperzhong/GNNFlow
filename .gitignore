@@ -184,3 +184,4 @@ data/
 
 rmm_log.txt
 *.qdrep
+*.ncu-rep
