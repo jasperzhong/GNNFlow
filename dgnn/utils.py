@@ -48,15 +48,15 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataF
     return train_df, val_df, test_df, df
 
 
-def load_feat(data_dir: str, dataset: str, rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
-    node_feats = None
+def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
+    
     if data_dir is None:
-        data_dir = os.path.dirname(__file__)
-        data_dir = os.path.join(data_dir, 'data')
+        data_dir = os.path.join(get_project_root_dir(), "data")
 
     dataset_path = os.path.join(data_dir, dataset)
 
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
+    node_feats = None
     if os.path.exists(node_feat_path):
         node_feats = torch.load(node_feat_path)
         if node_feats.dtyep == torch.bool:

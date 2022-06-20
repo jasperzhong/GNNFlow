@@ -4,9 +4,9 @@ from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import prepare_input, mfgs_to_cuda, node_to_dgl_blocks, get_batch
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-def val(df: pd.DataFrame, sampler: TemporalSampler, mailbox: MailBox, model: torch.nn.Module
+def val(df: pd.DataFrame, sampler: TemporalSampler, model: torch.nn.Module
         , node_feats: torch.Tensor, edge_feats: torch.Tensor, creterion: torch.nn.Module, 
-        neg_samples=1, no_neg=False, identity=False, deliver_to_neighbor=False):
+        neg_samples=1, no_neg=False, identity=False, deliver_to_neighbors=False):
     model.eval()
     val_losses = list()
     aps = list()
@@ -32,8 +32,6 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, mailbox: MailBox, model: tor
 
             mfgs_to_cuda(mfgs)
             mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
-            if mailbox is not None:
-                mailbox.prep_input_mails(mfgs[0])
 
             pred_pos, pred_neg = model(mfgs, neg_samples)
 
@@ -48,14 +46,9 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, mailbox: MailBox, model: tor
 
             aps.append(average_precision_score(y_true, y_pred))
             
-            if mailbox is not None:
-                mem_edge_feats = edge_feats[eid] if edge_feats is not None else None
-                block = None
-                if deliver_to_neighbor:
-                    block = mfgs_deliver_to_neighbors[0][0]
-                mailbox.update_mailbox(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, target_nodes, ts, mem_edge_feats, block)
-                mailbox.update_memory(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, model.memory_updater.last_updated_ts)
-
+            model.update_mem_mail(target_nodes, ts, edge_feats, eid, 
+                            mfgs_deliver_to_neighbors, 
+                            deliver_to_neighbors)
 
         val_losses.append(float(total_loss))
             
