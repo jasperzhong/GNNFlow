@@ -4,13 +4,12 @@
 
 namespace dgnn {
 
-__host__ __device__ void LowerBound(TimestampType* timestamps,
-                                    std::size_t num_edges,
-                                    TimestampType timestamp, std::size_t* idx) {
-  std::size_t left = 0;
-  std::size_t right = num_edges;
+__host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
+                                    TimestampType timestamp, int* idx) {
+  int left = 0;
+  int right = num_edges;
   while (left < right) {
-    std::size_t mid = (left + right) / 2;
+    int mid = (left + right) / 2;
     if (timestamps[mid] < timestamp) {
       left = mid + 1;
     } else {
@@ -20,13 +19,12 @@ __host__ __device__ void LowerBound(TimestampType* timestamps,
   *idx = left;
 }
 
-__host__ __device__ void UpperBound(TimestampType* timestamps,
-                                    std::size_t num_edges,
-                                    TimestampType timestamp, std::size_t* idx) {
-  std::size_t left = 0;
-  std::size_t right = num_edges;
+__host__ __device__ void UpperBound(TimestampType* timestamps, int num_edges,
+                                    TimestampType timestamp, int* idx) {
+  int left = 0;
+  int right = num_edges;
   while (left < right) {
-    std::size_t mid = (left + right) / 2;
+    int mid = (left + right) / 2;
     if (timestamps[mid] <= timestamp) {
       left = mid + 1;
     } else {
@@ -35,6 +33,7 @@ __host__ __device__ void UpperBound(TimestampType* timestamps,
   }
   *idx = left;
 }
+
 template <typename T>
 __device__ void inline swap(T a, T b) {
   T c(a);
@@ -58,24 +57,96 @@ __device__ void QuickSort(uint32_t* indices, int lo, int hi) {
   QuickSort(indices, i + 1, hi);
 }
 
+__global__ void SampleLayerRecentKernel(
+    const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
+    const NIDType* root_nodes, const TimestampType* root_timestamps,
+    const TimestampType* time_offsets, TimestampType snapshot_time_window,
+    uint32_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
+    TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
+    uint32_t* num_sampled) {
+  uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tid >= num_root_nodes) {
+    return;
+  }
+
+  NIDType nid = root_nodes[tid];
+  TimestampType root_timestamp = root_timestamps[tid];
+  TimestampType end_timestamp = root_timestamp - time_offsets[tid];
+  TimestampType start_timestamp = fabs(snapshot_time_window) > 1e-6
+                                      ? end_timestamp - snapshot_time_window
+                                      : 0;
+
+  auto curr = node_table[nid].head;
+  uint32_t offset = tid * fanout;
+  int start_idx, end_idx;
+  uint32_t sampled = 0;
+  while (curr != nullptr && sampled < fanout) {
+    if (end_timestamp < curr->timestamps[0]) {
+      // search in the next block
+      curr = curr->next;
+      continue;
+    }
+
+    if (start_timestamp > curr->timestamps[curr->size - 1]) {
+      // no need to search in the next block
+      break;
+    }
+
+    // search in the current block
+    if (start_timestamp >= curr->timestamps[0] &&
+        end_timestamp <= curr->timestamps[curr->size - 1]) {
+      // all edges in the current block
+      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+    } else if (start_timestamp < curr->timestamps[0] &&
+               end_timestamp >= curr->timestamps[curr->size - 1]) {
+      // only the edges before end_timestamp are in the current block
+      start_idx = 0;
+      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+    } else if (start_timestamp >= curr->timestamps[0] &&
+               end_timestamp > curr->timestamps[curr->size - 1]) {
+      // only the edges after start_timestamp are in the current block
+      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+      end_idx = curr->size;
+    } else {
+      // the whole block is in the range
+      start_idx = 0;
+      end_idx = curr->size;
+    }
+
+    // copy the edges to the output
+    for (int i = end_idx - 1; sampled < fanout && i >= start_idx; --i) {
+      src_nodes[offset + sampled] = curr->dst_nodes[i];
+      timestamps[offset + sampled] =
+          prop_time ? root_timestamp : curr->timestamps[i];
+      delta_timestamps[offset + sampled] = root_timestamp - curr->timestamps[i];
+      eids[offset + sampled] = curr->eids[i];
+      ++sampled;
+    }
+
+    curr = curr->next;
+  }
+
+  num_sampled[tid] = sampled;
+}
+
 struct SamplingRangeInBlock {
   // [start_idx, end_idx)
   TemporalBlock* block;
-  std::size_t start_idx;
-  std::size_t end_idx;
+  int start_idx;
+  int end_idx;
 
   __host__ __device__ SamplingRangeInBlock()
       : block(nullptr), start_idx(0), end_idx(0) {}
 };
 
-__global__ void SampleLayerKernel(
-    const DoublyLinkedList* node_table, std::size_t num_nodes,
-    SamplingPolicy sampling_policy, bool prop_time, curandState_t* rand_states,
-    uint64_t seed, NIDType* root_nodes, TimestampType* root_timestamps,
-    TimestampType* time_offsets, TimestampType snapshot_time_window,
-    std::size_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
-    TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
-    uint32_t* num_sampled) {
+__global__ void SampleLayerUniformKernel(
+    const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
+    curandState_t* rand_states, uint64_t seed, const NIDType* root_nodes,
+    const TimestampType* root_timestamps, const TimestampType* time_offsets,
+    TimestampType snapshot_time_window, uint32_t num_root_nodes,
+    uint32_t fanout, NIDType* src_nodes, TimestampType* timestamps,
+    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
@@ -158,19 +229,11 @@ __global__ void SampleLayerKernel(
   }
 
   uint32_t indices[10];
-  if (sampling_policy == SamplingPolicy::kSamplingPolicyRecent) {
-#pragma unroll
-    for (uint32_t i = 0; i < fanout; i++) {
-      indices[i] = i;
-    }
-  } else if (sampling_policy == SamplingPolicy::kSamplingPolicyUniform) {
-    curand_init(seed, tid, 0, &rand_states[tid]);
-#pragma unroll
-    for (uint32_t i = 0; i < fanout; i++) {
-      indices[i] = curand(rand_states + tid) % num_candidates;
-    }
-    QuickSort(indices, 0, fanout - 1);
+  curand_init(seed, tid, 0, &rand_states[tid]);
+  for (uint32_t i = 0; i < fanout; i++) {
+    indices[i] = curand(rand_states + tid) % num_candidates;
   }
+  QuickSort(indices, 0, fanout - 1);
 
   uint32_t cumsum = 0;
   uint32_t j = 0;

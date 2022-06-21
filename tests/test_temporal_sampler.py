@@ -13,13 +13,14 @@ class TestTemporalSampler(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 1-hop neighbors
         sampler = TemporalSampler(dgraph, [2])
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([1.5, 1.5, 1.5]))
+                                np.array([1.5, 1.5, 1.5]))
         blocks = blocks[0]
 
         block = blocks[0]
@@ -45,13 +46,14 @@ class TestTemporalSampler(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 1-hop neighbors
         sampler = TemporalSampler(dgraph, [2], strategy='uniform')
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([3, 3, 3]))
+                                np.array([3, 3, 3]))
         blocks = blocks[0]
 
         block = blocks[0]
@@ -66,19 +68,21 @@ class TestTemporalSampler(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
-        # add more edges 
+        # add more edges
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 1-hop neighbors
         sampler = TemporalSampler(dgraph, [2])
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([1.5, 1.5, 1.5]))
+                                np.array([1.5, 1.5, 1.5]))
         blocks = blocks[0]
 
         block = blocks[0]
@@ -104,13 +108,14 @@ class TestTemporalSampler(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 1-hop neighbors
         sampler = TemporalSampler(dgraph, [2])
         target_vertices = np.array([0, 1, 2, 0])
         blocks = sampler.sample(target_vertices,
-                np.array([1.5, 1.5, 1.5, 1.5]))
+                                np.array([1.5, 1.5, 1.5, 1.5]))
         blocks = blocks[0]
 
         block = blocks[0]
@@ -136,13 +141,14 @@ class TestTemporalSampler(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 2-hop neighbors
         sampler = TemporalSampler(dgraph, [2, 2])
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([1.5, 1.5, 1.5]))
+                                np.array([1.5, 1.5, 1.5]))
 
         block = blocks[1][0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
@@ -183,19 +189,20 @@ class TestTemporalSampler(unittest.TestCase):
         # build the dynamic graph
         dgraph = DynamicGraph()
         source_vertices = np.array(
-                [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
+            [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
         target_vertices = np.array(
-                [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
+            [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
         timestamps = np.array(
-                [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+            [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 1-hop neighbors with two snapshots
         sampler = TemporalSampler(dgraph, [2], num_snapshots=2,
-                snapshot_time_window=1)
+                                  snapshot_time_window=1)
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([5, 5, 5]))
+                                np.array([5, 5, 5]))
         blocks = blocks[0]
 
         block = blocks[1]  # timestamp range: [4, 5]
@@ -240,19 +247,20 @@ class TestTemporalSampler(unittest.TestCase):
         # build the dynamic graph
         dgraph = DynamicGraph()
         source_vertices = np.array(
-                [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
+            [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
         target_vertices = np.array(
-                [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
+            [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6])
         timestamps = np.array(
-                [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
+            [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
 
         # sample 2-hop neighbors with two snapshots
         sampler = TemporalSampler(dgraph, [2, 2], num_snapshots=2,
-                snapshot_time_window=1)
+                                  snapshot_time_window=1)
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
-                np.array([5, 5, 5]))
+                                np.array([5, 5, 5]))
 
         # root -> layer 1, timestamp range: [4, 5]
         block = blocks[1][1]

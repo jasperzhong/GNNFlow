@@ -29,7 +29,7 @@ class CustomBuildExt(build_ext):
         cmake_bin = get_cmake_bin()
 
         debug = os.environ.get("DEBUG", "0")
-        config = 'RelWithDebInfo' if debug == "1" else 'Release'
+        config = 'Debug' if debug == "1" else 'Release'
         print("Building with CMake config: {}".format(config))
 
         ext_name = self.extensions[0].name

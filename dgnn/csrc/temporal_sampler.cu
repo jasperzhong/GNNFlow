@@ -95,26 +95,36 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   uint32_t num_blocks =
       (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
 
-  curandState_t* rand_states = nullptr;
-  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyRecent) {
+    SampleLayerRecentKernel<<<num_blocks, num_threads_per_block>>>(
+        graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
+        thrust::raw_pointer_cast(d_root_nodes.data()),
+        thrust::raw_pointer_cast(d_root_timestamps.data()),
+        thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
+        num_root_nodes, fanouts_[layer],
+        thrust::raw_pointer_cast(d_src_nodes.data()),
+        thrust::raw_pointer_cast(d_timestamps.data()),
+        thrust::raw_pointer_cast(d_delta_timestamps.data()),
+        thrust::raw_pointer_cast(d_eids.data()),
+        thrust::raw_pointer_cast(d_num_sampled.data()));
+  } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
     rmm::device_vector<curandState_t> d_rand_states(num_threads_per_block *
                                                     num_blocks);
-    rand_states = thrust::raw_pointer_cast(d_rand_states.data());
-  }
+    auto rand_states = thrust::raw_pointer_cast(d_rand_states.data());
 
-  // launch sampling kernel
-  SampleLayerKernel<<<num_blocks, num_threads_per_block>>>(
-      graph_.get_device_node_table(), graph_.num_nodes(), sampling_policy_,
-      prop_time_, rand_states, seed_,
-      thrust::raw_pointer_cast(d_root_nodes.data()),
-      thrust::raw_pointer_cast(d_root_timestamps.data()),
-      thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
-      num_root_nodes, fanouts_[layer],
-      thrust::raw_pointer_cast(d_src_nodes.data()),
-      thrust::raw_pointer_cast(d_timestamps.data()),
-      thrust::raw_pointer_cast(d_delta_timestamps.data()),
-      thrust::raw_pointer_cast(d_eids.data()),
-      thrust::raw_pointer_cast(d_num_sampled.data()));
+    // launch sampling kernel
+    SampleLayerUniformKernel<<<num_blocks, num_threads_per_block>>>(
+        graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
+        rand_states, seed_, thrust::raw_pointer_cast(d_root_nodes.data()),
+        thrust::raw_pointer_cast(d_root_timestamps.data()),
+        thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
+        num_root_nodes, fanouts_[layer],
+        thrust::raw_pointer_cast(d_src_nodes.data()),
+        thrust::raw_pointer_cast(d_timestamps.data()),
+        thrust::raw_pointer_cast(d_delta_timestamps.data()),
+        thrust::raw_pointer_cast(d_eids.data()),
+        thrust::raw_pointer_cast(d_num_sampled.data()));
+  }
 
   // host output
   std::vector<NIDType> src_nodes(num_root_nodes * fanouts_[layer]);
