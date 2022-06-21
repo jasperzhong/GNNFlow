@@ -91,7 +91,7 @@ __global__ void SampleLayerKernel(
   auto& list = node_table[nid];
   uint32_t num_candidates = 0;
 
-  SamplingRangeInBlock* sampling_range = new SamplingRangeInBlock[list.size];
+  SamplingRangeInBlock sampling_range[8];
   auto curr = list.head;
   uint32_t curr_idx = 0;
   while (curr != nullptr) {
@@ -157,13 +157,15 @@ __global__ void SampleLayerKernel(
     }
   }
 
-  uint32_t* indices = new uint32_t[fanout];
+  uint32_t indices[10];
   if (sampling_policy == SamplingPolicy::kSamplingPolicyRecent) {
+#pragma unroll
     for (uint32_t i = 0; i < fanout; i++) {
       indices[i] = i;
     }
   } else if (sampling_policy == SamplingPolicy::kSamplingPolicyUniform) {
     curand_init(seed, tid, 0, &rand_states[tid]);
+#pragma unroll
     for (uint32_t i = 0; i < fanout; i++) {
       indices[i] = curand(rand_states + tid) % num_candidates;
     }
@@ -203,8 +205,8 @@ __global__ void SampleLayerKernel(
 
   num_sampled[tid] = j;
 
-  delete[] sampling_range;
-  delete[] indices;
+  //   delete[] sampling_range;
+  //   delete[] indices;
 }
 
 }  // namespace dgnn
