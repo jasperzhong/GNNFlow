@@ -32,6 +32,8 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, model: torch.nn.Module
 
             mfgs_to_cuda(mfgs)
             mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+            if model.mailbox is not None:
+                model.mailbox.prep_input_mails(mfgs[0])
 
             pred_pos, pred_neg = model(mfgs, neg_samples)
 
@@ -46,9 +48,16 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, model: torch.nn.Module
 
             aps.append(average_precision_score(y_true, y_pred))
             
-            model.update_mem_mail(target_nodes, ts, edge_feats, eid, 
-                            mfgs_deliver_to_neighbors, 
-                            deliver_to_neighbors)
+            # model.update_mem_mail(target_nodes, ts, edge_feats, eid, 
+            #                 mfgs_deliver_to_neighbors, 
+            #                 deliver_to_neighbors)
+            if model.mailbox is not None:
+                mem_edge_feats = edge_feats[eid] if edge_feats is not None else None
+                block = None
+                if deliver_to_neighbors:
+                    block = mfgs_deliver_to_neighbors[0][0]
+                model.mailbox.update_mailbox(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, target_nodes, ts, mem_edge_feats, block)
+                model.mailbox.update_memory(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, model.memory_updater.last_updated_ts)
 
         val_losses.append(float(total_loss))
             

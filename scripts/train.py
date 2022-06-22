@@ -1,7 +1,5 @@
 import argparse
-from random import sample
 import torch
-import torchvision
 import time
 import dgnn.models as models
 from dgnn.temporal_sampler import TemporalSampler
@@ -27,7 +25,7 @@ parser.add_argument("--deliver-to-neighbors", help='deliver to neighbors', actio
 parser.add_argument("--use-memory", help='use memory module', action='store_true', default=True)
 parser.add_argument("--no-sample", help='do not need sampling', action='store_true', default=False)
 parser.add_argument("--prop_time", help='use prop time', action='store_true', default=False)
-parser.add_argument("--no_neg", help='not using neg samples in sampling', action='store_true', default=False)
+parser.add_argument("--no-neg", help='not using neg samples in sampling', action='store_true', default=False)
 parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
 parser.add_argument("--sample-strategy", help="sample strategy", type=str, default='recent')
 parser.add_argument("--sample-neighbor", help="how many neighbors to sample in each layer", type=list, default=[10])
@@ -89,6 +87,10 @@ for e in range(args.epoch):
     # if mailbox is not None. reset!
     model.train()
 
+    if model.mailbox is not None:
+        model.mailbox.reset()
+        model.memory_updater.last_updated_nid = None
+
     for i, (target_nodes, ts, eid) in enumerate(get_batch(df[0])):
         time_start = time.time()
         mfgs = None
@@ -110,10 +112,9 @@ for e in range(args.epoch):
         # move mfgs to cuda
         mfgs_to_cuda(mfgs)
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
-
-        # TODO: move this to forward()
         
         optimizer.zero_grad()
+        # move pre_input_mail to forward()
         pred_pos, pred_neg = model(mfgs)
 
         loss = creterion(pred_pos, torch.ones_like(pred_pos))
@@ -124,7 +125,6 @@ for e in range(args.epoch):
         optimizer.step()
         
         # MailBox Update: 
-        # TODO: use a new function in model
         model.update_mem_mail(target_nodes, ts, edge_feats, eid, 
                             mfgs_deliver_to_neighbors, 
                             args.deliver_to_neighbors)
@@ -164,17 +164,18 @@ for e in range(args.epoch):
 
 print('Loading model at epoch {}...'.format(best_e))
 model.load_state_dict(torch.load(path_saver))
-model.mailbox_reset()
 
 # To update the memory
-val(df[0], sampler, model, node_feats, 
-    edge_feats, creterion, no_neg=args.no_neg, 
-    identity=args.arch_identity, 
-    deliver_to_neighbors=args.deliver_to_neighbors)
-val(df[1], sampler, model, node_feats, 
-    edge_feats, creterion, no_neg=args.no_neg, 
-    identity=args.arch_identity, 
-    deliver_to_neighbors=args.deliver_to_neighbors)
+if model.mailbox is not None:
+    model.mailbox_reset()   
+    val(df[0], sampler, model, node_feats, 
+        edge_feats, creterion, no_neg=args.no_neg, 
+        identity=args.arch_identity, 
+        deliver_to_neighbors=args.deliver_to_neighbors)
+    val(df[1], sampler, model, node_feats, 
+        edge_feats, creterion, no_neg=args.no_neg, 
+        identity=args.arch_identity, 
+        deliver_to_neighbors=args.deliver_to_neighbors)
 
 ap, auc = val(df[2], sampler, model, node_feats, 
         edge_feats, creterion, no_neg=args.no_neg, 

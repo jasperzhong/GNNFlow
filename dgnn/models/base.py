@@ -6,14 +6,6 @@ class Model(torch.nn.Module):
         self.mailbox = None
         self.memory_updater = None
 
-    def train(self, mode = True):
-        # TODO: where to put this if?
-        # learn AOP!!
-        super().train(mode)
-        if self.mailbox is not None:
-            self.mailbox.reset()
-            self.memory_updater.last_updated_nid = None
-
     def forward(self, mfgs, neg_samples=1):
         if self.mailbox is not None:
             self.mailbox.prep_input_mails(mfgs[0])

@@ -2,52 +2,63 @@ import torch
 
 from .layers import *
 from .memory_updater import *
+from .base import Model
 
+class apan(Model):
 
-class apan(torch.nn.Module):
-
-    def __init__(self, dim_node, dim_edge, sample_param, memory_param,
-                 gnn_param, train_param, combined=False):
+    def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1, 
+                 memory_dim_out=100, memory_dim_time=100, layer=1, gnn_attn_head=2,
+                 dropout=0.1, attn_dropout=0.1, mailbox_size=10, mail_combine='last', deliver_to_neighbors=True):
         super(apan, self).__init__()
         self.dim_node = dim_node
         self.dim_node_input = dim_node
         self.dim_edge = dim_edge
-        self.sample_param = sample_param
-        self.memory_param = memory_param
 
-        # no dim_out in gnn_param
-        gnn_param['dim_out'] = memory_param['dim_out']
-        self.gnn_param = gnn_param
-        self.train_param = train_param
+        self.sample_history = sample_history
+        self.memory_dim_out = memory_dim_out
+        self.memory_dim_time = memory_dim_time
+        self.gnn_dim_out = memory_dim_out
+        self.gnn_dim_time = memory_dim_time
+        self.gnn_attn_head = gnn_attn_head
+        self.gnn_layer = layer
+        self.dropout = dropout
+        self.attn_dropout = attn_dropout
+
+        self.mailbox = MailBox(memory_dim_out, mailbox_size, 
+                            mail_combine, num_nodes, dim_edge,
+                            deliver_to_neighbors)
+        self.mailbox.move_to_gpu()
 
         # Memory updater
         self.memory_updater = TransformerMemoryUpdater(
-            memory_param, 2 * memory_param['dim_out'] + dim_edge,
-            memory_param['dim_out'],
-            memory_param['dim_time'],
-            train_param)
-        self.dim_node_input = memory_param['dim_out']
+            mailbox_size, gnn_attn_head,
+            2 * memory_dim_out + dim_edge,
+            memory_dim_out,
+            memory_dim_time,
+            dropout, attn_dropout)
+        
+        self.dim_node_input = memory_dim_out
 
         self.layers = torch.nn.ModuleDict()
 
-        self.gnn_param['layer'] = 1
-        for h in range(sample_param['history']):
+        self.gnn_layer = 1
+        for h in range(sample_history):
             self.layers['l0h' + str(h)] = IdentityNormLayer(self.dim_node_input)
 
-        self.edge_predictor = EdgePredictor(gnn_param['dim_out'])
+        self.edge_predictor = EdgePredictor(memory_dim_out)
 
     def forward(self, mfgs, neg_samples=1):
-        self.memory_updater(mfgs[0])
-
+        super().forward(mfgs)
         out = list()
-        for l in range(self.gnn_param['layer']):
-            for h in range(self.sample_param['history']):
+        for l in range(self.gnn_layer):
+            for h in range(self.sample_history):
                 rst = self.layers['l' + str(l) + 'h' + str(h)](mfgs[l][h])
-                if l != self.gnn_param['layer'] - 1:
+                if l != self.gnn_layer - 1:
                     mfgs[l + 1][h].srcdata['h'] = rst
                 else:
                     out.append(rst)
-        if self.sample_param['history'] == 1:
+
+        if self.sample_history == 1:
             out = out[0]
         else:
             out = torch.stack(out, dim=0)
@@ -55,18 +66,16 @@ class apan(torch.nn.Module):
         return self.edge_predictor(out, neg_samples=neg_samples)
 
     def get_emb(self, mfgs):
-
         self.memory_updater(mfgs[0])
-
         out = list()
-        for l in range(self.gnn_param['layer']):
-            for h in range(self.sample_param['history']):
+        for l in range(self.gnn_layer):
+            for h in range(self.sample_history):
                 rst = self.layers['l' + str(l) + 'h' + str(h)](mfgs[l][h])
-                if l != self.gnn_param['layer'] - 1:
+                if l != self.gnn_layer - 1:
                     mfgs[l + 1][h].srcdata['h'] = rst
                 else:
                     out.append(rst)
-        if self.sample_param['history'] == 1:
+        if self.sample_history == 1:
             out = out[0]
         else:
             out = torch.stack(out, dim=0)

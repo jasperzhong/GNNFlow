@@ -8,7 +8,7 @@ from .base import Model
 class tgn(Model):
 
     def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1, memory_dim_out=100,
-                 layer=1, gnn_dim_out=100, gnn_dim_time=100, gnn_attn_head=2,
+                 memory_dim_time=100, layer=1, gnn_dim_out=100, gnn_dim_time=100, gnn_attn_head=2,
                  dropout=0.2, attn_dropout=0.2, combined=False, combine_node_feature=True, 
                  mailbox_size=1, mail_combine='last', deliver_to_neighbors=False):
         super(tgn, self).__init__()
@@ -18,12 +18,14 @@ class tgn(Model):
 
         self.sample_history = sample_history
         self.memory_dim_out = memory_dim_out
+        self.memory_dim_time = memory_dim_time
         self.gnn_dim_out = gnn_dim_out
         self.gnn_dim_time = gnn_dim_time
         self.gnn_attn_head = gnn_attn_head
         self.gnn_layer = layer
         self.dropout = dropout
         self.attn_dropout = attn_dropout
+        self.combine_node_feature = combine_node_feature
 
         # Use Memory
         self.mailbox = MailBox(memory_dim_out, mailbox_size, 
@@ -35,7 +37,7 @@ class tgn(Model):
         self.memory_updater = GRUMemeoryUpdater(
             combine_node_feature, 2 * memory_dim_out + dim_edge,
             memory_dim_out,
-            gnn_dim_time,
+            memory_dim_time,
             dim_node)
         self.dim_node_input = memory_dim_out
 
