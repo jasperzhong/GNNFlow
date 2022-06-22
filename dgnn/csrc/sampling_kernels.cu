@@ -60,10 +60,10 @@ __device__ void QuickSort(uint32_t* indices, int lo, int hi) {
 __global__ void SampleLayerRecentKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
     const NIDType* root_nodes, const TimestampType* root_timestamps,
-    const TimestampType* time_offsets, TimestampType snapshot_time_window,
-    uint32_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
-    TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
-    uint32_t* num_sampled) {
+    const uint32_t* cumsum_num_nodes, uint32_t num_snapshots,
+    TimestampType snapshot_time_window, uint32_t num_root_nodes,
+    uint32_t fanout, NIDType* src_nodes, TimestampType* timestamps,
+    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
@@ -71,10 +71,22 @@ __global__ void SampleLayerRecentKernel(
 
   NIDType nid = root_nodes[tid];
   TimestampType root_timestamp = root_timestamps[tid];
-  TimestampType end_timestamp = root_timestamp - time_offsets[tid];
-  TimestampType start_timestamp = fabs(snapshot_time_window) > 1e-6
-                                      ? end_timestamp - snapshot_time_window
-                                      : 0;
+  TimestampType start_timestamp, end_timestamp;
+  if (num_snapshots == 1) {
+    start_timestamp = 0;
+    end_timestamp = root_timestamp;
+  } else {
+    uint32_t snapshot_idx = 0;
+    while (snapshot_idx < num_snapshots &&
+           tid < cumsum_num_nodes[snapshot_idx]) {
+      snapshot_idx++;
+    }
+    snapshot_idx--;
+
+    end_timestamp = root_timestamp -
+                    (num_snapshots - snapshot_idx - 1) * snapshot_time_window;
+    start_timestamp = end_timestamp - snapshot_time_window;
+  }
 
   auto curr = node_table[nid].head;
   uint32_t offset = tid * fanout;
@@ -134,10 +146,10 @@ __global__ void SampleLayerUniformKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
     curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
     const NIDType* root_nodes, const TimestampType* root_timestamps,
-    const TimestampType* time_offsets, TimestampType snapshot_time_window,
-    uint32_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
-    TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
-    uint32_t* num_sampled) {
+    const uint32_t* cumsum_num_nodes, uint32_t num_snapshots,
+    TimestampType snapshot_time_window, uint32_t num_root_nodes,
+    uint32_t fanout, NIDType* src_nodes, TimestampType* timestamps,
+    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
@@ -147,10 +159,22 @@ __global__ void SampleLayerUniformKernel(
 
   NIDType nid = root_nodes[tid];
   TimestampType root_timestamp = root_timestamps[tid];
-  TimestampType end_timestamp = root_timestamp - time_offsets[tid];
-  TimestampType start_timestamp = fabs(snapshot_time_window) > 1e-6
-                                      ? end_timestamp - snapshot_time_window
-                                      : 0;
+  TimestampType start_timestamp, end_timestamp;
+  if (num_snapshots == 1) {
+    start_timestamp = 0;
+    end_timestamp = root_timestamp;
+  } else {
+    uint32_t snapshot_idx = 0;
+    while (snapshot_idx < num_snapshots &&
+           tid < cumsum_num_nodes[snapshot_idx]) {
+      snapshot_idx++;
+    }
+    snapshot_idx--;
+
+    end_timestamp = root_timestamp -
+                    (num_snapshots - snapshot_idx - 1) * snapshot_time_window;
+    start_timestamp = end_timestamp - snapshot_time_window;
+  }
 
   auto& list = node_table[nid];
   uint32_t num_candidates = 0;

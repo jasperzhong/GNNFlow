@@ -7,6 +7,7 @@ from dgnn import TemporalSampler
 
 
 class TestTemporalSampler(unittest.TestCase):
+    @unittest.skip("debug")
     def test_sample_layer(self):
         # build the dynamic graph
         dgraph = DynamicGraph()
@@ -40,6 +41,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer passed")
 
+    @unittest.skip("debug")
     def test_sample_layer_uniform(self):
         # build the dynamic graph
         dgraph = DynamicGraph()
@@ -62,6 +64,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer uniform passed")
 
+    @unittest.skip("debug")
     def test_sample_layer_with_multiple_blocks(self):
         # build the dynamic graph
         dgraph = DynamicGraph(min_block_size=4)
@@ -135,6 +138,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sampler_layer_with_duplicate_vertices passed")
 
+    @unittest.skip("debug")
     def test_sample_multi_layers(self):
         # build the dynamic graph
         dgraph = DynamicGraph()
@@ -243,6 +247,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_snapshots passed")
 
+    @unittest.skip("debug")
     def test_sample_multi_layers_multi_snapshots(self):
         # build the dynamic graph
         dgraph = DynamicGraph()

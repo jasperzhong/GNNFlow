@@ -54,8 +54,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   // host input
   std::vector<NIDType> root_nodes;
   std::vector<TimestampType> root_timestamps;
-  std::vector<TimestampType> time_offsets;
-  std::vector<uint32_t> num_nodes_per_snapshot;
+  std::vector<uint32_t> cumsum_num_nodes;
+  uint32_t cumsum = 0;
 
   // from old to new
   for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
@@ -69,10 +69,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         prev_sampling_results.at(snapshot).all_timestamps.end());
 
     uint32_t num_nodes = prev_sampling_results.at(snapshot).all_nodes.size();
-    num_nodes_per_snapshot.push_back(num_nodes);
-
-    float time_offset = snapshot_time_window_ * (num_snapshots_ - snapshot - 1);
-    time_offsets.insert(time_offsets.end(), num_nodes, time_offset);
+    cumsum += num_nodes;
+    cumsum_num_nodes.push_back(cumsum);
   }
 
   // device input
@@ -80,8 +78,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
                                            root_nodes.end());
   rmm::device_vector<TimestampType> d_root_timestamps(root_timestamps.begin(),
                                                       root_timestamps.end());
-  rmm::device_vector<TimestampType> d_time_offsets(time_offsets.begin(),
-                                                   time_offsets.end());
+  rmm::device_vector<uint32_t> d_num_nodes_per_snapshot(
+      cumsum_num_nodes.begin(), cumsum_num_nodes.end());
 
   // device output
   uint32_t num_root_nodes = root_nodes.size();
@@ -102,8 +100,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
         thrust::raw_pointer_cast(d_root_nodes.data()),
         thrust::raw_pointer_cast(d_root_timestamps.data()),
-        thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
-        num_root_nodes, fanouts_[layer],
+        thrust::raw_pointer_cast(cumsum_num_nodes.data()), num_snapshots_,
+        snapshot_time_window_, num_root_nodes, fanouts_[layer],
         thrust::raw_pointer_cast(d_src_nodes.data()),
         thrust::raw_pointer_cast(d_timestamps.data()),
         thrust::raw_pointer_cast(d_delta_timestamps.data()),
@@ -130,8 +128,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         rand_states, seed_, offset_per_thread,
         thrust::raw_pointer_cast(d_root_nodes.data()),
         thrust::raw_pointer_cast(d_root_timestamps.data()),
-        thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
-        num_root_nodes, fanouts_[layer],
+        thrust::raw_pointer_cast(cumsum_num_nodes.data()), num_snapshots_,
+        snapshot_time_window_, num_root_nodes, fanouts_[layer],
         thrust::raw_pointer_cast(d_src_nodes.data()),
         thrust::raw_pointer_cast(d_timestamps.data()),
         thrust::raw_pointer_cast(d_delta_timestamps.data()),
@@ -168,7 +166,13 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
               prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
-    uint32_t num_nodes_this_snapshot = num_nodes_per_snapshot[snapshot];
+    uint32_t num_nodes_this_snapshot;
+    if (snapshot == 0) {
+      num_nodes_this_snapshot = cumsum_num_nodes[0];
+    } else {
+      num_nodes_this_snapshot =
+          cumsum_num_nodes[snapshot] - cumsum_num_nodes[snapshot - 1];
+    }
 
     uint32_t num_sampled_total = 0;
     for (uint32_t i = 0; i < num_nodes_this_snapshot; i++) {
