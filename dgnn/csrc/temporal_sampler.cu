@@ -118,6 +118,10 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     int offset_per_thread =
         max_shared_memory_size / sizeof(SamplingRange) / num_threads_per_block;
 
+    LOG(DEBUG) << "Max shared memory size: " << max_shared_memory_size
+               << " bytes"
+               << ", offset per thread: " << offset_per_thread;
+
     // launch sampling kernel
     SampleLayerUniformKernel<<<num_blocks, num_threads_per_block,
                                offset_per_thread * num_threads_per_block *
