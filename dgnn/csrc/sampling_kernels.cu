@@ -130,27 +130,20 @@ __global__ void SampleLayerRecentKernel(
   num_sampled[tid] = sampled;
 }
 
-struct SamplingRangeInBlock {
-  // [start_idx, end_idx)
-  TemporalBlock* block;
-  int start_idx;
-  int end_idx;
-
-  __host__ __device__ SamplingRangeInBlock()
-      : block(nullptr), start_idx(0), end_idx(0) {}
-};
-
 __global__ void SampleLayerUniformKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
-    curandState_t* rand_states, uint64_t seed, const NIDType* root_nodes,
-    const TimestampType* root_timestamps, const TimestampType* time_offsets,
-    TimestampType snapshot_time_window, uint32_t num_root_nodes,
-    uint32_t fanout, NIDType* src_nodes, TimestampType* timestamps,
-    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
+    curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
+    const NIDType* root_nodes, const TimestampType* root_timestamps,
+    const TimestampType* time_offsets, TimestampType snapshot_time_window,
+    uint32_t num_root_nodes, uint32_t fanout, NIDType* src_nodes,
+    TimestampType* timestamps, TimestampType* delta_timestamps, EIDType* eids,
+    uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
   }
+
+  extern __shared__ SamplingRange ranges[];
 
   NIDType nid = root_nodes[tid];
   TimestampType root_timestamp = root_timestamps[tid];
@@ -162,14 +155,15 @@ __global__ void SampleLayerUniformKernel(
   auto& list = node_table[nid];
   uint32_t num_candidates = 0;
 
-  SamplingRangeInBlock sampling_range[8];
   auto curr = list.head;
-  uint32_t curr_idx = 0;
+  int start_idx, end_idx;
+  int curr_idx = 0;
+  int offset_by_thread = offset_per_thread * threadIdx.x;
   while (curr != nullptr) {
     if (end_timestamp < curr->timestamps[0]) {
       // search in the next block
       curr = curr->next;
-      curr_idx++;
+      curr_idx += 1;
       continue;
     }
 
@@ -182,94 +176,110 @@ __global__ void SampleLayerUniformKernel(
     if (start_timestamp >= curr->timestamps[0] &&
         end_timestamp <= curr->timestamps[curr->size - 1]) {
       // all edges in the current block
-      LowerBound(curr->timestamps, curr->size, start_timestamp,
-                 &sampling_range[curr_idx].start_idx);
-      UpperBound(curr->timestamps, curr->size, end_timestamp,
-                 &sampling_range[curr_idx].end_idx);
-      sampling_range[curr_idx].block = curr;
-
-      num_candidates +=
-          sampling_range[curr_idx].end_idx - sampling_range[curr_idx].start_idx;
-      break;
+      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp < curr->timestamps[0] &&
                end_timestamp >= curr->timestamps[curr->size - 1]) {
       // only the edges before end_timestamp are in the current block
-      sampling_range[curr_idx].start_idx = 0;
-      UpperBound(curr->timestamps, curr->size, end_timestamp,
-                 &sampling_range[curr_idx].end_idx);
-      sampling_range[curr_idx].block = curr;
-
-      num_candidates +=
-          sampling_range[curr_idx].end_idx - sampling_range[curr_idx].start_idx;
-      curr = curr->next;
-      curr_idx++;
-      continue;
+      start_idx = 0;
+      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp >= curr->timestamps[0] &&
                end_timestamp > curr->timestamps[curr->size - 1]) {
       // only the edges after start_timestamp are in the current block
-      LowerBound(curr->timestamps, curr->size, start_timestamp,
-                 &sampling_range[curr_idx].start_idx);
-      sampling_range[curr_idx].end_idx = curr->size;
-      sampling_range[curr_idx].block = curr;
-
-      num_candidates +=
-          sampling_range[curr_idx].end_idx - sampling_range[curr_idx].start_idx;
-      break;
+      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+      end_idx = curr->size;
     } else {
       // the whole block is in the range
-      sampling_range[curr_idx].start_idx = 0;
-      sampling_range[curr_idx].end_idx = curr->size;
-      sampling_range[curr_idx].block = curr;
-
-      num_candidates += curr->size;
-      curr = curr->next;
-      curr_idx++;
-      continue;
+      start_idx = 0;
+      end_idx = curr->size;
     }
+
+    if (curr_idx < offset_per_thread) {
+      ranges[offset_by_thread + curr_idx].start_idx = start_idx;
+      ranges[offset_by_thread + curr_idx].end_idx = end_idx;
+    }
+
+    num_candidates += end_idx - start_idx;
+    curr = curr->next;
+    curr_idx += 1;
   }
 
-  uint32_t indices[10];
+  uint32_t indices[MAX_FANOUT];
   curand_init(seed, tid, 0, &rand_states[tid]);
   for (uint32_t i = 0; i < fanout; i++) {
     indices[i] = curand(rand_states + tid) % num_candidates;
   }
   QuickSort(indices, 0, fanout - 1);
 
-  uint32_t cumsum = 0;
-  uint32_t j = 0;
+  uint32_t sampled = 0;
   uint32_t offset = tid * fanout;
-  for (uint32_t i = 0; i < list.size; i++) {
-    if (sampling_range[i].block == nullptr) {
+
+  curr = list.head;
+  curr_idx = 0;
+  uint32_t cumsum = 0;
+  while (curr != nullptr) {
+    if (end_timestamp < curr->timestamps[0]) {
+      // search in the next block
+      curr = curr->next;
+      curr_idx += 1;
       continue;
     }
-    auto idx = indices[j] - cumsum;
-    auto start_idx = sampling_range[i].start_idx;
-    auto end_idx = sampling_range[i].end_idx;
 
-    while (j < fanout && idx < end_idx - start_idx) {
-      // start from end_idx (newer edges)
-      src_nodes[offset + j] =
-          sampling_range[i].block->dst_nodes[end_idx - idx - 1];
-      timestamps[offset + j] =
-          prop_time ? root_timestamp
-                    : sampling_range[i].block->timestamps[end_idx - idx - 1];
-      delta_timestamps[offset + j] =
-          root_timestamp -
-          sampling_range[i].block->timestamps[end_idx - idx - 1];
-      eids[offset + j] = sampling_range[i].block->eids[end_idx - idx - 1];
-      idx = indices[++j] - cumsum;
-    }
-
-    if (j >= fanout) {
+    if (start_timestamp > curr->timestamps[curr->size - 1]) {
+      // no need to search in the next block
       break;
     }
+
+    if (curr_idx < offset_per_thread) {
+      start_idx = ranges[offset_by_thread + curr_idx].start_idx;
+      end_idx = ranges[offset_by_thread + curr_idx].end_idx;
+    } else {
+      // search in the current block
+      if (start_timestamp >= curr->timestamps[0] &&
+          end_timestamp <= curr->timestamps[curr->size - 1]) {
+        // all edges in the current block
+        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+        UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      } else if (start_timestamp < curr->timestamps[0] &&
+                 end_timestamp >= curr->timestamps[curr->size - 1]) {
+        // only the edges before end_timestamp are in the current block
+        start_idx = 0;
+        UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      } else if (start_timestamp >= curr->timestamps[0] &&
+                 end_timestamp > curr->timestamps[curr->size - 1]) {
+        // only the edges after start_timestamp are in the current block
+        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+        end_idx = curr->size;
+      } else {
+        // the whole block is in the range
+        start_idx = 0;
+        end_idx = curr->size;
+      }
+    }
+
+    auto idx = indices[sampled] - cumsum;
+    while (sampled < fanout && idx < end_idx - start_idx) {
+      // start from end_idx (newer edges)
+      src_nodes[offset + sampled] = curr->dst_nodes[end_idx - idx - 1];
+      timestamps[offset + sampled] =
+          prop_time ? root_timestamp : curr->timestamps[end_idx - idx - 1];
+      delta_timestamps[offset + sampled] =
+          root_timestamp - curr->timestamps[end_idx - idx - 1];
+      eids[offset + sampled] = curr->eids[end_idx - idx - 1];
+      idx = indices[sampled] - cumsum;
+      ++sampled;
+    }
+
+    if (sampled >= fanout) {
+      break;
+    }
+
     cumsum += end_idx - start_idx;
+    curr = curr->next;
+    curr_idx += 1;
   }
 
-  num_sampled[tid] = j;
-
-  //   delete[] sampling_range;
-  //   delete[] indices;
+  num_sampled[tid] = sampled;
 }
 
 }  // namespace dgnn

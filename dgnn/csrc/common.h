@@ -14,6 +14,8 @@ using NIDType = int64_t;
 using TimestampType = float;
 using EIDType = int64_t;
 
+constexpr int MAX_FANOUT = 32;
+
 static constexpr std::size_t kBlockSpaceSize =
     (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
 
@@ -48,6 +50,11 @@ struct SamplingResult {
   std::vector<EIDType> eids;
   std::size_t num_src_nodes;
   std::size_t num_dst_nodes;
+};
+
+struct SamplingRange {
+  int start_idx;
+  int end_idx;
 };
 
 /**

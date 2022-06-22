@@ -9,8 +9,10 @@
 #include "common.h"
 #include "sampling_kernels.h"
 #include "temporal_sampler.h"
+#include "utils.h"
 
 namespace dgnn {
+
 TemporalSampler::TemporalSampler(const DynamicGraph& graph,
                                  const std::vector<uint32_t>& fanouts,
                                  SamplingPolicy sampling_policy,
@@ -112,10 +114,17 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
                                                     num_blocks);
     auto rand_states = thrust::raw_pointer_cast(d_rand_states.data());
 
+    auto max_shared_memory_size = GetSharedMemoryMaxSize();
+    int offset_per_thread =
+        max_shared_memory_size / sizeof(SamplingRange) / num_threads_per_block;
+
     // launch sampling kernel
-    SampleLayerUniformKernel<<<num_blocks, num_threads_per_block>>>(
+    SampleLayerUniformKernel<<<num_blocks, num_threads_per_block,
+                               offset_per_thread * num_threads_per_block *
+                                   sizeof(SamplingRange)>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        rand_states, seed_, thrust::raw_pointer_cast(d_root_nodes.data()),
+        rand_states, seed_, offset_per_thread,
+        thrust::raw_pointer_cast(d_root_nodes.data()),
         thrust::raw_pointer_cast(d_root_timestamps.data()),
         thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
         num_root_nodes, fanouts_[layer],

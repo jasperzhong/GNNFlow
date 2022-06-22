@@ -51,4 +51,11 @@ void CopyEdgesToBlock(TemporalBlock* block,
   block->size += num_edges;
 }
 
+std::size_t GetSharedMemoryMaxSize() {
+  std::size_t max_size = 0;
+  cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop, 0);
+  max_size = prop.sharedMemPerBlock;
+  return max_size;
+}
 }  // namespace dgnn
