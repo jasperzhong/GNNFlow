@@ -78,10 +78,9 @@ __global__ void SampleLayerRecentKernel(
   } else {
     uint32_t snapshot_idx = 0;
     while (snapshot_idx < num_snapshots &&
-           tid < cumsum_num_nodes[snapshot_idx]) {
+           tid >= cumsum_num_nodes[snapshot_idx]) {
       snapshot_idx++;
     }
-    snapshot_idx--;
 
     end_timestamp = root_timestamp -
                     (num_snapshots - snapshot_idx - 1) * snapshot_time_window;
@@ -166,10 +165,9 @@ __global__ void SampleLayerUniformKernel(
   } else {
     uint32_t snapshot_idx = 0;
     while (snapshot_idx < num_snapshots &&
-           tid < cumsum_num_nodes[snapshot_idx]) {
+           tid >= cumsum_num_nodes[snapshot_idx]) {
       snapshot_idx++;
     }
-    snapshot_idx--;
 
     end_timestamp = root_timestamp -
                     (num_snapshots - snapshot_idx - 1) * snapshot_time_window;
