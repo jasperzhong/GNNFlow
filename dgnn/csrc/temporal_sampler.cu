@@ -1,3 +1,4 @@
+#include <cuda_runtime_api.h>
 #include <curand_kernel.h>
 
 #include <algorithm>
@@ -73,13 +74,36 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     cumsum_num_nodes.push_back(cumsum);
   }
 
+  std::size_t total_input_size =
+      root_nodes.size() * sizeof(NIDType) +
+      root_timestamps.size() * sizeof(TimestampType) +
+      cumsum_num_nodes.size() * sizeof(uint32_t);
+
+  char* tmp_host_buffer = new char[total_input_size];
+  std::copy(root_nodes.begin(), root_nodes.end(),
+            reinterpret_cast<NIDType*>(tmp_host_buffer));
+  std::copy(root_timestamps.begin(), root_timestamps.end(),
+            reinterpret_cast<TimestampType*>(
+                tmp_host_buffer + root_nodes.size() * sizeof(NIDType)));
+  std::copy(cumsum_num_nodes.begin(), cumsum_num_nodes.end(),
+            reinterpret_cast<uint32_t*>(
+                tmp_host_buffer + root_nodes.size() * sizeof(NIDType) +
+                root_timestamps.size() * sizeof(TimestampType)));
+
   // device input
-  rmm::device_vector<NIDType> d_root_nodes(root_nodes.begin(),
-                                           root_nodes.end());
-  rmm::device_vector<TimestampType> d_root_timestamps(root_timestamps.begin(),
-                                                      root_timestamps.end());
-  rmm::device_vector<uint32_t> d_cumsum_num_nodes(
-      cumsum_num_nodes.begin(), cumsum_num_nodes.end());
+  auto mr = rmm::mr::get_current_device_resource();
+  char* d_input = reinterpret_cast<char*>(mr->allocate(total_input_size));
+  CUDA_CALL(cudaMemcpy(d_input, tmp_host_buffer, total_input_size,
+                       cudaMemcpyHostToDevice));
+
+  NIDType* d_root_nodes = reinterpret_cast<NIDType*>(d_input);
+  TimestampType* d_root_timestamps = reinterpret_cast<TimestampType*>(
+      d_input + root_nodes.size() * sizeof(NIDType));
+  uint32_t* d_cumsum_num_nodes = reinterpret_cast<uint32_t*>(
+      d_input + root_nodes.size() * sizeof(NIDType) +
+      root_timestamps.size() * sizeof(TimestampType));
+
+  delete[] tmp_host_buffer;
 
   // device output
   uint32_t num_root_nodes = root_nodes.size();
@@ -98,9 +122,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   if (sampling_policy_ == SamplingPolicy::kSamplingPolicyRecent) {
     SampleLayerRecentKernel<<<num_blocks, num_threads_per_block>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        thrust::raw_pointer_cast(d_root_nodes.data()),
-        thrust::raw_pointer_cast(d_root_timestamps.data()),
-        thrust::raw_pointer_cast(d_cumsum_num_nodes.data()), num_snapshots_,
+        d_root_nodes, d_root_timestamps, d_cumsum_num_nodes, num_snapshots_,
         snapshot_time_window_, num_root_nodes, fanouts_[layer],
         thrust::raw_pointer_cast(d_src_nodes.data()),
         thrust::raw_pointer_cast(d_timestamps.data()),
@@ -125,11 +147,9 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
                                offset_per_thread * num_threads_per_block *
                                    sizeof(SamplingRange)>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        rand_states, seed_, offset_per_thread,
-        thrust::raw_pointer_cast(d_root_nodes.data()),
-        thrust::raw_pointer_cast(d_root_timestamps.data()),
-        thrust::raw_pointer_cast(d_cumsum_num_nodes.data()), num_snapshots_,
-        snapshot_time_window_, num_root_nodes, fanouts_[layer],
+        rand_states, seed_, offset_per_thread, d_root_nodes, d_root_timestamps,
+        d_cumsum_num_nodes, num_snapshots_, snapshot_time_window_,
+        num_root_nodes, fanouts_[layer],
         thrust::raw_pointer_cast(d_src_nodes.data()),
         thrust::raw_pointer_cast(d_timestamps.data()),
         thrust::raw_pointer_cast(d_delta_timestamps.data()),
@@ -213,6 +233,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     snapshot_offset += num_nodes_this_snapshot;
   }
+
+  mr->deallocate(d_input, total_input_size);
 
   return sampling_results;
 }
