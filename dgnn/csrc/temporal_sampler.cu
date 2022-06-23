@@ -56,8 +56,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   std::vector<uint32_t> cumsum_num_nodes;
   uint32_t cumsum = 0;
   for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
-    cumsum += prev_sampling_results.at(snapshot).all_nodes.size();
     cumsum_num_nodes.push_back(cumsum);
+    cumsum += prev_sampling_results.at(snapshot).all_nodes.size();
   }
   uint32_t num_root_nodes = cumsum;
 
@@ -72,10 +72,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     auto& all_nodes = sampling_result.all_nodes;
     auto& all_timestamps = sampling_result.all_timestamps;
 
-    std::size_t offset = 0;
-    if (snapshot > 0) {
-      offset = cumsum_num_nodes[snapshot - 1];
-    }
+    std::size_t offset = cumsum_num_nodes[snapshot];
     char* root_nodes_dst = tmp_host_buffer + offset * sizeof(NIDType);
     char* root_timestamps_dst = tmp_host_buffer +
                                 num_root_nodes * sizeof(NIDType) +
@@ -174,7 +171,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
   // convert to SamplingResult
   std::vector<SamplingResult> sampling_results(num_snapshots_);
-  uint32_t snapshot_offset = 0;
   for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
     auto& sampling_result = sampling_results[snapshot];
 
@@ -186,13 +182,9 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
               prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
-    uint32_t num_nodes_this_snapshot;
-    if (snapshot == 0) {
-      num_nodes_this_snapshot = cumsum_num_nodes[0];
-    } else {
-      num_nodes_this_snapshot =
-          cumsum_num_nodes[snapshot] - cumsum_num_nodes[snapshot - 1];
-    }
+    uint32_t num_nodes_this_snapshot =
+        prev_sampling_results.at(snapshot).all_nodes.size();
+    uint32_t snapshot_offset = cumsum_num_nodes[snapshot];
 
     uint32_t num_sampled_total = 0;
     for (uint32_t i = 0; i < num_nodes_this_snapshot; i++) {
@@ -228,8 +220,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     sampling_result.num_dst_nodes = num_nodes_this_snapshot;
     sampling_result.num_src_nodes = num_nodes_this_snapshot + num_sampled_total;
-
-    snapshot_offset += num_nodes_this_snapshot;
   }
 
   delete[] tmp_host_buffer_output;
