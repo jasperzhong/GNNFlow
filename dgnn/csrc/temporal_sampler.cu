@@ -85,9 +85,9 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     Copy(root_timestamps_dst, all_timestamps.data(),
          all_timestamps.size() * sizeof(TimestampType));
   }
-  Copy(tmp_host_buffer +
-           num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
-       cumsum_num_nodes.data(), cumsum_num_nodes.size() * sizeof(uint32_t));
+  memcpy(tmp_host_buffer +
+             num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
+         cumsum_num_nodes.data(), cumsum_num_nodes.size() * sizeof(uint32_t));
 
   // device input
   auto mr = rmm::mr::get_current_device_resource();
