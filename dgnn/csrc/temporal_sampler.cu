@@ -107,13 +107,24 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
   // device output
   uint32_t num_root_nodes = root_nodes.size();
-  rmm::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[layer]);
-  rmm::device_vector<TimestampType> d_timestamps(num_root_nodes *
-                                                 fanouts_[layer]);
-  rmm::device_vector<TimestampType> d_delta_timestamps(num_root_nodes *
-                                                       fanouts_[layer]);
-  rmm::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[layer]);
-  rmm::device_vector<uint32_t> d_num_sampled(num_root_nodes);
+  std::size_t offset1 = num_root_nodes * fanouts_[layer] * sizeof(NIDType);
+  std::size_t offset2 =
+      offset1 + num_root_nodes * fanouts_[layer] * sizeof(TimestampType);
+  std::size_t offset3 =
+      offset2 + num_root_nodes * fanouts_[layer] * sizeof(TimestampType);
+  std::size_t offset4 =
+      offset3 + num_root_nodes * fanouts_[layer] * sizeof(EIDType);
+  std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
+
+  char* d_output = reinterpret_cast<char*>(mr->allocate(total_output_size));
+
+  NIDType* d_src_nodes = reinterpret_cast<NIDType*>(d_output);
+  TimestampType* d_timestamps =
+      reinterpret_cast<TimestampType*>(d_output + offset1);
+  TimestampType* d_delta_timestamps =
+      reinterpret_cast<TimestampType*>(d_output + offset2);
+  EIDType* d_eids = reinterpret_cast<EIDType*>(d_output + offset3);
+  uint32_t* d_num_sampled = reinterpret_cast<uint32_t*>(d_output + offset4);
 
   uint32_t num_threads_per_block = 256;
   uint32_t num_blocks =
@@ -123,12 +134,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     SampleLayerRecentKernel<<<num_blocks, num_threads_per_block>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
         d_root_nodes, d_root_timestamps, d_cumsum_num_nodes, num_snapshots_,
-        snapshot_time_window_, num_root_nodes, fanouts_[layer],
-        thrust::raw_pointer_cast(d_src_nodes.data()),
-        thrust::raw_pointer_cast(d_timestamps.data()),
-        thrust::raw_pointer_cast(d_delta_timestamps.data()),
-        thrust::raw_pointer_cast(d_eids.data()),
-        thrust::raw_pointer_cast(d_num_sampled.data()));
+        snapshot_time_window_, num_root_nodes, fanouts_[layer], d_src_nodes,
+        d_timestamps, d_delta_timestamps, d_eids, d_num_sampled);
   } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
     rmm::device_vector<curandState_t> d_rand_states(num_threads_per_block *
                                                     num_blocks);
@@ -149,28 +156,31 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
         rand_states, seed_, offset_per_thread, d_root_nodes, d_root_timestamps,
         d_cumsum_num_nodes, num_snapshots_, snapshot_time_window_,
-        num_root_nodes, fanouts_[layer],
-        thrust::raw_pointer_cast(d_src_nodes.data()),
-        thrust::raw_pointer_cast(d_timestamps.data()),
-        thrust::raw_pointer_cast(d_delta_timestamps.data()),
-        thrust::raw_pointer_cast(d_eids.data()),
-        thrust::raw_pointer_cast(d_num_sampled.data()));
+        num_root_nodes, fanouts_[layer], d_src_nodes, d_timestamps,
+        d_delta_timestamps, d_eids, d_num_sampled);
   }
 
-  // host output
-  std::vector<NIDType> src_nodes(num_root_nodes * fanouts_[layer]);
-  std::vector<TimestampType> timestamps(num_root_nodes * fanouts_[layer]);
-  std::vector<TimestampType> delta_timestamps(num_root_nodes * fanouts_[layer]);
-  std::vector<EIDType> eids(num_root_nodes * fanouts_[layer]);
-  std::vector<uint32_t> num_sampled(num_root_nodes);
+  // copy output to host
+  char* tmp_host_buffer_output = new char[total_output_size];
+  CUDA_CALL(cudaMemcpy(tmp_host_buffer_output, d_output, total_output_size,
+                       cudaMemcpyDeviceToHost));
 
-  // copy output from device
-  thrust::copy(d_src_nodes.begin(), d_src_nodes.end(), src_nodes.begin());
-  thrust::copy(d_timestamps.begin(), d_timestamps.end(), timestamps.begin());
-  thrust::copy(d_delta_timestamps.begin(), d_delta_timestamps.end(),
-               delta_timestamps.begin());
-  thrust::copy(d_eids.begin(), d_eids.end(), eids.begin());
-  thrust::copy(d_num_sampled.begin(), d_num_sampled.end(), num_sampled.begin());
+  // host output
+  std::vector<NIDType> src_nodes(
+      reinterpret_cast<NIDType*>(tmp_host_buffer_output),
+      reinterpret_cast<NIDType*>(tmp_host_buffer_output + offset1));
+  std::vector<TimestampType> timestamps(
+      reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset1),
+      reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset2));
+  std::vector<TimestampType> delta_timestamps(
+      reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset2),
+      reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset3));
+  std::vector<EIDType> eids(
+      reinterpret_cast<EIDType*>(tmp_host_buffer_output + offset3),
+      reinterpret_cast<EIDType*>(tmp_host_buffer_output + offset4));
+  std::vector<uint32_t> num_sampled(
+      reinterpret_cast<uint32_t*>(tmp_host_buffer_output + offset4),
+      reinterpret_cast<uint32_t*>(tmp_host_buffer_output + total_output_size));
 
   // convert to SamplingResult
   std::vector<SamplingResult> sampling_results(num_snapshots_);
@@ -235,6 +245,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   }
 
   mr->deallocate(d_input, total_input_size);
+  mr->deallocate(d_output, total_output_size);
 
   return sampling_results;
 }
