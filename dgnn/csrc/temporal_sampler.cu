@@ -168,7 +168,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   // host output
   std::vector<NIDType> src_nodes(
       reinterpret_cast<NIDType*>(tmp_host_buffer_output),
-      reinterpret_cast<NIDType*>(tmp_host_buffer_output + offset1));
+      reinterpret_cast<NIDType*>(tmp_host_buffer_output + offset2));
   std::vector<TimestampType> timestamps(
       reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset1),
       reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset2));
@@ -181,6 +181,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   std::vector<uint32_t> num_sampled(
       reinterpret_cast<uint32_t*>(tmp_host_buffer_output + offset4),
       reinterpret_cast<uint32_t*>(tmp_host_buffer_output + total_output_size));
+
+  delete[] tmp_host_buffer_output;
 
   // convert to SamplingResult
   std::vector<SamplingResult> sampling_results(num_snapshots_);
