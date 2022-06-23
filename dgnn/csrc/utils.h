@@ -68,6 +68,9 @@ void CopyEdgesToBlock(TemporalBlock* block,
 
 std::size_t GetSharedMemoryMaxSize();
 
+
+void Copy(void* dst, const void* src, std::size_t size);
+
 }  // namespace dgnn
 
 #endif  // DGNN_UTILS_H_

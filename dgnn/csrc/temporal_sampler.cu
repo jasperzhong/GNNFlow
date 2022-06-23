@@ -53,42 +53,41 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results) {
   CHECK_EQ(prev_sampling_results.size(), num_snapshots_);
   // host input
-  std::vector<NIDType> root_nodes;
-  std::vector<TimestampType> root_timestamps;
   std::vector<uint32_t> cumsum_num_nodes;
   uint32_t cumsum = 0;
-
-  // from old to new
   for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
-    root_nodes.insert(root_nodes.end(),
-                      prev_sampling_results.at(snapshot).all_nodes.begin(),
-                      prev_sampling_results.at(snapshot).all_nodes.end());
-
-    root_timestamps.insert(
-        root_timestamps.end(),
-        prev_sampling_results.at(snapshot).all_timestamps.begin(),
-        prev_sampling_results.at(snapshot).all_timestamps.end());
-
-    uint32_t num_nodes = prev_sampling_results.at(snapshot).all_nodes.size();
-    cumsum += num_nodes;
+    cumsum += prev_sampling_results.at(snapshot).all_nodes.size();
     cumsum_num_nodes.push_back(cumsum);
   }
+  uint32_t num_root_nodes = cumsum;
 
   std::size_t total_input_size =
-      root_nodes.size() * sizeof(NIDType) +
-      root_timestamps.size() * sizeof(TimestampType) +
+      num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)) +
       cumsum_num_nodes.size() * sizeof(uint32_t);
 
   char* tmp_host_buffer = new char[total_input_size];
-  std::copy(root_nodes.begin(), root_nodes.end(),
-            reinterpret_cast<NIDType*>(tmp_host_buffer));
-  std::copy(root_timestamps.begin(), root_timestamps.end(),
-            reinterpret_cast<TimestampType*>(
-                tmp_host_buffer + root_nodes.size() * sizeof(NIDType)));
-  std::copy(cumsum_num_nodes.begin(), cumsum_num_nodes.end(),
-            reinterpret_cast<uint32_t*>(
-                tmp_host_buffer + root_nodes.size() * sizeof(NIDType) +
-                root_timestamps.size() * sizeof(TimestampType)));
+  // copy all_nodes and all_timestamps to tmp_host_buffer
+  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    auto& sampling_result = prev_sampling_results.at(snapshot);
+    auto& all_nodes = sampling_result.all_nodes;
+    auto& all_timestamps = sampling_result.all_timestamps;
+
+    std::size_t offset = 0;
+    if (snapshot > 0) {
+      offset = cumsum_num_nodes[snapshot - 1];
+    }
+    char* root_nodes_dst = tmp_host_buffer + offset * sizeof(NIDType);
+    char* root_timestamps_dst = tmp_host_buffer +
+                                num_root_nodes * sizeof(NIDType) +
+                                offset * sizeof(TimestampType);
+
+    Copy(root_nodes_dst, all_nodes.data(), all_nodes.size() * sizeof(NIDType));
+    Copy(root_timestamps_dst, all_timestamps.data(),
+         all_timestamps.size() * sizeof(TimestampType));
+  }
+  Copy(tmp_host_buffer +
+           num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
+       cumsum_num_nodes.data(), cumsum_num_nodes.size() * sizeof(uint32_t));
 
   // device input
   auto mr = rmm::mr::get_current_device_resource();
@@ -98,15 +97,13 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
   NIDType* d_root_nodes = reinterpret_cast<NIDType*>(d_input);
   TimestampType* d_root_timestamps = reinterpret_cast<TimestampType*>(
-      d_input + root_nodes.size() * sizeof(NIDType));
+      d_input + num_root_nodes * sizeof(NIDType));
   uint32_t* d_cumsum_num_nodes = reinterpret_cast<uint32_t*>(
-      d_input + root_nodes.size() * sizeof(NIDType) +
-      root_timestamps.size() * sizeof(TimestampType));
+      d_input + num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)));
 
   delete[] tmp_host_buffer;
 
   // device output
-  uint32_t num_root_nodes = root_nodes.size();
   std::size_t offset1 = num_root_nodes * fanouts_[layer] * sizeof(NIDType);
   std::size_t offset2 =
       offset1 + num_root_nodes * fanouts_[layer] * sizeof(TimestampType);
