@@ -3,28 +3,28 @@
 MODEL=$1
 
 # TGN
-if [[ $MODEL -eq 'tgn' ]];then
+if [ "$MODEL" == "tgn" ];then
     cmd="python train.py --model tgn"
 fi
 
 # TGAT
-if [[ MODEL -eq 'tgat' -o MODEL -eq 'TGAT']];then
+if ["$MODEL" == "tgat" ];then
     cmd="python train.py --model tgat --sample-layer 2 --sample-neighbor [10, 10] \
                     --sample-strategy uniform"
 fi
 
 # JODIE
-if [[ MODEL -eq 'jodie' -o MODEL -eq 'JODIE']];then
+if ["$MODEL" == "jodie"];then
     cmd="python train.py --model jodie --no-sample"
 fi
 
 # APAN
-if [[ MODEL -eq 'apan' -o MODEL -eq 'APAN']];then
+if ["$MODEL" == "apan"];then
     cmd="python train.py --model apan --no-neg --deliver-to-neighbors"
 fi
 
 # DySAT
-if [[ MODEL -eq 'dysat' -o MODEL -eq 'DySAT'] -o [ MODEL -eq 'DYSAT']];then
+if ["$MODEL" == "dysat"];then
     cmd="python train.py --model dysat --epoch 50 \
                     --sample-layer 2 --sample-neighbor [10, 10] \
                     --sample-strategy uniform --sample-history 100 \

@@ -24,11 +24,11 @@ parser.add_argument("--attn-dropout", help="attention dropout", type=float, defa
 parser.add_argument("--deliver-to-neighbors", help='deliver to neighbors', action='store_true', default=False)
 parser.add_argument("--use-memory", help='use memory module', action='store_true', default=True)
 parser.add_argument("--no-sample", help='do not need sampling', action='store_true', default=False)
-parser.add_argument("--prop_time", help='use prop time', action='store_true', default=False)
+parser.add_argument("--prop-time", help='use prop time', action='store_true', default=False)
 parser.add_argument("--no-neg", help='not using neg samples in sampling', action='store_true', default=False)
 parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
 parser.add_argument("--sample-strategy", help="sample strategy", type=str, default='recent')
-parser.add_argument("--sample-neighbor", help="how many neighbors to sample in each layer", type=list, default=[10])
+parser.add_argument("--sample-neighbor", help="how many neighbors to sample in each layer", type=int, nargs="+", default=10)
 parser.add_argument("--sample-history", help="the number of snapshot", type=int, default=1)
 parser.add_argument("--sample-duration", help="snapshot duration", type=int, default=0)
 

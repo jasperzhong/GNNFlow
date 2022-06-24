@@ -2,11 +2,11 @@ import torch
 
 from .layers import *
 from .memory_updater import *
+from .base import Model
 
+class dysat(Model):
 
-class dysat(torch.nn.Module):
-
-    def __init__(self, dim_node, dim_edge, sample_history=3, memory_dim_out=0,
+    def __init__(self, dim_node, dim_edge, num_nodes, sample_history=3, memory_dim_out=0,
                  layer=2, gnn_dim_out=100, gnn_dim_time=0, gnn_attn_head=2,
                  dropout=0.1, attn_dropout=0.1, combined=False):
         super(dysat, self).__init__()
