@@ -1,6 +1,7 @@
 #ifndef DGNN_TEMPORAL_SAMPLER_H_
 #define DGNN_TEMPORAL_SAMPLER_H_
 
+#include <cuda_runtime_api.h>
 #include <curand_kernel.h>
 
 #include "common.h"
@@ -40,12 +41,14 @@ class TemporalSampler {
   bool prop_time_;
   uint32_t num_layers_;
   uint64_t seed_;
-  curandState_t* rand_states_;
-  char* cpu_buffer_;
-  char* gpu_input_buffer_;
-  char* gpu_output_buffer_;
-
   std::size_t shared_memory_size_;
+
+  cudaStream_t* streams_;
+  char** cpu_buffer_;
+  char** gpu_input_buffer_;
+  char** gpu_output_buffer_;
+  curandState_t** rand_states_;
+  bool initialized_;
 };
 
 }  // namespace dgnn
