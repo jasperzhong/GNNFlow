@@ -207,8 +207,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   }
 
   // copy output to host
-  CUDA_CALL(cudaMemcpyAsync(cpu_buffer_, gpu_output_buffer_, total_output_size,
-                            cudaMemcpyDeviceToHost));
+  CUDA_CALL(cudaMemcpy(cpu_buffer_, gpu_output_buffer_, total_output_size,
+                       cudaMemcpyDeviceToHost));
 
   // host output
   NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_);
