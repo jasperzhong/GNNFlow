@@ -71,4 +71,10 @@ void Copy(void* dst, const void* src, std::size_t size) {
     std::memcpy(out + size / 4, in + size / 4, size % 4);
   }
 }
+
+__global__ void InitCuRandStates(curandState_t* states, uint64_t seed) {
+  int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  curand_init(seed, tid, 0, &states[tid]);
+}
+
 }  // namespace dgnn

@@ -1,6 +1,8 @@
 #ifndef DGNN_TEMPORAL_SAMPLER_H_
 #define DGNN_TEMPORAL_SAMPLER_H_
 
+#include <curand_kernel.h>
+
 #include "common.h"
 #include "dynamic_graph.h"
 
@@ -27,7 +29,7 @@ class TemporalSampler {
       const std::vector<NIDType>& dst_nodes,
       const std::vector<TimestampType>& dst_timestamps);
 
-  void PrepareInputOutputBuffer(std::size_t num_root_nodes);
+  void InitBuffer(std::size_t num_root_nodes);
 
  private:
   const DynamicGraph& graph_;
@@ -38,7 +40,7 @@ class TemporalSampler {
   bool prop_time_;
   uint32_t num_layers_;
   uint64_t seed_;
-
+  curandState_t* rand_states_;
   char* cpu_buffer_;
 };
 

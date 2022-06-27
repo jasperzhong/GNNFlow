@@ -1,5 +1,4 @@
 #include <cuda_runtime_api.h>
-#include <curand_kernel.h>
 
 #include <algorithm>
 #include <cmath>
@@ -41,7 +40,7 @@ TemporalSampler::~TemporalSampler() {
   }
 }
 
-void TemporalSampler::PrepareInputOutputBuffer(std::size_t num_root_nodes) {
+void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
   CHECK_EQ(cpu_buffer_, nullptr);
 
   std::size_t maximum_sampled_nodes = num_root_nodes * num_snapshots_;
@@ -59,6 +58,17 @@ void TemporalSampler::PrepareInputOutputBuffer(std::size_t num_root_nodes) {
       cudaMallocHost(&cpu_buffer_, per_node_size * maximum_sampled_nodes));
   LOG(DEBUG) << "Allocated CPU buffer: "
              << maximum_sampled_nodes * per_node_size << " bytes";
+
+  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+    CUDA_CALL(cudaMalloc((void**)&rand_states_,
+                         maximum_sampled_nodes * sizeof(curandState)));
+    uint32_t num_threads_per_block = 256;
+    uint32_t num_blocks =
+        (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
+
+    InitCuRandStates<<<num_blocks, num_threads_per_block>>>(rand_states_,
+                                                            seed_);
+  }
 
   CHECK_NE(cpu_buffer_, nullptr);
 }
@@ -160,10 +170,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         snapshot_time_window_, num_root_nodes, fanouts_[layer], d_src_nodes,
         d_timestamps, d_delta_timestamps, d_eids, d_num_sampled);
   } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-    rmm::device_vector<curandState_t> d_rand_states(num_threads_per_block *
-                                                    num_blocks);
-    auto rand_states = thrust::raw_pointer_cast(d_rand_states.data());
-
     auto max_shared_memory_size = GetSharedMemoryMaxSize();
     int offset_per_thread =
         max_shared_memory_size / sizeof(SamplingRange) / num_threads_per_block;
@@ -177,7 +183,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
                                offset_per_thread * num_threads_per_block *
                                    sizeof(SamplingRange)>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        rand_states, seed_, offset_per_thread, d_root_nodes, d_root_timestamps,
+        rand_states_, seed_, offset_per_thread, d_root_nodes, d_root_timestamps,
         d_cumsum_num_nodes, num_snapshots_, snapshot_time_window_,
         num_root_nodes, fanouts_[layer], d_src_nodes, d_timestamps,
         d_delta_timestamps, d_eids, d_num_sampled);
@@ -275,7 +281,7 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
   std::vector<std::vector<SamplingResult>> results;
 
   if (cpu_buffer_ == nullptr) {
-    PrepareInputOutputBuffer(dst_nodes.size());
+    InitBuffer(dst_nodes.size());
   }
 
   for (int layer = 0; layer < num_layers_; ++layer) {
