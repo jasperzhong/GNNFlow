@@ -42,6 +42,8 @@ class TemporalSampler {
   uint64_t seed_;
   curandState_t* rand_states_;
   char* cpu_buffer_;
+  char* gpu_input_buffer_;
+  char* gpu_output_buffer_;
 };
 
 }  // namespace dgnn
