@@ -27,11 +27,40 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       snapshot_time_window_(snapshot_time_window),
       prop_time_(prop_time),
       num_layers_(fanouts.size()),
-      seed_(seed) {
+      seed_(seed),
+      cpu_buffer_(nullptr) {
   if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
   }
+}
+
+TemporalSampler::~TemporalSampler() {
+  if (cpu_buffer_ != nullptr) {
+    delete[] cpu_buffer_;
+  }
+}
+
+void TemporalSampler::PrepareInputOutputBuffer(std::size_t num_root_nodes) {
+  CHECK_EQ(cpu_buffer_, nullptr);
+
+  std::size_t maximum_sampled_nodes = num_root_nodes * num_snapshots_;
+  for (int i = 0; i < num_layers_; i++) {
+    // including itself
+    maximum_sampled_nodes +=
+        maximum_sampled_nodes * fanouts_[i];
+  }
+  LOG(DEBUG) << "Maximum sampled nodes: " << maximum_sampled_nodes;
+
+  constexpr std::size_t per_node_size =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(TimestampType) +
+      sizeof(EIDType) + sizeof(uint32_t);
+
+  cpu_buffer_ = new char[maximum_sampled_nodes * per_node_size];
+  LOG(DEBUG) << "Allocated CPU buffer: "
+             << maximum_sampled_nodes * per_node_size << " bytes";
+
+  CHECK_NE(cpu_buffer_, nullptr);
 }
 
 std::vector<SamplingResult> TemporalSampler::RootInputToSamplingResult(
@@ -65,31 +94,31 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
       num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)) +
       cumsum_num_nodes.size() * sizeof(uint32_t);
 
-  char* tmp_host_buffer = new char[total_input_size];
-  // copy all_nodes and all_timestamps to tmp_host_buffer
+  LOG(DEBUG) << "Total input size: " << total_input_size;
+
+  // copy all_nodes and all_timestamps to cpu_buffer_
   for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
     auto& sampling_result = prev_sampling_results.at(snapshot);
     auto& all_nodes = sampling_result.all_nodes;
     auto& all_timestamps = sampling_result.all_timestamps;
 
     std::size_t offset = cumsum_num_nodes[snapshot];
-    char* root_nodes_dst = tmp_host_buffer + offset * sizeof(NIDType);
-    char* root_timestamps_dst = tmp_host_buffer +
-                                num_root_nodes * sizeof(NIDType) +
+    char* root_nodes_dst = cpu_buffer_ + offset * sizeof(NIDType);
+    char* root_timestamps_dst = cpu_buffer_ + num_root_nodes * sizeof(NIDType) +
                                 offset * sizeof(TimestampType);
 
     Copy(root_nodes_dst, all_nodes.data(), all_nodes.size() * sizeof(NIDType));
     Copy(root_timestamps_dst, all_timestamps.data(),
          all_timestamps.size() * sizeof(TimestampType));
   }
-  memcpy(tmp_host_buffer +
-             num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
-         cumsum_num_nodes.data(), cumsum_num_nodes.size() * sizeof(uint32_t));
+  memcpy(
+      cpu_buffer_ + num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
+      cumsum_num_nodes.data(), cumsum_num_nodes.size() * sizeof(uint32_t));
 
   // device input
   auto mr = rmm::mr::get_current_device_resource();
   char* d_input = reinterpret_cast<char*>(mr->allocate(total_input_size));
-  CUDA_CALL(cudaMemcpy(d_input, tmp_host_buffer, total_input_size,
+  CUDA_CALL(cudaMemcpy(d_input, cpu_buffer_, total_input_size,
                        cudaMemcpyHostToDevice));
 
   NIDType* d_root_nodes = reinterpret_cast<NIDType*>(d_input);
@@ -97,8 +126,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
       d_input + num_root_nodes * sizeof(NIDType));
   uint32_t* d_cumsum_num_nodes = reinterpret_cast<uint32_t*>(
       d_input + num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)));
-
-  delete[] tmp_host_buffer;
 
   // device output
   std::size_t offset1 = num_root_nodes * fanouts_[layer] * sizeof(NIDType);
@@ -109,6 +136,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   std::size_t offset4 =
       offset3 + num_root_nodes * fanouts_[layer] * sizeof(EIDType);
   std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
+
+  LOG(DEBUG) << "Total output size: " << total_output_size;
 
   char* d_output = reinterpret_cast<char*>(mr->allocate(total_output_size));
 
@@ -155,19 +184,17 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   }
 
   // copy output to host
-  char* tmp_host_buffer_output = new char[total_output_size];
-  CUDA_CALL(cudaMemcpy(tmp_host_buffer_output, d_output, total_output_size,
+  CUDA_CALL(cudaMemcpy(cpu_buffer_, d_output, total_output_size,
                        cudaMemcpyDeviceToHost));
 
   // host output
-  NIDType* src_nodes = reinterpret_cast<NIDType*>(tmp_host_buffer_output);
+  NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_);
   TimestampType* timestamps =
-      reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset1);
+      reinterpret_cast<TimestampType*>(cpu_buffer_ + offset1);
   TimestampType* delta_timestamps =
-      reinterpret_cast<TimestampType*>(tmp_host_buffer_output + offset2);
-  EIDType* eids = reinterpret_cast<EIDType*>(tmp_host_buffer_output + offset3);
-  uint32_t* num_sampled =
-      reinterpret_cast<uint32_t*>(tmp_host_buffer_output + offset4);
+      reinterpret_cast<TimestampType*>(cpu_buffer_ + offset2);
+  EIDType* eids = reinterpret_cast<EIDType*>(cpu_buffer_ + offset3);
+  uint32_t* num_sampled = reinterpret_cast<uint32_t*>(cpu_buffer_ + offset4);
 
   // convert to SamplingResult
   std::vector<SamplingResult> sampling_results(num_snapshots_);
@@ -235,7 +262,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     }
   }
 
-  delete[] tmp_host_buffer_output;
   mr->deallocate(d_input, total_input_size);
   mr->deallocate(d_output, total_output_size);
 
@@ -247,6 +273,10 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
     const std::vector<TimestampType>& timestamps) {
   CHECK_EQ(dst_nodes.size(), timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
+
+  if (cpu_buffer_ == nullptr) {
+    PrepareInputOutputBuffer(dst_nodes.size());
+  }
 
   for (int layer = 0; layer < num_layers_; ++layer) {
     if (layer == 0) {

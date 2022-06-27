@@ -13,7 +13,7 @@ class TemporalSampler {
                   SamplingPolicy sample_policy, uint32_t num_snapshots = 1,
                   float snapshot_time_window = 0.0f, bool prop_time = false,
                   uint64_t seed = 1234);
-  ~TemporalSampler() = default;
+  ~TemporalSampler();
 
   std::vector<std::vector<SamplingResult>> Sample(
       const std::vector<NIDType>& dst_nodes,
@@ -27,6 +27,8 @@ class TemporalSampler {
       const std::vector<NIDType>& dst_nodes,
       const std::vector<TimestampType>& dst_timestamps);
 
+  void PrepareInputOutputBuffer(std::size_t num_root_nodes);
+
  private:
   const DynamicGraph& graph_;
   std::vector<uint32_t> fanouts_;
@@ -36,6 +38,8 @@ class TemporalSampler {
   bool prop_time_;
   uint32_t num_layers_;
   uint64_t seed_;
+
+  char* cpu_buffer_;
 };
 
 }  // namespace dgnn
