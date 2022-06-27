@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from dgnn.model.tgn import TGN
+from dgnn.models import TGN
 
 
 class TestModel(unittest.TestCase):

@@ -8,10 +8,10 @@ from .layers import TimeEncode
 class MailBox():
 
     def __init__(self, memory_dim_out, mailbox_size, mail_combine, num_nodes, dim_edge_feat,
-                deliver_to_neighbors = False,
+                 deliver_to_neighbors=False,
                  _node_memory=None, _node_memory_ts=None, _mailbox=None,
                  _mailbox_ts=None, _next_mail_pos=None, _update_mail_pos=None):
-        
+
         self.memory_dim_out = memory_dim_out
         self.mail_combine = mail_combine
         self.mailbox_size = mailbox_size
@@ -51,7 +51,8 @@ class MailBox():
         self.next_mail_pos = self.next_mail_pos.cuda()
         self.device = torch.device('cuda:0')
 
-    def allocate_pinned_memory_buffers(self, sample_neighbor, sample_history, batch_size):
+    def allocate_pinned_memory_buffers(
+            self, sample_neighbor, sample_history, batch_size):
         limit = int(batch_size * 3.3)
         if sample_neighbor is not None:
             for i in sample_neighbor:
@@ -239,7 +240,8 @@ class MailBox():
 
 class GRUMemeoryUpdater(torch.nn.Module):
 
-    def __init__(self, combine_node_feature, dim_in, dim_hid, dim_time, dim_node_feat):
+    def __init__(self, combine_node_feature, dim_in,
+                 dim_hid, dim_time, dim_node_feat):
         super(GRUMemeoryUpdater, self).__init__()
         self.dim_hid = dim_hid
         self.dim_node_feat = dim_node_feat
@@ -267,7 +269,8 @@ class GRUMemeoryUpdater(torch.nn.Module):
             # msg_dim comes from msg_function it maybe an mlp or identity
             # if is identity: msg_dim = raw_msg_dim = 2 * mem_dim + n_edge_dim + time_encoder_dim
             # updater(dim_in + dim_time -> msg_dim, dim_hid == mem_dim == dim_out)
-            # b.dstdata['mem_input'] ==> message ; b.srcdata['mem][:b.num_dst_nodes()] ==> target nodes' memory
+            # b.dstdata['mem_input'] ==> message ;
+            # b.srcdata['mem][:b.num_dst_nodes()] ==> target nodes' memory
             updated_memory = self.updater(
                 b.dstdata['mem_input'],
                 b.srcdata['mem'][: b.num_dst_nodes()])
@@ -291,7 +294,8 @@ class GRUMemeoryUpdater(torch.nn.Module):
 
 class RNNMemeoryUpdater(torch.nn.Module):
 
-    def __init__(self, combine_node_feature, dim_in, dim_hid, dim_time, dim_node_feat):
+    def __init__(self, combine_node_feature, dim_in,
+                 dim_hid, dim_time, dim_node_feat):
         super(RNNMemeoryUpdater, self).__init__()
         self.dim_hid = dim_hid
         self.dim_node_feat = dim_node_feat
@@ -338,7 +342,8 @@ class RNNMemeoryUpdater(torch.nn.Module):
 
 class TransformerMemoryUpdater(torch.nn.Module):
 
-    def __init__(self, mailbox_size, attention_head, dim_in, dim_out, dim_time, dropout, attn_dropout):
+    def __init__(self, mailbox_size, attention_head, dim_in,
+                 dim_out, dim_time, dropout, attn_dropout):
         super(TransformerMemoryUpdater, self).__init__()
 
         self.dim_time = dim_time
@@ -376,10 +381,10 @@ class TransformerMemoryUpdater(torch.nn.Module):
                 (b.num_src_nodes(),
                  self.mailbox_size,
                  self.att_h, -1))
-            att = self.att_act((Q[:, None, :, :]*K).sum(dim=3))
+            att = self.att_act((Q[:, None, :, :] * K).sum(dim=3))
             att = torch.nn.functional.softmax(att, dim=1)
             att = self.att_dropout(att)
-            rst = (att[:, :, :, None]*V).sum(dim=1)
+            rst = (att[:, :, :, None] * V).sum(dim=1)
             rst = rst.reshape((rst.shape[0], -1))
             rst += b.srcdata['mem']
             rst = self.layer_norm(rst)
