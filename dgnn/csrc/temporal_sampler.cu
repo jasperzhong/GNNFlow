@@ -34,6 +34,7 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
   }
+  shared_memory_size_ = GetSharedMemoryMaxSize();
 }
 
 TemporalSampler::~TemporalSampler() {
@@ -144,7 +145,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
       cumsum_num_nodes.data(), cumsum_num_nodes.size() * sizeof(uint32_t));
 
   // device input
-  auto mr = rmm::mr::get_current_device_resource();
   CUDA_CALL(cudaMemcpyAsync(gpu_input_buffer_, cpu_buffer_, total_input_size,
                             cudaMemcpyHostToDevice));
 
@@ -187,12 +187,10 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         snapshot_time_window_, num_root_nodes, fanouts_[layer], d_src_nodes,
         d_timestamps, d_delta_timestamps, d_eids, d_num_sampled);
   } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-    auto max_shared_memory_size = GetSharedMemoryMaxSize();
     int offset_per_thread =
-        max_shared_memory_size / sizeof(SamplingRange) / num_threads_per_block;
+        shared_memory_size_ / sizeof(SamplingRange) / num_threads_per_block;
 
-    LOG(DEBUG) << "Max shared memory size: " << max_shared_memory_size
-               << " bytes"
+    LOG(DEBUG) << "Max shared memory size: " << shared_memory_size_ << " bytes"
                << ", offset per thread: " << offset_per_thread;
 
     // launch sampling kernel

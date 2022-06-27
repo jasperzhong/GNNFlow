@@ -44,6 +44,8 @@ class TemporalSampler {
   char* cpu_buffer_;
   char* gpu_input_buffer_;
   char* gpu_output_buffer_;
+
+  std::size_t shared_memory_size_;
 };
 
 }  // namespace dgnn
