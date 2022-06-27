@@ -5,13 +5,13 @@ from .memory_updater import *
 from .base import Model
 
 
-class jodie(Model):
+class JODIE(Model):
 
     def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1, memory_dim_out=100,
                  memory_dim_time=100, gnn_dim_out=100, gnn_dim_time=100, gnn_attn_head=2,
                  dropout=0.1, combine_node_feature=True, 
                  mailbox_size=1, mail_combine='last', deliver_to_neighbors=False):
-        super(jodie, self).__init__()
+        super(JODIE, self).__init__()
         self.dim_node = dim_node
         self.dim_node_input = dim_node
         self.dim_edge = dim_edge

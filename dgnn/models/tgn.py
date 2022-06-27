@@ -5,13 +5,13 @@ from .memory_updater import *
 from .base import Model
 
 
-class tgn(Model):
+class TGN(Model):
 
     def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1, memory_dim_out=100,
                  memory_dim_time=100, layer=1, gnn_dim_out=100, gnn_dim_time=100, gnn_attn_head=2,
                  dropout=0.2, attn_dropout=0.2, combined=False, combine_node_feature=True, 
                  mailbox_size=1, mail_combine='last', deliver_to_neighbors=False):
-        super(tgn, self).__init__()
+        super(TGN, self).__init__()
         self.dim_node = dim_node
         self.dim_node_input = dim_node
         self.dim_edge = dim_edge

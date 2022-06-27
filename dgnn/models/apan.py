@@ -4,12 +4,12 @@ from .layers import *
 from .memory_updater import *
 from .base import Model
 
-class apan(Model):
+class APAN(Model):
 
     def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1, 
                  memory_dim_out=100, memory_dim_time=100, layer=1, gnn_attn_head=2,
                  dropout=0.1, attn_dropout=0.1, mailbox_size=10, mail_combine='last', deliver_to_neighbors=True):
-        super(apan, self).__init__()
+        super(APAN, self).__init__()
         self.dim_node = dim_node
         self.dim_node_input = dim_node
         self.dim_edge = dim_edge

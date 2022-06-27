@@ -8,11 +8,11 @@ from scripts.validation import val
 import os
 
 model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
+    if not name.startswith("__")
     and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", choices=model_names, default='tgn',
+parser.add_argument("--model", choices=model_names, default='TGN',
                     help="model architecture" + 
                     '|'.join(model_names) + 
                     '(default: tgn)')
@@ -28,7 +28,7 @@ parser.add_argument("--prop-time", help='use prop time', action='store_true', de
 parser.add_argument("--no-neg", help='not using neg samples in sampling', action='store_true', default=False)
 parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
 parser.add_argument("--sample-strategy", help="sample strategy", type=str, default='recent')
-parser.add_argument("--sample-neighbor", help="how many neighbors to sample in each layer", type=int, nargs="+", default=10)
+parser.add_argument("--sample-neighbor", help="how many neighbors to sample in each layer", type=int, nargs="+", default=[10])
 parser.add_argument("--sample-history", help="the number of snapshot", type=int, default=1)
 parser.add_argument("--sample-duration", help="snapshot duration", type=int, default=0)
 
@@ -37,26 +37,22 @@ args = parser.parse_args()
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
 node_feats, edge_feats = load_feat('REDDIT')
-df = load_dataset('REDDIT')
-# df[0] consist train part of the data
-# df[3] is the full graph
+train_df, val_df, test_df, df = load_dataset('REDDIT')
+
 # use the full data to build graph
-dgraph = build_dynamic_graph(df[3])
+dgraph = build_dynamic_graph(df)
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-model = models.__dict__[args.model](gnn_dim_node, gnn_dim_edge, dgraph.num_vertices() + 3)
+model = models.__dict__[args.model](gnn_dim_node, gnn_dim_edge, dgraph.num_vertices())
 model.cuda()
 
-args.arch_identity = args.model in ['jodie', 'apan']
+args.arch_identity = args.model in ['JODIE', 'APAN']
 
 # assert
 assert args.sample_layer == model.gnn_layer , "sample layers must match the gnn layers"
 assert args.sample_layer == len(args.sample_neighbor), "sample layer must match the length of sample_neighbors"
-
-
-# TODO: MailBox. Check num_vertices
 
 sampler = None
 
@@ -87,11 +83,9 @@ for e in range(args.epoch):
     # if mailbox is not None. reset!
     model.train()
 
-    if model.mailbox is not None:
-        model.mailbox.reset()
-        model.memory_updater.last_updated_nid = None
+    model.mailbox_reset()
 
-    for i, (target_nodes, ts, eid) in enumerate(get_batch(df[0])):
+    for i, (target_nodes, ts, eid) in enumerate(get_batch(train_df)):
         time_start = time.time()
         mfgs = None
         if sampler is not None:
@@ -114,6 +108,7 @@ for e in range(args.epoch):
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         
         optimizer.zero_grad()
+        
         # move pre_input_mail to forward()
         pred_pos, pred_neg = model(mfgs)
 
@@ -148,7 +143,7 @@ for e in range(args.epoch):
     # Validation
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
-    ap, auc = val(df[1], sampler, model, node_feats, 
+    ap, auc = val(val_df, sampler, model, node_feats, 
         edge_feats, creterion, no_neg=args.no_neg, 
         identity=args.arch_identity, 
         deliver_to_neighbors=args.deliver_to_neighbors)
@@ -166,18 +161,18 @@ print('Loading model at epoch {}...'.format(best_e))
 model.load_state_dict(torch.load(path_saver))
 
 # To update the memory
-if model.mailbox is not None:
+if model.use_mailbox():
     model.mailbox_reset()   
-    val(df[0], sampler, model, node_feats, 
+    val(train_df, sampler, model, node_feats, 
         edge_feats, creterion, no_neg=args.no_neg, 
         identity=args.arch_identity, 
         deliver_to_neighbors=args.deliver_to_neighbors)
-    val(df[1], sampler, model, node_feats, 
+    val(val_df, sampler, model, node_feats, 
         edge_feats, creterion, no_neg=args.no_neg, 
         identity=args.arch_identity, 
         deliver_to_neighbors=args.deliver_to_neighbors)
 
-ap, auc = val(df[2], sampler, model, node_feats, 
+ap, auc = val(test_df, sampler, model, node_feats, 
         edge_feats, creterion, no_neg=args.no_neg, 
         identity=args.arch_identity, 
         deliver_to_neighbors=args.deliver_to_neighbors)

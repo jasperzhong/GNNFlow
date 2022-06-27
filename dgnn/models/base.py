@@ -10,6 +10,9 @@ class Model(torch.nn.Module):
         if self.mailbox is not None:
             self.mailbox.prep_input_mails(mfgs[0])
             self.memory_updater(mfgs[0])
+    
+    def use_mailbox(self):
+        return self.mailbox is not None
 
     def mailbox_reset(self):
         if self.mailbox is not None:
