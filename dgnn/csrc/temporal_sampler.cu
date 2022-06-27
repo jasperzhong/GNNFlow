@@ -38,6 +38,10 @@ TemporalSampler::~TemporalSampler() {
   if (cpu_buffer_ != nullptr) {
     cudaFreeHost(cpu_buffer_);
   }
+
+  if (rand_states_ != nullptr) {
+    cudaFree(rand_states_);
+  }
 }
 
 void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
