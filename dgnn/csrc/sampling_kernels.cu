@@ -229,7 +229,6 @@ __global__ void SampleLayerUniformKernel(
   }
 
   uint32_t indices[MAX_FANOUT];
-  curand_init(seed, tid, 0, &rand_states[tid]);
   for (uint32_t i = 0; i < fanout; i++) {
     indices[i] = curand(rand_states + tid) % num_candidates;
   }
