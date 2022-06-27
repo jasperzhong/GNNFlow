@@ -37,7 +37,7 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
 
 TemporalSampler::~TemporalSampler() {
   if (cpu_buffer_ != nullptr) {
-    delete[] cpu_buffer_;
+    cudaFreeHost(cpu_buffer_);
   }
 }
 
@@ -47,8 +47,7 @@ void TemporalSampler::PrepareInputOutputBuffer(std::size_t num_root_nodes) {
   std::size_t maximum_sampled_nodes = num_root_nodes * num_snapshots_;
   for (int i = 0; i < num_layers_; i++) {
     // including itself
-    maximum_sampled_nodes +=
-        maximum_sampled_nodes * fanouts_[i];
+    maximum_sampled_nodes += maximum_sampled_nodes * fanouts_[i];
   }
   LOG(DEBUG) << "Maximum sampled nodes: " << maximum_sampled_nodes;
 
@@ -56,7 +55,8 @@ void TemporalSampler::PrepareInputOutputBuffer(std::size_t num_root_nodes) {
       sizeof(NIDType) + sizeof(TimestampType) + sizeof(TimestampType) +
       sizeof(EIDType) + sizeof(uint32_t);
 
-  cpu_buffer_ = new char[maximum_sampled_nodes * per_node_size];
+  CUDA_CALL(
+      cudaMallocHost(&cpu_buffer_, per_node_size * maximum_sampled_nodes));
   LOG(DEBUG) << "Allocated CPU buffer: "
              << maximum_sampled_nodes * per_node_size << " bytes";
 
