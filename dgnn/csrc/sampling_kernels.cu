@@ -62,8 +62,9 @@ __global__ void SampleLayerRecentKernel(
     const NIDType* root_nodes, const TimestampType* root_timestamps,
     uint32_t snapshot_idx, uint32_t num_snapshots,
     TimestampType snapshot_time_window, uint32_t num_root_nodes,
-    uint32_t fanout, NIDType* src_nodes, TimestampType* timestamps,
-    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
+    uint32_t fanout, NIDType* src_nodes, EIDType* eids,
+    TimestampType* timestamps, TimestampType* delta_timestamps,
+    uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
@@ -141,8 +142,9 @@ __global__ void SampleLayerUniformKernel(
     const NIDType* root_nodes, const TimestampType* root_timestamps,
     uint32_t snapshot_idx, uint32_t num_snapshots,
     TimestampType snapshot_time_window, uint32_t num_root_nodes,
-    uint32_t fanout, NIDType* src_nodes, TimestampType* timestamps,
-    TimestampType* delta_timestamps, EIDType* eids, uint32_t* num_sampled) {
+    uint32_t fanout, NIDType* src_nodes, EIDType* eids,
+    TimestampType* timestamps, TimestampType* delta_timestamps,
+    uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
