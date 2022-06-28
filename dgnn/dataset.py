@@ -88,7 +88,10 @@ def default_collate_ndarray(batch):
             # If we're in a background process, concatenate directly into a
             # shared memory tensor to avoid an extra copy
             numel = sum(x.size for x in batch)
-            out = np.zeros(numel).resize(len(batch), elem.size)
+            out = np.zeros(numel, dtype=elem.dtype).reshape(len(batch), elem.size)
+            # [1, 10000, 6818]
+            # [2, 10001, 6212]
+            # [3, 10002, 3243] -> [1, 2, 3, 10000, 10001, 10002, 6818, 6212, 3243]
         return np.stack(batch, 0, out=out).flatten('F')  # column major
     elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
             and elem_type.__name__ != 'string_':

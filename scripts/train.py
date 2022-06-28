@@ -25,7 +25,7 @@ parser.add_argument("--model", choices=model_names, default='TGN',
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
-parser.add_argument("--num-workers", help="num workers", type=int, default=0)
+parser.add_argument("--num-workers", help="num workers", type=int, default=16)
 parser.add_argument("--dropout", help="dropout", type=float, default=0.2)
 parser.add_argument(
     "--attn-dropout", help="attention dropout", type=float, default=0.2)
@@ -231,7 +231,7 @@ for e in range(args.epoch):
 
         if i % 300 == 0:
             print('Iteration:{}. Train loss:{:.4f}'.format(i, loss))
-            print('Iteration time:{:.2f}s; sample time:{:.2f}s; train time:{:.2f}s.'
+            print('Iteration time:{:.4f}s; sample time:{:.4f}s; train time:{:.4f}s.'
                   .format(iteration_time / (i + 1), sample_time / (i + 1), train_time / (i + 1)))
 
     epoch_time_end = time.time()

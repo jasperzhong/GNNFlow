@@ -31,9 +31,9 @@ class TestDataset(unittest.TestCase):
             target1, ts1, eid1 = ite.__next__()
             end_batch = time.time()
             batch_time = end_batch - start_batch
-            # self.assertTrue(np.array_equal(target[:1200], target1[:1200]))
-            # self.assertTrue(np.array_equal(ts[:1200], ts1[:1200]))
-            # self.assertTrue(np.array_equal(eid[:1200], eid1[:1200]))
+            self.assertTrue(np.array_equal(target[:1200], target1[:1200]))
+            self.assertTrue(np.array_equal(ts[:1200], ts1[:1200]))
+            self.assertTrue(np.array_equal(eid[:1200], eid1[:1200]))
             ti = ti + 1
             if ti > 10:
                 break
