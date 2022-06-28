@@ -31,7 +31,7 @@ def main():
 
     # Create a temporal sampler
     sampler = TemporalSampler(
-        dgraph, fanouts=[10, 10],  #num_snapshots=3, prop_time=True,
+        dgraph, fanouts=[10, 10],  num_snapshots=3, prop_time=True,
         strategy="uniform")
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 

@@ -245,8 +245,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
                               gpu_output_buffer_[snapshot], total_output_size,
                               cudaMemcpyDeviceToHost, streams_[snapshot]));
 
-    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
-
     // host output
     NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_[snapshot]);
     TimestampType* timestamps =
@@ -259,27 +257,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     auto& sampling_result = sampling_results[snapshot];
 
-    uint32_t num_nodes_this_snapshot =
-        prev_sampling_results.at(snapshot).all_nodes.size();
-
-    uint32_t num_sampled_total = 0;
-    for (uint32_t i = 0; i < num_nodes_this_snapshot; ++i) {
-      num_sampled_total += num_sampled[i];
-    }
-
-    sampling_result.col.resize(num_sampled_total);
-    std::iota(sampling_result.col.begin(), sampling_result.col.end(),
-              num_nodes_this_snapshot);
-
-    sampling_result.num_dst_nodes = num_nodes_this_snapshot;
-    sampling_result.num_src_nodes = num_nodes_this_snapshot + num_sampled_total;
-
-    sampling_result.all_nodes.reserve(sampling_result.num_src_nodes);
-    sampling_result.all_timestamps.reserve(sampling_result.num_src_nodes);
-    sampling_result.row.reserve(num_sampled_total);
-    sampling_result.delta_timestamps.reserve(num_sampled_total);
-    sampling_result.eids.reserve(num_sampled_total);
-
     // copy dst nodes
     std::copy(prev_sampling_results.at(snapshot).all_nodes.begin(),
               prev_sampling_results.at(snapshot).all_nodes.end(),
@@ -288,7 +265,27 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
               prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
-    for (uint32_t i = 0; i < num_nodes_this_snapshot; i++) {
+    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
+
+    uint32_t num_sampled_total = 0;
+    for (uint32_t i = 0; i < num_root_nodes; ++i) {
+      num_sampled_total += num_sampled[i];
+    }
+
+    sampling_result.col.resize(num_sampled_total);
+    std::iota(sampling_result.col.begin(), sampling_result.col.end(),
+              num_root_nodes);
+
+    sampling_result.num_dst_nodes = num_root_nodes;
+    sampling_result.num_src_nodes = num_root_nodes + num_sampled_total;
+
+    sampling_result.all_nodes.reserve(sampling_result.num_src_nodes);
+    sampling_result.all_timestamps.reserve(sampling_result.num_src_nodes);
+    sampling_result.row.reserve(num_sampled_total);
+    sampling_result.delta_timestamps.reserve(num_sampled_total);
+    sampling_result.eids.reserve(num_sampled_total);
+
+    for (uint32_t i = 0; i < num_root_nodes; i++) {
       std::vector<NIDType> row(num_sampled[i]);
       std::fill(row.begin(), row.end(), i);
       std::copy(row.begin(), row.end(),
