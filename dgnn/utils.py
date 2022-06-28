@@ -49,7 +49,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataF
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
-    
+
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
@@ -105,6 +105,14 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
         eid = rows['Unnamed: 0'].values
 
         yield target_nodes, ts, eid
+
+
+def get_batch_test(df: pd.DataFrame, batch_size: int = 600):
+    group_indexes = list()
+
+    group_indexes.append(np.array(df.index // batch_size))
+    group = df.groupby(
+            group_indexes[random.randint(0, len(group_indexes) - 1)])
 
 
 def build_dynamic_graph(

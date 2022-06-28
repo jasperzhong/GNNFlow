@@ -3,9 +3,14 @@ import argparse
 import torch
 import time
 import pandas as pd
+import torch.utils.data.dataloader
 import dgnn.models as models
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import get_project_root_dir, prepare_input, mfgs_to_cuda, node_to_dgl_blocks, build_dynamic_graph, load_dataset, load_feat, get_batch
+from dgnn.utils import get_project_root_dir, prepare_input
+from dgnn.utils import mfgs_to_cuda, node_to_dgl_blocks
+from dgnn.utils import build_dynamic_graph, load_dataset
+from dgnn.utils import load_feat, get_batch
+from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 model_names = sorted(name for name in models.__dict__
@@ -20,6 +25,7 @@ parser.add_argument("--model", choices=model_names, default='TGN',
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
+parser.add_argument("--num-workers", help="num workers", type=int, default=8)
 parser.add_argument("--dropout", help="dropout", type=float, default=0.2)
 parser.add_argument(
     "--attn-dropout", help="attention dropout", type=float, default=0.2)
@@ -48,7 +54,7 @@ parser.add_argument("--sample-duration",
 args = parser.parse_args()
 
 
-def val(df: pd.DataFrame, sampler: TemporalSampler, model: torch.nn.Module,
+def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler, model: torch.nn.Module,
         node_feats: torch.Tensor, edge_feats: torch.Tensor,
         creterion: torch.nn.Module, neg_samples=1, no_neg=False,
         identity=False, deliver_to_neighbors=False):
@@ -61,7 +67,7 @@ def val(df: pd.DataFrame, sampler: TemporalSampler, model: torch.nn.Module,
         total_loss = 0
 
         mfgs = None
-        for i, (target_nodes, ts, eid) in enumerate(get_batch(df)):
+        for i, (target_nodes, ts, eid) in enumerate(dataloader):
 
             if sampler is not None:
                 if no_neg:
@@ -116,6 +122,18 @@ path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
 node_feats, edge_feats = load_feat('REDDIT')
 train_df, val_df, test_df, df = load_dataset('REDDIT')
 
+train_ds = DynamicGraphDataset(train_df)
+val_ds = DynamicGraphDataset(val_df)
+test_ds = DynamicGraphDataset(test_df)
+
+train_loader = torch.utils.data.DataLoader(
+            train_ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+val_loader = torch.utils.data.DataLoader(
+            val_ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+test_loader = torch.utils.data.DataLoader(
+            test_ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+
+
 # use the full data to build graph
 dgraph = build_dynamic_graph(df)
 
@@ -149,6 +167,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 best_ap = 0
 best_e = 0
 
+
 for e in range(args.epoch):
     print("Epoch {}".format(e))
     epoch_time_start = time.time()
@@ -164,7 +183,7 @@ for e in range(args.epoch):
 
     model.mailbox_reset()
 
-    for i, (target_nodes, ts, eid) in enumerate(get_batch(train_df)):
+    for i, (target_nodes, ts, eid) in enumerate(train_loader):
         time_start = time.time()
         mfgs = None
         if sampler is not None:
@@ -221,7 +240,7 @@ for e in range(args.epoch):
     # Validation
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
-    ap, auc = val(val_df, sampler, model, node_feats,
+    ap, auc = val(val_loader, sampler, model, node_feats,
                   edge_feats, creterion, no_neg=args.no_neg,
                   identity=args.arch_identity,
                   deliver_to_neighbors=args.deliver_to_neighbors)
@@ -241,16 +260,16 @@ model.load_state_dict(torch.load(path_saver))
 # To update the memory
 if model.use_mailbox():
     model.mailbox_reset()
-    val(train_df, sampler, model, node_feats,
+    val(train_loader, sampler, model, node_feats,
         edge_feats, creterion, no_neg=args.no_neg,
         identity=args.arch_identity,
         deliver_to_neighbors=args.deliver_to_neighbors)
-    val(val_df, sampler, model, node_feats,
+    val(val_loader, sampler, model, node_feats,
         edge_feats, creterion, no_neg=args.no_neg,
         identity=args.arch_identity,
         deliver_to_neighbors=args.deliver_to_neighbors)
 
-ap, auc = val(test_df, sampler, model, node_feats,
+ap, auc = val(test_loader, sampler, model, node_feats,
               edge_feats, creterion, no_neg=args.no_neg,
               identity=args.arch_identity,
               deliver_to_neighbors=args.deliver_to_neighbors)
