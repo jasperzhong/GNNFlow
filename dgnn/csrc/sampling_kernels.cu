@@ -217,10 +217,11 @@ __global__ void SampleLayerUniformKernel(
   }
 
   uint32_t indices[MAX_FANOUT];
-  for (uint32_t i = 0; i < fanout; i++) {
+  uint32_t to_sample = min(fanout, num_candidates);
+  for (uint32_t i = 0; i < to_sample; i++) {
     indices[i] = curand(rand_states + tid) % num_candidates;
   }
-  QuickSort(indices, 0, fanout - 1);
+  QuickSort(indices, 0, to_sample - 1);
 
   uint32_t sampled = 0;
   uint32_t offset = tid * fanout;
@@ -269,7 +270,7 @@ __global__ void SampleLayerUniformKernel(
     }
 
     auto idx = indices[sampled] - cumsum;
-    while (sampled < fanout && idx < end_idx - start_idx) {
+    while (sampled < to_sample && idx < end_idx - start_idx) {
       // start from end_idx (newer edges)
       src_nodes[offset + sampled] = curr->dst_nodes[end_idx - idx - 1];
       timestamps[offset + sampled] =
@@ -281,7 +282,7 @@ __global__ void SampleLayerUniformKernel(
       ++sampled;
     }
 
-    if (sampled >= fanout) {
+    if (sampled >= to_sample) {
       break;
     }
 
