@@ -107,14 +107,6 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
         yield target_nodes, ts, eid
 
 
-def get_batch_test(df: pd.DataFrame, batch_size: int = 600):
-    group_indexes = list()
-
-    group_indexes.append(np.array(df.index // batch_size))
-    group = df.groupby(
-            group_indexes[random.randint(0, len(group_indexes) - 1)])
-
-
 def build_dynamic_graph(
         dataset_df: pd.DataFrame, max_gpu_pool_size: int = 1 << 30,
         min_block_size: int = 64, add_reverse: bool = False,

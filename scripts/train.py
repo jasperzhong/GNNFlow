@@ -25,7 +25,7 @@ parser.add_argument("--model", choices=model_names, default='TGN',
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
-parser.add_argument("--num-workers", help="num workers", type=int, default=8)
+parser.add_argument("--num-workers", help="num workers", type=int, default=0)
 parser.add_argument("--dropout", help="dropout", type=float, default=0.2)
 parser.add_argument(
     "--attn-dropout", help="attention dropout", type=float, default=0.2)

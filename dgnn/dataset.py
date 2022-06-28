@@ -14,12 +14,12 @@ class DynamicGraphDataset(Dataset):
     def __init__(self, df):
         super(DynamicGraphDataset).__init__()
         self.df = df
+        self.length = np.max(np.array(df['dst'], dtype=int))
 
     def __getitem__(self, index):
         row = self.df.iloc[index]
-        length = np.max(np.array(self.df['dst'], dtype=int))
         target_nodes = np.array(
-            [row.src, row.dst, np.random.randint(length)]).astype(
+            [row.src, row.dst, np.random.randint(self.length)]).astype(
             np.int64)
         ts = np.array(
             [row.time, row.time, row.time]).astype(
