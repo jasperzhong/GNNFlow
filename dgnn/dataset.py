@@ -1,6 +1,5 @@
 import torch
-import math
-from torch.utils.data import Dataset, IterableDataset
+from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
 import re
@@ -18,13 +17,14 @@ class DynamicGraphDataset(Dataset):
 
     def __getitem__(self, index):
         row = self.df.iloc[index]
-        target_nodes = np.array(
-            [row.src, row.dst, np.random.randint(self.length)]).astype(
+        target_nodes = np.concatenate(
+            [row.src.values, row.dst.values, np.random.randint(
+                self.length, size=len(row.src.values))]).astype(
             np.int64)
-        ts = np.array(
-            [row.time, row.time, row.time]).astype(
+        ts = np.concatenate(
+            [row.time.values, row.time.values, row.time.values]).astype(
             np.float32)
-        eid = row['Unnamed: 0']
+        eid = row['Unnamed: 0'].values
         return (target_nodes, ts, eid)
 
     def __len__(self):
@@ -88,10 +88,8 @@ def default_collate_ndarray(batch):
             # If we're in a background process, concatenate directly into a
             # shared memory tensor to avoid an extra copy
             numel = sum(x.size for x in batch)
-            out = np.zeros(numel, dtype=elem.dtype).reshape(len(batch), elem.size)
-            # [1, 10000, 6818]
-            # [2, 10001, 6212]
-            # [3, 10002, 3243] -> [1, 2, 3, 10000, 10001, 10002, 6818, 6212, 3243]
+            out = np.zeros(numel, dtype=elem.dtype).reshape(
+                len(batch), elem.size)
         return np.stack(batch, 0, out=out).flatten('F')  # column major
     elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
             and elem_type.__name__ != 'string_':

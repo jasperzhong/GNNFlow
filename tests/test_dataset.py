@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import torch
 import time
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SequentialSampler, BatchSampler
 from dgnn.utils import load_dataset, get_batch
 from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from parameterized import parameterized
@@ -16,9 +16,15 @@ class TestDataset(unittest.TestCase):
     @parameterized.expand(itertools.product([0, 2, 4, 8, 16, 32]))
     def test_loader(self, num_workers):
         train_df, val_df, test_df, df = load_dataset('REDDIT')
+
         ds = DynamicGraphDataset(train_df)
-        a = torch.utils.data.DataLoader(
-            ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=num_workers)
+
+        sampler = BatchSampler(SequentialSampler(
+            ds), batch_size=600, drop_last=False)
+
+        a = DataLoader(dataset=ds, sampler=sampler,
+                       collate_fn=default_collate_ndarray,
+                       num_workers=num_workers)
         ti = 0
         ite = iter(get_batch(train_df, batch_size=600))
         start_loader = 0

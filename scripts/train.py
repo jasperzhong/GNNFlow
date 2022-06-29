@@ -3,8 +3,8 @@ import argparse
 import torch
 import time
 import pandas as pd
-import torch.utils.data.dataloader
 import dgnn.models as models
+from torch.utils.data import BatchSampler, SequentialSampler
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import get_project_root_dir, prepare_input
 from dgnn.utils import mfgs_to_cuda, node_to_dgl_blocks
@@ -25,7 +25,7 @@ parser.add_argument("--model", choices=model_names, default='TGN',
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
-parser.add_argument("--num-workers", help="num workers", type=int, default=16)
+parser.add_argument("--num-workers", help="num workers", type=int, default=0)
 parser.add_argument("--dropout", help="dropout", type=float, default=0.2)
 parser.add_argument(
     "--attn-dropout", help="attention dropout", type=float, default=0.2)
@@ -126,12 +126,16 @@ train_ds = DynamicGraphDataset(train_df)
 val_ds = DynamicGraphDataset(val_df)
 test_ds = DynamicGraphDataset(test_df)
 
+train_sampler = BatchSampler(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False)
+val_sampler = BatchSampler(SequentialSampler(val_ds), batch_size=args.batch_size, drop_last=False)
+test_sampler = BatchSampler(SequentialSampler(test_ds), batch_size=args.batch_size, drop_last=False)
+
 train_loader = torch.utils.data.DataLoader(
-            train_ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+            train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 val_loader = torch.utils.data.DataLoader(
-            val_ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+            val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 test_loader = torch.utils.data.DataLoader(
-            test_ds, batch_size=600, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+            test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
 
 # use the full data to build graph
