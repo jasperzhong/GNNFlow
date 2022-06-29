@@ -1,16 +1,28 @@
-#include <curand_kernel.h>
-#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/remove.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include "common.h"
 #include "sampling_kernels.h"
 #include "temporal_sampler.h"
+#include "utils.h"
 
 namespace dgnn {
+
+struct is_invalid_edge {
+  __host__ __device__ bool operator()(
+      thrust::tuple<NIDType, EIDType, TimestampType, TimestampType> const&
+          edge) {
+    return thrust::get<0>(edge) == kInvalidNID;
+  }
+};
+
 TemporalSampler::TemporalSampler(const DynamicGraph& graph,
                                  const std::vector<uint32_t>& fanouts,
                                  SamplingPolicy sampling_policy,
@@ -24,11 +36,98 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       snapshot_time_window_(snapshot_time_window),
       prop_time_(prop_time),
       num_layers_(fanouts.size()),
-      seed_(seed) {
+      seed_(seed),
+      streams_(nullptr),
+      cpu_buffer_(nullptr),
+      gpu_input_buffer_(nullptr),
+      gpu_output_buffer_(nullptr),
+      rand_states_(nullptr),
+      initialized_(false) {
   if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
   }
+  shared_memory_size_ = GetSharedMemoryMaxSize();
+
+  streams_ = new cudaStream_t[num_snapshots_];
+  for (uint32_t i = 0; i < num_snapshots_; ++i) {
+    CUDA_CALL(cudaStreamCreate(&streams_[i]));
+  }
+
+  cpu_buffer_ = new char*[num_snapshots_];
+  gpu_input_buffer_ = new char*[num_snapshots_];
+  gpu_output_buffer_ = new char*[num_snapshots_];
+  rand_states_ = new curandState_t*[num_snapshots_];
+}
+
+TemporalSampler::~TemporalSampler() {
+  for (uint32_t i = 0; i < num_snapshots_; ++i) {
+    if (cpu_buffer_[i] != nullptr) {
+      cudaFreeHost(cpu_buffer_[i]);
+    }
+
+    if (gpu_input_buffer_[i] != nullptr) {
+      cudaFree(gpu_input_buffer_[i]);
+    }
+
+    if (gpu_output_buffer_[i] != nullptr) {
+      cudaFree(gpu_output_buffer_[i]);
+    }
+
+    if (rand_states_[i] != nullptr) {
+      cudaFree(rand_states_[i]);
+    }
+  }
+
+  delete[] cpu_buffer_;
+  delete[] gpu_input_buffer_;
+  delete[] gpu_output_buffer_;
+  delete[] rand_states_;
+
+  for (uint32_t i = 0; i < num_snapshots_; ++i) {
+    cudaStreamDestroy(streams_[i]);
+  }
+  delete[] streams_;
+}
+
+void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
+  std::size_t maximum_sampled_nodes = num_root_nodes;
+  for (int i = 0; i < num_layers_; i++) {
+    // including itself
+    maximum_sampled_nodes += maximum_sampled_nodes * fanouts_[i];
+  }
+  LOG(DEBUG) << "Maximum sampled nodes: " << maximum_sampled_nodes;
+
+  constexpr std::size_t per_node_size =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(TimestampType) +
+      sizeof(EIDType) + sizeof(uint32_t);
+
+  for (uint32_t i = 0; i < num_snapshots_; ++i) {
+    CUDA_CALL(
+        cudaMallocHost(&cpu_buffer_[i], per_node_size * maximum_sampled_nodes));
+
+    CUDA_CALL(cudaMalloc(&gpu_input_buffer_[i],
+                         per_node_size * maximum_sampled_nodes));
+    CUDA_CALL(cudaMalloc(&gpu_output_buffer_[i],
+                         per_node_size * maximum_sampled_nodes));
+
+    LOG(DEBUG) << "Allocated CPU & GPU buffer: "
+               << maximum_sampled_nodes * per_node_size << " bytes";
+
+    if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+      CUDA_CALL(cudaMalloc((void**)&rand_states_[i],
+                           maximum_sampled_nodes * sizeof(curandState)));
+      uint32_t num_threads_per_block = 256;
+      uint32_t num_blocks =
+          (maximum_sampled_nodes + num_threads_per_block - 1) /
+          num_threads_per_block;
+
+      InitCuRandStates<<<num_blocks, num_threads_per_block>>>(rand_states_[i],
+                                                              seed_);
+    }
+  }
+
+  initialized_ = true;
 }
 
 std::vector<SamplingResult> TemporalSampler::RootInputToSamplingResult(
@@ -49,92 +148,180 @@ std::vector<SamplingResult> TemporalSampler::RootInputToSamplingResult(
 std::vector<SamplingResult> TemporalSampler::SampleLayer(
     uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results) {
   CHECK_EQ(prev_sampling_results.size(), num_snapshots_);
-  // host input
-  std::vector<NIDType> root_nodes;
-  std::vector<TimestampType> root_timestamps;
-  std::vector<TimestampType> time_offsets;
-  std::vector<uint32_t> num_nodes_per_snapshot;
 
-  // from old to new
-  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
-    root_nodes.insert(root_nodes.end(),
-                      prev_sampling_results.at(snapshot).all_nodes.begin(),
-                      prev_sampling_results.at(snapshot).all_nodes.end());
+  // prepare input
+  std::vector<std::size_t> num_root_nodes_list(num_snapshots_);
+  for (uint32_t snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    auto& sampling_result = prev_sampling_results.at(snapshot);
+    auto& all_nodes = sampling_result.all_nodes;
+    auto& all_timestamps = sampling_result.all_timestamps;
+    std::size_t num_root_nodes = all_nodes.size();
+    num_root_nodes_list[snapshot] = num_root_nodes;
 
-    root_timestamps.insert(
-        root_timestamps.end(),
-        prev_sampling_results.at(snapshot).all_timestamps.begin(),
-        prev_sampling_results.at(snapshot).all_timestamps.end());
+    char* root_nodes_dst = cpu_buffer_[snapshot];
+    char* root_timestamps_dst =
+        cpu_buffer_[snapshot] + num_root_nodes * sizeof(NIDType);
 
-    uint32_t num_nodes = prev_sampling_results.at(snapshot).all_nodes.size();
-    num_nodes_per_snapshot.push_back(num_nodes);
+    // copy all_nodes and all_timestamps to cpu_buffer_
+    Copy(root_nodes_dst, all_nodes.data(), all_nodes.size() * sizeof(NIDType));
+    Copy(root_timestamps_dst, all_timestamps.data(),
+         all_timestamps.size() * sizeof(TimestampType));
 
-    float time_offset = snapshot_time_window_ * (num_snapshots_ - snapshot - 1);
-    time_offsets.insert(time_offsets.end(), num_nodes, time_offset);
+    CUDA_CALL(cudaMemcpyAsync(
+        gpu_input_buffer_[snapshot], cpu_buffer_[snapshot],
+        num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
+        cudaMemcpyHostToDevice, streams_[snapshot]));
   }
 
-  // device input
-  thrust::device_vector<NIDType> d_root_nodes(root_nodes.begin(),
-                                              root_nodes.end());
-  thrust::device_vector<TimestampType> d_root_timestamps(
-      root_timestamps.begin(), root_timestamps.end());
-  thrust::device_vector<TimestampType> d_time_offsets(time_offsets.begin(),
-                                                      time_offsets.end());
+  // launch kernel for each snapshot
+  std::vector<std::size_t> total_output_size_list(num_snapshots_);
+  for (uint32_t snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    std::size_t num_root_nodes = num_root_nodes_list[snapshot];
+    std::size_t max_sampled_nodes = num_root_nodes * fanouts_[layer];
 
-  // device output
-  uint32_t num_root_nodes = root_nodes.size();
-  thrust::device_vector<NIDType> d_src_nodes(num_root_nodes * fanouts_[layer]);
-  thrust::device_vector<TimestampType> d_timestamps(num_root_nodes *
-                                                    fanouts_[layer]);
-  thrust::device_vector<TimestampType> d_delta_timestamps(num_root_nodes *
-                                                          fanouts_[layer]);
-  thrust::device_vector<EIDType> d_eids(num_root_nodes * fanouts_[layer]);
-  thrust::device_vector<uint32_t> d_num_sampled(num_root_nodes);
+    NIDType* d_root_nodes =
+        reinterpret_cast<NIDType*>(gpu_input_buffer_[snapshot]);
+    TimestampType* d_root_timestamps = reinterpret_cast<TimestampType*>(
+        gpu_input_buffer_[snapshot] + num_root_nodes * sizeof(NIDType));
 
-  uint32_t num_threads_per_block = 256;
-  uint32_t num_blocks =
-      (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
+    // device output
+    std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
+    std::size_t offset2 = offset1 + max_sampled_nodes * sizeof(EIDType);
+    std::size_t offset3 = offset2 + max_sampled_nodes * sizeof(TimestampType);
+    std::size_t offset4 = offset3 + max_sampled_nodes * sizeof(TimestampType);
 
-  curandState_t* rand_states = nullptr;
-  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-    thrust::device_vector<curandState_t> d_rand_states(num_threads_per_block *
-                                                       num_blocks);
-    rand_states = thrust::raw_pointer_cast(d_rand_states.data());
+    std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
+    total_output_size_list[snapshot] = total_output_size;
+
+    LOG(DEBUG) << "Total output size: " << total_output_size;
+
+    NIDType* d_src_nodes =
+        reinterpret_cast<NIDType*>(gpu_output_buffer_[snapshot]);
+    EIDType* d_eids =
+        reinterpret_cast<EIDType*>(gpu_output_buffer_[snapshot] + offset1);
+    TimestampType* d_timestamps = reinterpret_cast<TimestampType*>(
+        gpu_output_buffer_[snapshot] + offset2);
+    TimestampType* d_delta_timestamps = reinterpret_cast<TimestampType*>(
+        gpu_output_buffer_[snapshot] + offset3);
+    uint32_t* d_num_sampled =
+        reinterpret_cast<uint32_t*>(gpu_output_buffer_[snapshot] + offset4);
+
+    uint32_t num_threads_per_block = 256;
+    uint32_t num_blocks =
+        (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
+
+    if (sampling_policy_ == SamplingPolicy::kSamplingPolicyRecent) {
+      SampleLayerRecentKernel<<<num_blocks, num_threads_per_block, 0,
+                                streams_[snapshot]>>>(
+          graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
+          d_root_nodes, d_root_timestamps, snapshot, num_snapshots_,
+          snapshot_time_window_, num_root_nodes, fanouts_[layer], d_src_nodes,
+          d_eids, d_timestamps, d_delta_timestamps, d_num_sampled);
+    } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+      int offset_per_thread =
+          shared_memory_size_ / sizeof(SamplingRange) / num_threads_per_block;
+
+      LOG(DEBUG) << "Max shared memory size: " << shared_memory_size_
+                 << " bytes"
+                 << ", offset per thread: " << offset_per_thread;
+
+      SampleLayerUniformKernel<<<num_blocks, num_threads_per_block,
+                                 offset_per_thread * num_threads_per_block *
+                                     sizeof(SamplingRange),
+                                 streams_[snapshot]>>>(
+          graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
+          rand_states_[snapshot], seed_, offset_per_thread, d_root_nodes,
+          d_root_timestamps, snapshot, num_snapshots_, snapshot_time_window_,
+          num_root_nodes, fanouts_[layer], d_src_nodes, d_eids, d_timestamps,
+          d_delta_timestamps, d_num_sampled);
+    }
   }
 
-  // launch sampling kernel
-  SampleLayerKernel<<<num_blocks, num_threads_per_block>>>(
-      graph_.get_device_node_table(), graph_.num_nodes(), sampling_policy_,
-      prop_time_, rand_states, seed_,
-      thrust::raw_pointer_cast(d_root_nodes.data()),
-      thrust::raw_pointer_cast(d_root_timestamps.data()),
-      thrust::raw_pointer_cast(d_time_offsets.data()), snapshot_time_window_,
-      num_root_nodes, fanouts_[layer],
-      thrust::raw_pointer_cast(d_src_nodes.data()),
-      thrust::raw_pointer_cast(d_timestamps.data()),
-      thrust::raw_pointer_cast(d_delta_timestamps.data()),
-      thrust::raw_pointer_cast(d_eids.data()),
-      thrust::raw_pointer_cast(d_num_sampled.data()));
+  // combine
+  std::vector<uint32_t> num_sampled_nodes_list(num_snapshots_);
+  for (uint32_t snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    std::size_t num_root_nodes = num_root_nodes_list[snapshot];
 
-  // host output
-  std::vector<NIDType> src_nodes(num_root_nodes * fanouts_[layer]);
-  std::vector<TimestampType> timestamps(num_root_nodes * fanouts_[layer]);
-  std::vector<TimestampType> delta_timestamps(num_root_nodes * fanouts_[layer]);
-  std::vector<EIDType> eids(num_root_nodes * fanouts_[layer]);
-  std::vector<uint32_t> num_sampled(num_root_nodes);
+    std::size_t max_sampled_nodes = num_root_nodes * fanouts_[layer];
+    std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
+    std::size_t offset2 = offset1 + max_sampled_nodes * sizeof(EIDType);
+    std::size_t offset3 = offset2 + max_sampled_nodes * sizeof(TimestampType);
+    std::size_t offset4 = offset3 + max_sampled_nodes * sizeof(TimestampType);
 
-  // copy output from device
-  thrust::copy(d_src_nodes.begin(), d_src_nodes.end(), src_nodes.begin());
-  thrust::copy(d_timestamps.begin(), d_timestamps.end(), timestamps.begin());
-  thrust::copy(d_delta_timestamps.begin(), d_delta_timestamps.end(),
-               delta_timestamps.begin());
-  thrust::copy(d_eids.begin(), d_eids.end(), eids.begin());
-  thrust::copy(d_num_sampled.begin(), d_num_sampled.end(), num_sampled.begin());
+    auto d_src_nodes = reinterpret_cast<NIDType*>(gpu_output_buffer_[snapshot]);
+    auto d_eids =
+        reinterpret_cast<EIDType*>(gpu_output_buffer_[snapshot] + offset1);
+    auto d_timestamps = reinterpret_cast<TimestampType*>(
+        gpu_output_buffer_[snapshot] + offset2);
+    auto d_delta_timestamps = reinterpret_cast<TimestampType*>(
+        gpu_output_buffer_[snapshot] + offset3);
+    uint32_t* d_num_sampled =
+        reinterpret_cast<uint32_t*>(gpu_output_buffer_[snapshot] + offset4);
 
-  // convert to SamplingResult
+    auto new_end = thrust::remove_if(
+        rmm::exec_policy(streams_[snapshot]),
+        thrust::make_zip_iterator(thrust::make_tuple(
+            d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
+        thrust::make_zip_iterator(thrust::make_tuple(
+            d_src_nodes + max_sampled_nodes, d_eids + max_sampled_nodes,
+            d_timestamps + max_sampled_nodes,
+            d_delta_timestamps + max_sampled_nodes)),
+        is_invalid_edge());
+
+    uint32_t num_sampled_nodes = thrust::distance(
+        thrust::make_zip_iterator(thrust::make_tuple(
+            d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
+        new_end);
+
+    num_sampled_nodes_list[snapshot] = num_sampled_nodes;
+
+    NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_[snapshot]);
+    EIDType* eids = reinterpret_cast<EIDType*>(cpu_buffer_[snapshot] + offset1);
+    TimestampType* timestamps =
+        reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset2);
+    TimestampType* delta_timestamps =
+        reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset3);
+    uint32_t* num_sampled =
+        reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset4);
+
+    CUDA_CALL(cudaMemcpyAsync(src_nodes, d_src_nodes,
+                              sizeof(NIDType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(eids, d_eids, sizeof(EIDType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(timestamps, d_timestamps,
+                              sizeof(TimestampType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(delta_timestamps, d_delta_timestamps,
+                              sizeof(TimestampType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(num_sampled, d_num_sampled,
+                              sizeof(uint32_t) * num_root_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+  }
+
+  // combine
   std::vector<SamplingResult> sampling_results(num_snapshots_);
-  uint32_t snapshot_offset = 0;
-  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+  for (uint32_t snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
+    auto& prev_sampling_result = prev_sampling_results.at(snapshot);
+    std::size_t num_root_nodes = num_root_nodes_list[snapshot];
+    std::size_t max_sampled_nodes = num_root_nodes * fanouts_[layer];
+
+    std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
+    std::size_t offset2 = offset1 + max_sampled_nodes * sizeof(EIDType);
+    std::size_t offset3 = offset2 + max_sampled_nodes * sizeof(TimestampType);
+    std::size_t offset4 = offset3 + max_sampled_nodes * sizeof(TimestampType);
+
+    // host output
+    NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_[snapshot]);
+    EIDType* eids = reinterpret_cast<EIDType*>(cpu_buffer_[snapshot] + offset1);
+    TimestampType* timestamps =
+        reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset2);
+    TimestampType* delta_timestamps =
+        reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset3);
+    uint32_t* num_sampled =
+        reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset4);
+
     auto& sampling_result = sampling_results[snapshot];
 
     // copy dst nodes
@@ -145,46 +332,38 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
               prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
-    uint32_t num_nodes_this_snapshot = num_nodes_per_snapshot[snapshot];
+    uint32_t num_sampled_nodes = num_sampled_nodes_list[snapshot];
 
-    uint32_t num_sampled_total = 0;
-    for (uint32_t i = 0; i < num_nodes_this_snapshot; i++) {
-      std::vector<NIDType> row(num_sampled[snapshot_offset + i]);
-      std::fill(row.begin(), row.end(), i);
-      std::copy(row.begin(), row.end(),
-                std::back_inserter(sampling_result.row));
-
-      std::copy(src_nodes.begin() + (snapshot_offset + i) * fanouts_[layer],
-                src_nodes.begin() + num_sampled[i] +
-                    (snapshot_offset + i) * fanouts_[layer],
-                std::back_inserter(sampling_result.all_nodes));
-
-      std::copy(timestamps.begin() + (snapshot_offset + i) * fanouts_[layer],
-                timestamps.begin() + num_sampled[i] +
-                    (snapshot_offset + i) * fanouts_[layer],
-                std::back_inserter(sampling_result.all_timestamps));
-
-      std::copy(
-          delta_timestamps.begin() + (snapshot_offset + i) * fanouts_[layer],
-          delta_timestamps.begin() + num_sampled[i] +
-              (snapshot_offset + i) * fanouts_[layer],
-          std::back_inserter(sampling_result.delta_timestamps));
-
-      std::copy(eids.begin() + (snapshot_offset + i) * fanouts_[layer],
-                eids.begin() + num_sampled[i] +
-                    (snapshot_offset + i) * fanouts_[layer],
-                std::back_inserter(sampling_result.eids));
-
-      num_sampled_total += num_sampled[i];
-    }
-    sampling_result.col.resize(num_sampled_total);
+    sampling_result.col.resize(num_sampled_nodes);
     std::iota(sampling_result.col.begin(), sampling_result.col.end(),
-              num_nodes_this_snapshot);
+              num_root_nodes);
 
-    sampling_result.num_dst_nodes = num_nodes_this_snapshot;
-    sampling_result.num_src_nodes = num_nodes_this_snapshot + num_sampled_total;
+    sampling_result.num_dst_nodes = num_root_nodes;
+    sampling_result.num_src_nodes = num_root_nodes + num_sampled_nodes;
 
-    snapshot_offset += num_nodes_this_snapshot;
+    sampling_result.all_nodes.reserve(sampling_result.num_src_nodes);
+    sampling_result.all_timestamps.reserve(sampling_result.num_src_nodes);
+    sampling_result.delta_timestamps.reserve(num_sampled_nodes);
+    sampling_result.eids.reserve(num_sampled_nodes);
+
+    // synchronize memcpy
+    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
+
+    std::copy(src_nodes, src_nodes + num_sampled_nodes,
+              std::back_inserter(sampling_result.all_nodes));
+    std::copy(timestamps, timestamps + num_sampled_nodes,
+              std::back_inserter(sampling_result.all_timestamps));
+    std::copy(delta_timestamps, delta_timestamps + num_sampled_nodes,
+              std::back_inserter(sampling_result.delta_timestamps));
+    std::copy(eids, eids + num_sampled_nodes,
+              std::back_inserter(sampling_result.eids));
+
+    sampling_result.row.resize(num_sampled_nodes);
+    uint32_t cumsum = 0;
+    for (uint32_t i = 0; i < num_root_nodes; i++) {
+      std::fill_n(sampling_result.row.begin() + cumsum, num_sampled[i], i);
+      cumsum += num_sampled[i];
+    }
   }
 
   return sampling_results;
@@ -195,6 +374,8 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
     const std::vector<TimestampType>& timestamps) {
   CHECK_EQ(dst_nodes.size(), timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
+
+  if (initialized_ == false) InitBuffer(dst_nodes.size());
 
   for (int layer = 0; layer < num_layers_; ++layer) {
     if (layer == 0) {

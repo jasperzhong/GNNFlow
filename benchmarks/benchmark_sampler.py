@@ -1,7 +1,6 @@
 import argparse
 
 import numpy as np
-import torch
 from tqdm import tqdm
 
 from dgnn.utils import build_dynamic_graph, load_dataset
@@ -10,7 +9,10 @@ from dgnn.temporal_sampler import TemporalSampler
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="REDDIT")
 parser.add_argument("--batch_size", type=int, default=600)
+parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
+
+np.random.seed(args.seed)
 
 
 class NegLinkSampler:
@@ -19,7 +21,7 @@ class NegLinkSampler:
         self.num_nodes = num_nodes
 
     def sample(self, n):
-        return torch.randint(0, self.num_nodes, (n, ))
+        return np.random.randint(0, self.num_nodes, (n, ))
 
 
 def main():
@@ -28,7 +30,9 @@ def main():
     dgraph = build_dynamic_graph(df)
 
     # Create a temporal sampler
-    sampler = TemporalSampler(dgraph, fanouts=[10])
+    sampler = TemporalSampler(
+        dgraph, fanouts=[10, 10],  num_snapshots=3, prop_time=True,
+        strategy="uniform")
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
     for _, rows in tqdm(df.groupby(df.index // args.batch_size)):

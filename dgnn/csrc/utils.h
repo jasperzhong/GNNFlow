@@ -1,6 +1,8 @@
 #ifndef DGNN_UTILS_H_
 #define DGNN_UTILS_H_
 
+#include <curand_kernel.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <numeric>
@@ -65,6 +67,12 @@ void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
                       std::size_t num_edges);
+
+std::size_t GetSharedMemoryMaxSize();
+
+void Copy(void* dst, const void* src, std::size_t size);
+
+__global__ void InitCuRandStates(curandState_t* state, uint64_t seed);
 
 }  // namespace dgnn
 
