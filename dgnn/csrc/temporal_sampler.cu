@@ -1,3 +1,4 @@
+#include <thrust/execution_policy.h>
 #include <thrust/remove.h>
 
 #include <algorithm>
@@ -14,11 +15,11 @@
 namespace dgnn {
 
 struct is_invalid_edge {
-  bool operator()(thrust::tuple<NIDType, EIDType, TimestampType,
-                                TimestampType> const& edge) {
+  __host__ __device__ bool operator()(
+      thrust::tuple<NIDType, EIDType, TimestampType, TimestampType> const&
+          edge) {
     return thrust::get<0>(edge) == kInvalidNID ||
-           thrust::get<1>(edge) == kInvalidEID ||
-           thrust::get<2>(edge) < 0||
+           thrust::get<1>(edge) == kInvalidEID || thrust::get<2>(edge) < 0 ||
            thrust::get<3>(edge) < 0;
   }
 };
@@ -177,6 +178,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
   std::vector<std::size_t> total_output_size_list(num_snapshots_);
   for (uint32_t snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
     std::size_t num_root_nodes = num_root_nodes_list[snapshot];
+    std::size_t max_sampled_nodes = num_root_nodes * fanouts_[layer];
 
     NIDType* d_root_nodes =
         reinterpret_cast<NIDType*>(gpu_input_buffer_[snapshot]);
@@ -184,13 +186,11 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         gpu_input_buffer_[snapshot] + num_root_nodes * sizeof(NIDType));
 
     // device output
-    std::size_t offset1 = num_root_nodes * fanouts_[layer] * sizeof(NIDType);
-    std::size_t offset2 =
-        offset1 + num_root_nodes * fanouts_[layer] * sizeof(EIDType);
-    std::size_t offset3 =
-        offset2 + num_root_nodes * fanouts_[layer] * sizeof(TimestampType);
-    std::size_t offset4 =
-        offset3 + num_root_nodes * fanouts_[layer] * sizeof(TimestampType);
+    std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
+    std::size_t offset2 = offset1 + max_sampled_nodes * sizeof(EIDType);
+    std::size_t offset3 = offset2 + max_sampled_nodes * sizeof(TimestampType);
+    std::size_t offset4 = offset3 + max_sampled_nodes * sizeof(TimestampType);
+
     std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
     total_output_size_list[snapshot] = total_output_size;
 
@@ -259,6 +259,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     thrust::cuda::par.on(streams_[snapshot]);
     auto new_end = thrust::remove_if(
+        thrust::device,
         thrust::make_zip_iterator(thrust::make_tuple(
             d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
         thrust::make_zip_iterator(thrust::make_tuple(
