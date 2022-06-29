@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <numeric>
 #include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include "common.h"
 #include "sampling_kernels.h"
@@ -256,7 +257,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         gpu_output_buffer_[snapshot] + offset3);
 
     auto new_end = thrust::remove_if(
-        thrust::cuda::par.on(streams_[snapshot]),
+        rmm::exec_policy(streams_[snapshot]),
         thrust::make_zip_iterator(thrust::make_tuple(
             d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
         thrust::make_zip_iterator(thrust::make_tuple(
@@ -271,10 +272,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         new_end);
 
     num_sampled_nodes_list[snapshot] = num_sampled_nodes;
-  }
 
-  // copy output to host
-  for (uint32_t snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
     CUDA_CALL(cudaMemcpyAsync(cpu_buffer_[snapshot],
                               gpu_output_buffer_[snapshot],
                               total_output_size_list[snapshot],
