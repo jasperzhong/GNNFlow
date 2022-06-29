@@ -246,15 +246,17 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
     std::size_t offset2 = offset1 + max_sampled_nodes * sizeof(EIDType);
     std::size_t offset3 = offset2 + max_sampled_nodes * sizeof(TimestampType);
+    std::size_t offset4 = offset3 + max_sampled_nodes * sizeof(TimestampType);
 
-    NIDType* d_src_nodes =
-        reinterpret_cast<NIDType*>(gpu_output_buffer_[snapshot]);
-    EIDType* d_eids =
+    auto d_src_nodes = reinterpret_cast<NIDType*>(gpu_output_buffer_[snapshot]);
+    auto d_eids =
         reinterpret_cast<EIDType*>(gpu_output_buffer_[snapshot] + offset1);
-    TimestampType* d_timestamps = reinterpret_cast<TimestampType*>(
+    auto d_timestamps = reinterpret_cast<TimestampType*>(
         gpu_output_buffer_[snapshot] + offset2);
-    TimestampType* d_delta_timestamps = reinterpret_cast<TimestampType*>(
+    auto d_delta_timestamps = reinterpret_cast<TimestampType*>(
         gpu_output_buffer_[snapshot] + offset3);
+    uint32_t* d_num_sampled =
+        reinterpret_cast<uint32_t*>(gpu_output_buffer_[snapshot] + offset4);
 
     auto new_end = thrust::remove_if(
         rmm::exec_policy(streams_[snapshot]),
@@ -273,10 +275,37 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     num_sampled_nodes_list[snapshot] = num_sampled_nodes;
 
-    CUDA_CALL(cudaMemcpyAsync(cpu_buffer_[snapshot],
-                              gpu_output_buffer_[snapshot],
-                              total_output_size_list[snapshot],
+    NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_[snapshot]);
+    EIDType* eids = reinterpret_cast<EIDType*>(cpu_buffer_[snapshot] + offset1);
+    TimestampType* timestamps =
+        reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset2);
+    TimestampType* delta_timestamps =
+        reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset3);
+    uint32_t* num_sampled =
+        reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset4);
+
+    CUDA_CALL(cudaMemcpyAsync(src_nodes, d_src_nodes,
+                              sizeof(NIDType) * num_sampled_nodes,
                               cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(eids, d_eids, sizeof(EIDType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(timestamps, d_timestamps,
+                              sizeof(TimestampType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(delta_timestamps, d_delta_timestamps,
+                              sizeof(TimestampType) * num_sampled_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+    CUDA_CALL(cudaMemcpyAsync(num_sampled, d_num_sampled,
+                              sizeof(uint32_t) * num_root_nodes,
+                              cudaMemcpyDeviceToHost, streams_[snapshot]));
+
+    //    thrust::copy(thrust::cuda::par.on(streams_[snapshot]),
+    //                 thrust::make_zip_iterator(thrust::make_tuple(
+    //                     d_src_nodes, d_eids, d_timestamps,
+    //                     d_delta_timestamps)),
+    //                 new_end,
+    //                 thrust::make_zip_iterator(thrust::make_tuple(
+    //                     src_nodes, eids, timestamps, delta_timestamps)));
   }
 
   // combine
