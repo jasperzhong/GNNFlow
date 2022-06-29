@@ -298,14 +298,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     CUDA_CALL(cudaMemcpyAsync(num_sampled, d_num_sampled,
                               sizeof(uint32_t) * num_root_nodes,
                               cudaMemcpyDeviceToHost, streams_[snapshot]));
-
-    //    thrust::copy(thrust::cuda::par.on(streams_[snapshot]),
-    //                 thrust::make_zip_iterator(thrust::make_tuple(
-    //                     d_src_nodes, d_eids, d_timestamps,
-    //                     d_delta_timestamps)),
-    //                 new_end,
-    //                 thrust::make_zip_iterator(thrust::make_tuple(
-    //                     src_nodes, eids, timestamps, delta_timestamps)));
   }
 
   // combine
