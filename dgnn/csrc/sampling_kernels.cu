@@ -123,10 +123,10 @@ __global__ void SampleLayerRecentKernel(
     // copy the edges to the output
     for (int i = end_idx - 1; sampled < fanout && i >= start_idx; --i) {
       src_nodes[offset + sampled] = curr->dst_nodes[i];
+      eids[offset + sampled] = curr->eids[i];
       timestamps[offset + sampled] =
           prop_time ? root_timestamp : curr->timestamps[i];
       delta_timestamps[offset + sampled] = root_timestamp - curr->timestamps[i];
-      eids[offset + sampled] = curr->eids[i];
       ++sampled;
     }
 
@@ -134,6 +134,14 @@ __global__ void SampleLayerRecentKernel(
   }
 
   num_sampled[tid] = sampled;
+
+  while (sampled < fanout) {
+    src_nodes[offset + sampled] = kInvalidNID;
+    eids[offset + sampled] = kInvalidEID;
+    timestamps[offset + sampled] = kInvalidTimestamp;
+    delta_timestamps[offset + sampled] = kInvalidTimestamp;
+    ++sampled;
+  }
 }
 
 __global__ void SampleLayerUniformKernel(
@@ -273,11 +281,11 @@ __global__ void SampleLayerUniformKernel(
     while (sampled < to_sample && idx < end_idx - start_idx) {
       // start from end_idx (newer edges)
       src_nodes[offset + sampled] = curr->dst_nodes[end_idx - idx - 1];
+      eids[offset + sampled] = curr->eids[end_idx - idx - 1];
       timestamps[offset + sampled] =
           prop_time ? root_timestamp : curr->timestamps[end_idx - idx - 1];
       delta_timestamps[offset + sampled] =
           root_timestamp - curr->timestamps[end_idx - idx - 1];
-      eids[offset + sampled] = curr->eids[end_idx - idx - 1];
       idx = indices[sampled] - cumsum;
       ++sampled;
     }
@@ -292,6 +300,14 @@ __global__ void SampleLayerUniformKernel(
   }
 
   num_sampled[tid] = sampled;
+
+  while (sampled < fanout) {
+    src_nodes[offset + sampled] = kInvalidNID;
+    eids[offset + sampled] = kInvalidEID;
+    timestamps[offset + sampled] = kInvalidTimestamp;
+    delta_timestamps[offset + sampled] = kInvalidTimestamp;
+    ++sampled;
+  }
 }
 
 }  // namespace dgnn

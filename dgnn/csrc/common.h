@@ -16,6 +16,10 @@ using EIDType = int64_t;
 
 constexpr int MAX_FANOUT = 32;
 
+constexpr NIDType kInvalidNID = -1;
+constexpr EIDType kInvalidEID = -1;
+constexpr TimestampType kInvalidTimestamp = -1.0f;
+
 static constexpr std::size_t kBlockSpaceSize =
     (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));
 
