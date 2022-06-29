@@ -18,9 +18,7 @@ struct is_invalid_edge {
   __host__ __device__ bool operator()(
       thrust::tuple<NIDType, EIDType, TimestampType, TimestampType> const&
           edge) {
-    return thrust::get<0>(edge) == kInvalidNID ||
-           thrust::get<1>(edge) == kInvalidEID || thrust::get<2>(edge) < 0 ||
-           thrust::get<3>(edge) < 0;
+    return thrust::get<0>(edge) == kInvalidNID;
   }
 };
 
@@ -257,9 +255,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     TimestampType* d_delta_timestamps = reinterpret_cast<TimestampType*>(
         gpu_output_buffer_[snapshot] + offset3);
 
-    thrust::cuda::par.on(streams_[snapshot]);
     auto new_end = thrust::remove_if(
-        thrust::device,
+        thrust::cuda::par.on(streams_[snapshot]),
         thrust::make_zip_iterator(thrust::make_tuple(
             d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
         thrust::make_zip_iterator(thrust::make_tuple(
@@ -316,8 +313,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
               prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
-    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
-
     uint32_t num_sampled_nodes = num_sampled_nodes_list[snapshot];
 
     sampling_result.col.resize(num_sampled_nodes);
@@ -329,9 +324,11 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     sampling_result.all_nodes.reserve(sampling_result.num_src_nodes);
     sampling_result.all_timestamps.reserve(sampling_result.num_src_nodes);
-    sampling_result.row.reserve(num_sampled_nodes);
     sampling_result.delta_timestamps.reserve(num_sampled_nodes);
     sampling_result.eids.reserve(num_sampled_nodes);
+
+    // synchronize memcpy
+    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
 
     std::copy(src_nodes, src_nodes + num_sampled_nodes,
               std::back_inserter(sampling_result.all_nodes));
@@ -342,11 +339,11 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     std::copy(eids, eids + num_sampled_nodes,
               std::back_inserter(sampling_result.eids));
 
+    sampling_result.row.resize(num_sampled_nodes);
+    uint32_t cumsum = 0;
     for (uint32_t i = 0; i < num_root_nodes; i++) {
-      std::vector<NIDType> row(num_sampled[i]);
-      std::fill(row.begin(), row.end(), i);
-      std::copy(row.begin(), row.end(),
-                std::back_inserter(sampling_result.row));
+      std::fill_n(sampling_result.row.begin() + cumsum, num_sampled[i], i);
+      cumsum += num_sampled[i];
     }
   }
 

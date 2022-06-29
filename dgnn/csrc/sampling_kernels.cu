@@ -137,9 +137,6 @@ __global__ void SampleLayerRecentKernel(
 
   while (sampled < fanout) {
     src_nodes[offset + sampled] = kInvalidNID;
-    eids[offset + sampled] = kInvalidEID;
-    timestamps[offset + sampled] = kInvalidTimestamp;
-    delta_timestamps[offset + sampled] = kInvalidTimestamp;
     ++sampled;
   }
 }
@@ -303,9 +300,6 @@ __global__ void SampleLayerUniformKernel(
 
   while (sampled < fanout) {
     src_nodes[offset + sampled] = kInvalidNID;
-    eids[offset + sampled] = kInvalidEID;
-    timestamps[offset + sampled] = kInvalidTimestamp;
-    delta_timestamps[offset + sampled] = kInvalidTimestamp;
     ++sampled;
   }
 }
