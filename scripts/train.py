@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import dgnn.models as models
 from torch.utils.data import BatchSampler, SequentialSampler
+from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import get_project_root_dir, prepare_input
 from dgnn.utils import mfgs_to_cuda, node_to_dgl_blocks
@@ -50,6 +51,7 @@ parser.add_argument("--sample-history",
                     help="the number of snapshot", type=int, default=1)
 parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
+parser.add_argument("--reorder", help="", type=int, default=0)
 
 args = parser.parse_args()
 
@@ -126,7 +128,11 @@ train_ds = DynamicGraphDataset(train_df)
 val_ds = DynamicGraphDataset(val_df)
 test_ds = DynamicGraphDataset(test_df)
 
-train_sampler = BatchSampler(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False)
+if args.reorder > 0:
+    train_sampler = BatchSamplerReorder(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
+else:
+    train_sampler = BatchSampler(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False)
+
 val_sampler = BatchSampler(SequentialSampler(val_ds), batch_size=args.batch_size, drop_last=False)
 test_sampler = BatchSampler(SequentialSampler(test_ds), batch_size=args.batch_size, drop_last=False)
 
@@ -179,6 +185,9 @@ for e in range(args.epoch):
     iteration_time = 0
     sample_time = 0
     train_time = 0
+
+    if args.reorder > 0:
+        train_sampler.reset()
 
     # TODO: we can overwrite train():
     # a new class inherit torch.nn.Module which has self.mailbox = None.
