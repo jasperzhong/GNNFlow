@@ -332,3 +332,22 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
 
         print("Test sample_multi_layers_multi_snapshots passed")
+
+    def test_sample_layer_with_different_batch_size(self):
+        # build the dynamic graph
+        dgraph = DynamicGraph()
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
+
+        # sample 1-hop neighbors
+        sampler = TemporalSampler(dgraph, [2])
+        for bs in range(0, 100, 10):
+            target_vertices = np.random.randint(0, 3, bs)
+            timestamps = np.random.randint(0, 3, bs)
+            sampler.sample(target_vertices,
+                           timestamps)
+
+        print("Test sample_layer_with_different_batch_size passed")

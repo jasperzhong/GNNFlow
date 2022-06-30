@@ -42,7 +42,7 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       gpu_input_buffer_(nullptr),
       gpu_output_buffer_(nullptr),
       rand_states_(nullptr),
-      initialized_(false) {
+      init_num_root_nodes_(0) {
   if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
@@ -60,7 +60,9 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
   rand_states_ = new curandState_t*[num_snapshots_];
 }
 
-TemporalSampler::~TemporalSampler() {
+void TemporalSampler::FreeBuffer() {
+  if (init_num_root_nodes_ == 0) return;
+
   for (uint32_t i = 0; i < num_snapshots_; ++i) {
     if (cpu_buffer_[i] != nullptr) {
       cudaFreeHost(cpu_buffer_[i]);
@@ -78,7 +80,10 @@ TemporalSampler::~TemporalSampler() {
       cudaFree(rand_states_[i]);
     }
   }
+}
 
+TemporalSampler::~TemporalSampler() {
+  FreeBuffer();
   delete[] cpu_buffer_;
   delete[] gpu_input_buffer_;
   delete[] gpu_output_buffer_;
@@ -126,8 +131,6 @@ void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
                                                               seed_);
     }
   }
-
-  initialized_ = true;
 }
 
 std::vector<SamplingResult> TemporalSampler::RootInputToSamplingResult(
@@ -375,7 +378,11 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
   CHECK_EQ(dst_nodes.size(), timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
 
-  if (initialized_ == false) InitBuffer(dst_nodes.size());
+  if (dst_nodes.size() > init_num_root_nodes_) {
+    FreeBuffer();
+    init_num_root_nodes_ = dst_nodes.size();
+    InitBuffer(init_num_root_nodes_);
+  }
 
   for (int layer = 0; layer < num_layers_; ++layer) {
     if (layer == 0) {
