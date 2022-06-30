@@ -165,10 +165,11 @@ sampler = None
 
 if not args.no_sample:
     sampler = TemporalSampler(dgraph,
-                              args.sample_neighbor,
-                              args.sample_strategy,
+                              fanouts=args.sample_neighbor,
+                              strategy=args.sample_strategy,
                               num_snapshots=args.sample_history,
                               snapshot_time_window=args.sample_duration,
+                              prop_time=args.prop_time,
                               reverse=args.deliver_to_neighbors)
 
 creterion = torch.nn.BCEWithLogitsLoss()
@@ -177,7 +178,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 best_ap = 0
 best_e = 0
 
-
+epoch_sum = 0
 for e in range(args.epoch):
     print("Epoch {}".format(e))
     epoch_time_start = time.time()
@@ -250,6 +251,8 @@ for e in range(args.epoch):
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
 
+    epoch_sum += iteration_time
+
     # Validation
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
@@ -287,3 +290,4 @@ ap, auc = val(test_loader, sampler, model, node_feats,
               identity=args.arch_identity,
               deliver_to_neighbors=args.deliver_to_neighbors)
 print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+print('Avg epoch time: {}'.format(epoch_sum / args.epoch))
