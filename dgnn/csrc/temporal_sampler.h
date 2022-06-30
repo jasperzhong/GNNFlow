@@ -32,6 +32,8 @@ class TemporalSampler {
 
   void InitBuffer(std::size_t num_root_nodes);
 
+  void FreeBuffer();
+
  private:
   const DynamicGraph& graph_;
   std::vector<uint32_t> fanouts_;
@@ -48,7 +50,7 @@ class TemporalSampler {
   char** gpu_input_buffer_;
   char** gpu_output_buffer_;
   curandState_t** rand_states_;
-  bool initialized_;
+  std::size_t init_num_root_nodes_;
 };
 
 }  // namespace dgnn
