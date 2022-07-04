@@ -118,9 +118,10 @@ class TransfomerAttentionLayer(torch.nn.Module):
             Q = torch.reshape(Q, (Q.shape[0], self.num_head, -1))
             K = torch.reshape(K, (K.shape[0], self.num_head, -1))
             V = torch.reshape(V, (V.shape[0], self.num_head, -1))
-            att = dgl.ops.edge_softmax(b, self.att_act(torch.sum(Q*K, dim=2)))
+            att = dgl.ops.edge_softmax(
+                b, self.att_act(torch.sum(Q * K, dim=2)))
             att = self.att_dropout(att)
-            V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
+            V = torch.reshape(V * att[:, :, None], (V.shape[0], -1))
             b.edata['v'] = V
             b.update_all(
                 dgl.function.copy_edge('v', 'm'),
@@ -191,9 +192,10 @@ class TransfomerAttentionLayer(torch.nn.Module):
             Q = torch.reshape(Q, (Q.shape[0], self.num_head, -1))
             K = torch.reshape(K, (K.shape[0], self.num_head, -1))
             V = torch.reshape(V, (V.shape[0], self.num_head, -1))
-            att = dgl.ops.edge_softmax(b, self.att_act(torch.sum(Q*K, dim=2)))
+            att = dgl.ops.edge_softmax(
+                b, self.att_act(torch.sum(Q * K, dim=2)))
             att = self.att_dropout(att)
-            V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
+            V = torch.reshape(V * att[:, :, None], (V.shape[0], -1))
             b.srcdata['v'] = torch.cat(
                 [torch.zeros(
                     (b.num_dst_nodes(),
@@ -204,7 +206,9 @@ class TransfomerAttentionLayer(torch.nn.Module):
             # edges.src['v'] -> edges.dst['m']
             # update_all function:
             # 1. copy_src:First aggregate the "attentioned (or weighted sum)" msg from all the neighbors. That is, the 'v' is first aggregate to the target nodes' memory
-            # 2. sum: The aggregated msg from neighbors are then sum with the target nodes' memory. Then the outcome will serve as features (embeddings).
+            # 2. sum: The aggregated msg from neighbors are then sum with the
+            # target nodes' memory. Then the outcome will serve as features
+            # (embeddings).
             b.update_all(
                 dgl.function.copy_src('v', 'm'),
                 dgl.function.sum('m', 'h'))
