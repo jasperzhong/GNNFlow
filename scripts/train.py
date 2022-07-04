@@ -52,6 +52,7 @@ parser.add_argument("--sample-history",
 parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
 parser.add_argument("--reorder", help="", type=int, default=0)
+parser.add_argument("--graph-reverse", help="build undirected graph", type=bool, default=True)
 
 args = parser.parse_args()
 
@@ -145,7 +146,7 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
-dgraph = build_dynamic_graph(df)
+dgraph = build_dynamic_graph(df, add_reverse=args.graph_reverse)
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
