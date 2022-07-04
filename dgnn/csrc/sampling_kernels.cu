@@ -42,7 +42,7 @@ __device__ void inline swap(T a, T b) {
 }
 
 __device__ void QuickSort(uint32_t* indices, int lo, int hi) {
-  if (lo >= hi || lo < 0) return;
+  if (lo >= hi || lo < 0 || hi < 0) return;
 
   uint32_t pivot = indices[hi];
   int i = lo - 1;
