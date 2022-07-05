@@ -90,7 +90,7 @@ __global__ void SampleLayerRecentKernel(
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp < curr->timestamps[0] &&
-               end_timestamp < curr->timestamps[curr->size - 1]) {
+               end_timestamp <= curr->timestamps[curr->size - 1]) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
@@ -181,7 +181,7 @@ __global__ void SampleLayerUniformKernel(
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp < curr->timestamps[0] &&
-               end_timestamp < curr->timestamps[curr->size - 1]) {
+               end_timestamp <= curr->timestamps[curr->size - 1]) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
@@ -243,7 +243,7 @@ __global__ void SampleLayerUniformKernel(
         LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
         LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
       } else if (start_timestamp < curr->timestamps[0] &&
-                 end_timestamp < curr->timestamps[curr->size - 1]) {
+                 end_timestamp <= curr->timestamps[curr->size - 1]) {
         // only the edges before end_timestamp are in the current block
         start_idx = 0;
         LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);

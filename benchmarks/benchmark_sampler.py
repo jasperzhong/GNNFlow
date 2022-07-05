@@ -49,7 +49,7 @@ def main():
 
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
-    for _, rows in df.groupby(df.index // args.batch_size):
+    for _, rows in tqdm(df.groupby(df.index // args.batch_size)):
         # Sample a batch of data
         root_nodes = np.concatenate(
             [rows.src.values, rows.dst.values]).astype(np.int64)
@@ -57,9 +57,7 @@ def main():
             [rows.time.values, rows.time.values]).astype(
             np.float32)
 
-        blocks = sampler.sample(root_nodes, ts)
-        block = blocks[0][0]
-        print(len(block.srcdata['ID']))
+        sampler._sampler.sample(root_nodes, ts)
 
 if __name__ == "__main__":
     main()
