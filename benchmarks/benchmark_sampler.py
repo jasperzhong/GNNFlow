@@ -33,7 +33,6 @@ def main():
     dgraph = build_dynamic_graph(df, add_reverse=True)
 
     # Create a temporal sampler
-
     if args.model == "tgn":
         sampler = TemporalSampler(
             dgraph, fanouts=[10], strategy="recent")
@@ -50,17 +49,17 @@ def main():
 
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
-    for _, rows in tqdm(df.groupby(df.index // args.batch_size)):
+    for _, rows in df.groupby(df.index // args.batch_size):
         # Sample a batch of data
         root_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values, neg_link_sampler.sample(
-                len(rows))]).astype(np.int64)
+            [rows.src.values, rows.dst.values]).astype(np.int64)
         ts = np.concatenate(
-            [rows.time.values, rows.time.values, rows.time.values]).astype(
+            [rows.time.values, rows.time.values]).astype(
             np.float32)
 
-        sampler._sampler.sample(root_nodes, ts)
-
+        blocks = sampler.sample(root_nodes, ts)
+        block = blocks[0][0]
+        print(len(block.srcdata['ID']))
 
 if __name__ == "__main__":
     main()

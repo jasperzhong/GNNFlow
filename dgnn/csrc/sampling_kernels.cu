@@ -19,21 +19,6 @@ __host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
   *idx = left;
 }
 
-__host__ __device__ void UpperBound(TimestampType* timestamps, int num_edges,
-                                    TimestampType timestamp, int* idx) {
-  int left = 0;
-  int right = num_edges;
-  while (left < right) {
-    int mid = (left + right) / 2;
-    if (timestamps[mid] <= timestamp) {
-      left = mid + 1;
-    } else {
-      right = mid;
-    }
-  }
-  *idx = left;
-}
-
 template <typename T>
 __device__ void inline swap(T a, T b) {
   T c(a);
@@ -103,12 +88,12 @@ __global__ void SampleLayerRecentKernel(
         end_timestamp <= curr->timestamps[curr->size - 1]) {
       // all edges in the current block
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp < curr->timestamps[0] &&
                end_timestamp < curr->timestamps[curr->size - 1]) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
-      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp > curr->timestamps[0] &&
                end_timestamp > curr->timestamps[curr->size - 1]) {
       // only the edges after start_timestamp are in the current block
@@ -194,12 +179,12 @@ __global__ void SampleLayerUniformKernel(
         end_timestamp <= curr->timestamps[curr->size - 1]) {
       // all edges in the current block
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp < curr->timestamps[0] &&
                end_timestamp < curr->timestamps[curr->size - 1]) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
-      UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
     } else if (start_timestamp > curr->timestamps[0] &&
                end_timestamp > curr->timestamps[curr->size - 1]) {
       // only the edges after start_timestamp are in the current block
@@ -256,12 +241,12 @@ __global__ void SampleLayerUniformKernel(
           end_timestamp <= curr->timestamps[curr->size - 1]) {
         // all edges in the current block
         LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-        UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
       } else if (start_timestamp < curr->timestamps[0] &&
                  end_timestamp < curr->timestamps[curr->size - 1]) {
         // only the edges before end_timestamp are in the current block
         start_idx = 0;
-        UpperBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
       } else if (start_timestamp > curr->timestamps[0] &&
                  end_timestamp > curr->timestamps[curr->size - 1]) {
         // only the edges after start_timestamp are in the current block
