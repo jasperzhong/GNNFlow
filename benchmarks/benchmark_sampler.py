@@ -52,12 +52,14 @@ def main():
     for _, rows in tqdm(df.groupby(df.index // args.batch_size)):
         # Sample a batch of data
         root_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values]).astype(np.int64)
+            [rows.src.values, rows.dst.values,
+                neg_link_sampler.sample(len(rows))]).astype(np.int64)
         ts = np.concatenate(
-            [rows.time.values, rows.time.values]).astype(
+            [rows.time.values, rows.time.values, rows.time.values]).astype(
             np.float32)
 
         sampler._sampler.sample(root_nodes, ts)
+
 
 if __name__ == "__main__":
     main()
