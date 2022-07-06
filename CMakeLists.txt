@@ -35,7 +35,7 @@ file(GLOB_RECURSE DGNN_SRC_CUDA_FILES ${PROJECT_SOURCE_DIR}/dgnn/csrc/*.cu)
 set_source_files_properties(${DGNN_SRC_CUDA_FILES} PROPERTIES LANGUAGE CUDA)
 list(APPEND DGNN_SRC_FILES ${DGNN_SRC_CUDA_FILES})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fPIC -Wall -ftree-vectorize")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -fPIC -Wall -ftree-vectorize")
 set(ARCH_FLAGS "-march=native -mtune=native")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")
 

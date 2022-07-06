@@ -73,7 +73,8 @@ class DynamicGraph {
   void AddEdgesForOneNode(NIDType src_node,
                           const std::vector<NIDType>& dst_nodes,
                           const std::vector<TimestampType>& timestamps,
-                          const std::vector<EIDType>& eids);
+                          const std::vector<EIDType>& eids,
+                          cudaStream_t stream);
 
   std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size);
 
@@ -81,7 +82,7 @@ class DynamicGraph {
 
   TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges);
 
-  void InsertBlock(NIDType node_id, TemporalBlock* block);
+  void InsertBlock(NIDType node_id, TemporalBlock* block, cudaStream_t stream);
 
   void DeleteTailBlock(NIDType node_id);
 

@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from typing import Optional, Tuple
 
 import dgl
@@ -189,8 +190,13 @@ def prepare_input(
                             non_blocking=True)
                         i += 1
                     else:
+                        start = time.time()
                         srch = edge_feats[b.edata['ID'].long()].float()
+                        start = time.time()
                         b.edata['f'] = srch.cuda()
+                        end = time.time()
+                        print("length of srch: {}".format(srch.shape))
+                        print("feature cuda and add time: {}".format(end - start))
     return mfgs
 
 

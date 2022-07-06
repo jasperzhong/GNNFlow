@@ -4,14 +4,20 @@
 #include <thrust/device_new.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <rmm/detail/error.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
+#include <omp.h>
+
+#include "common.h"
 #include "dynamic_graph.h"
 #include "logging.h"
 #include "utils.h"
+
+#define NUM_THREADS 8
 
 namespace dgnn {
 
@@ -53,15 +59,29 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
   std::map<NIDType, std::vector<NIDType>> src_to_dst_map;
   std::map<NIDType, std::vector<TimestampType>> src_to_ts_map;
   std::map<NIDType, std::vector<EIDType>> src_to_eid_map;
+  
+  // #pragma omp parallel num_threads(NUM_THREADS)
   for (std::size_t i = 0; i < src_nodes.size(); ++i) {
     src_to_dst_map[src_nodes[i]].push_back(dst_nodes[i]);
     src_to_ts_map[src_nodes[i]].push_back(timestamps[i]);
     src_to_eid_map[src_nodes[i]].push_back(eids[i]);
   }
 
-  for (auto& src_to_dst : src_to_dst_map) {
-    NIDType src_node = src_to_dst.first;
-    auto& dst_nodes = src_to_dst.second;
+  std::vector<cudaStream_t> streams;
+
+  for (int i = 0; i < NUM_THREADS; i++) {
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+    streams.push_back(stream);
+  }
+
+  // TODO: change to index -> OMP
+  #pragma omp parallel num_threads(NUM_THREADS)
+  for (std::map<NIDType, std::vector<NIDType>>::iterator iter = std::begin(src_to_dst_map);
+      iter != std::end(src_to_dst_map);
+      iter++) {
+    NIDType src_node = iter->first;
+    auto& dst_nodes = iter->second;
     auto& timestamps = src_to_ts_map[src_node];
     auto& eids = src_to_eid_map[src_node];
 
@@ -72,9 +92,17 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
     timestamps = sort_vector(timestamps, idx);
     eids = sort_vector(eids, idx);
 
-    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids);
+    int thread_id = omp_get_thread_num();
+
+    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids, streams[thread_id]);
+    }
+
+  for (auto stream : streams) {
+    CUDA_CALL(cudaStreamSynchronize(stream));
+    CUDA_CALL(cudaStreamDestroy(stream));
   }
-}
+
+  }
 
 void DynamicGraph::AddNodes(NIDType max_node) {
   if (max_node < num_nodes_) {
@@ -120,7 +148,7 @@ TemporalBlock* DynamicGraph::ReallocateBlock(TemporalBlock* block,
   return new_block;
 }
 
-void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
+void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block, cudaStream_t stream) {
   CHECK_NOTNULL(block);
   // host
   InsertBlockToDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id, block);
@@ -130,9 +158,10 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
       thrust::device_new<TemporalBlock>(1);
   *d_block = *block;
 
-  InsertBlockToDoublyLinkedListKernel<<<1, 1>>>(
+  // TODO: Use a dedicated Stream & cudaStreamSynchronize
+  InsertBlockToDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
-  CUDA_CALL(cudaDeviceSynchronize());
+  // CUDA_CALL(cudaStreamSynchronize(stream));
 
   // mapping
   h2d_mapping_[block] = d_block;
@@ -191,7 +220,8 @@ void DynamicGraph::SyncBlock(TemporalBlock* block) {
 void DynamicGraph::AddEdgesForOneNode(
     NIDType src_node, const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& timestamps,
-    const std::vector<EIDType>& eids) {
+    const std::vector<EIDType>& eids,
+    cudaStream_t stream) {
   std::size_t num_edges = dst_nodes.size();
 
   auto& head = h_copy_of_d_node_table_[src_node].head;
@@ -200,7 +230,7 @@ void DynamicGraph::AddEdgesForOneNode(
   if (head == nullptr) {
     // empty list
     auto block = AllocateBlock(num_edges);
-    InsertBlock(src_node, block);
+    InsertBlock(src_node, block, stream);
   } else if (head->size + num_edges > head->capacity) {
     // not enough space in the current block
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
@@ -217,7 +247,7 @@ void DynamicGraph::AddEdgesForOneNode(
 
       // insert new block
       auto new_block = AllocateBlock(num_edges);
-      InsertBlock(src_node, new_block);
+      InsertBlock(src_node, new_block, stream);
     } else {
       // reallocate block
       auto new_block = ReallocateBlock(head, head->size + num_edges);
