@@ -178,6 +178,7 @@ _deps
 
 # IDE
 
+.idea
 .vscode
 data/
 .clangd/
@@ -186,3 +187,6 @@ rmm_log.txt
 *.qdrep
 *.ncu-rep
 *.pt
+
+# MacOS
+.DS_Store
