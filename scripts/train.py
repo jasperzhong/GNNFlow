@@ -52,7 +52,8 @@ parser.add_argument("--sample-history",
 parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
 parser.add_argument("--reorder", help="", type=int, default=0)
-parser.add_argument("--graph-reverse", help="build undirected graph", type=bool, default=True)
+parser.add_argument("--graph-reverse",
+                    help="build undirected graph", type=bool, default=True)
 
 args = parser.parse_args()
 
@@ -130,19 +131,23 @@ val_ds = DynamicGraphDataset(val_df)
 test_ds = DynamicGraphDataset(test_df)
 
 if args.reorder > 0:
-    train_sampler = BatchSamplerReorder(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
+    train_sampler = BatchSamplerReorder(SequentialSampler(
+        train_ds), batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
 else:
-    train_sampler = BatchSampler(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False)
+    train_sampler = BatchSampler(SequentialSampler(
+        train_ds), batch_size=args.batch_size, drop_last=False)
 
-val_sampler = BatchSampler(SequentialSampler(val_ds), batch_size=args.batch_size, drop_last=False)
-test_sampler = BatchSampler(SequentialSampler(test_ds), batch_size=args.batch_size, drop_last=False)
+val_sampler = BatchSampler(SequentialSampler(
+    val_ds), batch_size=args.batch_size, drop_last=False)
+test_sampler = BatchSampler(SequentialSampler(
+    test_ds), batch_size=args.batch_size, drop_last=False)
 
 train_loader = torch.utils.data.DataLoader(
-            train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 val_loader = torch.utils.data.DataLoader(
-            val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 test_loader = torch.utils.data.DataLoader(
-            test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
 
 # use the full data to build graph
@@ -199,7 +204,7 @@ for e in range(args.epoch):
     model.mailbox_reset()
 
     for i, (target_nodes, ts, eid) in enumerate(train_loader):
-        time_start = time.time()
+        iter_start = time.time()
         mfgs = None
         if sampler is not None:
             if args.no_neg:
@@ -215,11 +220,12 @@ for e in range(args.epoch):
             mfgs_deliver_to_neighbors = mfgs
             mfgs = node_to_dgl_blocks(target_nodes, ts)
 
-        sample_end = time.time()
-
         # move mfgs to cuda
         mfgs_to_cuda(mfgs)
+        sample_end = time.time()
+
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        prepare_end = time.time()
 
         optimizer.zero_grad()
 
@@ -240,14 +246,17 @@ for e in range(args.epoch):
 
         train_end = time.time()
 
-        iteration_time += train_end - time_start
-        sample_time += sample_end - time_start
+        iteration_time += train_end - iter_start
+        sample_time += sample_end - iter_start
         train_time += train_end - sample_end
 
-        if i % 300 == 0:
-            print('Iteration:{}. Train loss:{:.4f}'.format(i, loss))
-            print('Iteration time:{:.4f}s; sample time:{:.4f}s; train time:{:.4f}s.'
-                  .format(iteration_time / (i + 1), sample_time / (i + 1), train_time / (i + 1)))
+        if i % 100 == 0:
+            # print('Iteration:{}. Train loss:{:.4f}'.format(i, loss))
+            # print('Iteration time:{:.4f}s; sample time:{:.4f}s; train time:{:.4f}s.'
+            #       .format(iteration_time / (i + 1), sample_time / (i + 1), train_time / (i + 1)))
+            print(
+                "iter {}: iter time: {:.4f}, sample time: {:.4f}, prepare time: {:.4f}, model time: {:.4f}".format(
+                    i, train_end - iter_start, sample_end - iter_start, prepare_end - sample_end, train_end - prepare_end))
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
