@@ -66,7 +66,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<NIDType>& dst_nodes,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
-                      std::size_t num_edges);
+                      std::size_t num_edges, cudaStream_t stream = nullptr);
 
 std::size_t GetSharedMemoryMaxSize();
 

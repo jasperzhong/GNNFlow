@@ -74,21 +74,25 @@ class DynamicGraph {
                           const std::vector<NIDType>& dst_nodes,
                           const std::vector<TimestampType>& timestamps,
                           const std::vector<EIDType>& eids,
-                          cudaStream_t stream);
+                          cudaStream_t stream = nullptr);
 
-  std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size);
+  std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size,
+                                 cudaStream_t stream = nullptr);
 
-  TemporalBlock* AllocateBlock(std::size_t num_edges);
+  TemporalBlock* AllocateBlock(std::size_t num_edges,
+                               cudaStream_t stream = nullptr);
 
-  TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges);
+  TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges,
+                                 cudaStream_t stream = nullptr);
 
-  void InsertBlock(NIDType node_id, TemporalBlock* block, cudaStream_t stream);
+  void InsertBlock(NIDType node_id, TemporalBlock* block,
+                   cudaStream_t stream = nullptr);
 
   void DeleteTailBlock(NIDType node_id);
 
   void ReplaceBlock(NIDType node_id, TemporalBlock* block);
 
-  void SyncBlock(TemporalBlock* block);
+  void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
  private:
   // The device node table. Blocks are allocated in the GPU memory pool.

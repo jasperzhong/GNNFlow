@@ -4,6 +4,8 @@ import numpy as np
 
 from libdgnn import InsertionPolicy, _DynamicGraph
 
+import time
+
 
 class DynamicGraph:
     """
@@ -45,13 +47,19 @@ class DynamicGraph:
         insertion_policy = InsertionPolicy.INSERT if insertion_policy == 'insert' \
             else InsertionPolicy.REPLACE
 
+        start = time.time()
         self._dgraph = _DynamicGraph(
             max_gpu_pool_size, min_block_size, insertion_policy)
+        end = time.time()
+        print("init graph time: {}".format(end - start))
 
+        start = time.time()
         # initialize the graph with edges
         if source_vertices is not None and target_vertices is not None and timestamps is not None:
             self.add_edges(source_vertices, target_vertices,
                            timestamps, add_reverse)
+        end = time.time()
+        print("add time: {}".format(end - start))
 
     def add_edges(
             self, source_vertices: np.ndarray, target_vertices: np.ndarray,
