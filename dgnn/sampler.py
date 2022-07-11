@@ -1,15 +1,15 @@
 import random
-import torch
-import numpy as np
-from torch.utils.data import Sampler, BatchSampler
+from typing import Iterable, Iterator, List, Union
 
-from typing import Iterator, Iterable, Optional, Sequence, List, TypeVar, Generic, Sized, Union
+from torch.utils.data import BatchSampler, Sampler
+
 
 class BatchSamplerReorder(BatchSampler):
     def __init__(self, sampler: Union[Sampler[int], Iterable[int]],
                  batch_size: int, drop_last: bool,
                  num_chunks: int = 0) -> None:
-        super(BatchSamplerReorder, self).__init__(sampler, batch_size, drop_last)
+        super(BatchSamplerReorder, self).__init__(
+            sampler, batch_size, drop_last)
         self.num_chunks = num_chunks
         self.chunk_size = batch_size // num_chunks
         self.reorder = self.num_chunks > 1

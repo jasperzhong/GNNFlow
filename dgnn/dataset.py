@@ -1,10 +1,10 @@
-import torch
-from torch.utils.data import Dataset
-import pandas as pd
-import numpy as np
-import re
 import collections
+import re
+
+import numpy as np
+import torch
 from torch._six import string_classes
+from torch.utils.data import Dataset
 
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
@@ -110,12 +110,16 @@ def default_collate_ndarray(batch):
         return batch
     elif isinstance(elem, collections.abc.Mapping):
         try:
-            return elem_type({key: default_collate_ndarray([d[key] for d in batch]) for key in elem})
+            return elem_type(
+                {key: default_collate_ndarray([d[key] for d in batch])
+                 for key in elem})
         except TypeError:
             # The mapping type may not support `__init__(iterable)`.
             return {key: default_collate_ndarray([d[key] for d in batch]) for key in elem}
     elif isinstance(elem, tuple) and hasattr(elem, '_fields'):  # namedtuple
-        return elem_type(*(default_collate_ndarray(samples) for samples in zip(*batch)))
+        return elem_type(*
+                         (default_collate_ndarray(samples)
+                          for samples in zip(*batch)))
     elif isinstance(elem, collections.abc.Sequence):
         # check to make sure that the elements in batch have consistent size
         it = iter(batch)
@@ -131,7 +135,8 @@ def default_collate_ndarray(batch):
             return [default_collate_ndarray(samples) for samples in transposed]
         else:
             try:
-                return elem_type([default_collate_ndarray(samples) for samples in transposed])
+                return elem_type([default_collate_ndarray(samples)
+                                  for samples in transposed])
             except TypeError:
                 # The sequence type may not support `__init__(iterable)` (e.g., `range`).
                 return [default_collate_ndarray(samples) for samples in transposed]

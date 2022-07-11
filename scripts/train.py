@@ -1,6 +1,8 @@
 import argparse
 import os
 import time
+import random 
+import numpy as np
 
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -54,9 +56,17 @@ parser.add_argument("--sample-duration",
 parser.add_argument("--reorder", help="", type=int, default=0)
 parser.add_argument("--graph-reverse",
                     help="build undirected graph", type=bool, default=True)
+parser.add_argument("--seed", type=int, default=42)
 
 args = parser.parse_args()
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+set_seed(args.seed)
 
 def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
         model: torch.nn.Module, node_feats: torch.Tensor,
@@ -158,7 +168,9 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
-dgraph = build_dynamic_graph(df, add_reverse=args.graph_reverse)
+dgraph = build_dynamic_graph(
+    df, max_gpu_pool_size=100 * (1 << 20),
+    add_reverse=args.graph_reverse)
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
@@ -183,7 +195,8 @@ if not args.no_sample:
                               num_snapshots=args.sample_history,
                               snapshot_time_window=args.sample_duration,
                               prop_time=args.prop_time,
-                              reverse=args.deliver_to_neighbors)
+                              reverse=args.deliver_to_neighbors,
+                              seed=args.seed)
 
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -232,7 +245,6 @@ for e in range(args.epoch):
         # move mfgs to cuda
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mfgs_to_cuda(mfgs)
-
         feature_end = time.time()
 
         optimizer.zero_grad()
@@ -257,7 +269,6 @@ for e in range(args.epoch):
         sample_time += sample_end - time_start
         feature_time += feature_end - sample_end
         train_time += train_end - feature_end
-        # torch.cuda.current_stream().synchronize()
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
