@@ -1,18 +1,18 @@
-import os
 import argparse
-import torch
+import os
 import time
-import pandas as pd
-import dgnn.models as models
+
+import torch
+from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
+
+import dgnn.models as models
+from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import get_project_root_dir, prepare_input
-from dgnn.utils import mfgs_to_cuda, node_to_dgl_blocks
-from dgnn.utils import build_dynamic_graph, load_dataset
-from dgnn.utils import load_feat, get_batch
-from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
-from sklearn.metrics import average_precision_score, roc_auc_score
+from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
+                        load_dataset, load_feat, mfgs_to_cuda,
+                        node_to_dgl_blocks, prepare_input)
 
 model_names = sorted(name for name in models.__dict__
                      if not name.startswith("__")
@@ -52,15 +52,16 @@ parser.add_argument("--sample-history",
 parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
 parser.add_argument("--reorder", help="", type=int, default=0)
-parser.add_argument("--graph-reverse", help="build undirected graph", type=bool, default=True)
+parser.add_argument("--graph-reverse",
+                    help="build undirected graph", type=bool, default=True)
 
 args = parser.parse_args()
 
 
-def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler, model: torch.nn.Module,
-        node_feats: torch.Tensor, edge_feats: torch.Tensor,
-        creterion: torch.nn.Module, neg_samples=1, no_neg=False,
-        identity=False, deliver_to_neighbors=False):
+def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
+        model: torch.nn.Module, node_feats: torch.Tensor,
+        edge_feats: torch.Tensor, creterion: torch.nn.Module, neg_samples=1,
+        no_neg=False, identity=False, deliver_to_neighbors=False):
     model.eval()
     val_losses = list()
     aps = list()
@@ -85,9 +86,9 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler, model
                 mfgs_deliver_to_neighbors = mfgs
                 mfgs = node_to_dgl_blocks(target_nodes, ts)
 
-            mfgs_to_cuda(mfgs)
             mfgs = prepare_input(
                 mfgs, node_feats, edge_feats, combine_first=False)
+            mfgs_to_cuda(mfgs)
 
             pred_pos, pred_neg = model(mfgs, neg_samples)
 
@@ -130,19 +131,30 @@ val_ds = DynamicGraphDataset(val_df)
 test_ds = DynamicGraphDataset(test_df)
 
 if args.reorder > 0:
-    train_sampler = BatchSamplerReorder(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
+    train_sampler = BatchSamplerReorder(
+        SequentialSampler(train_ds),
+        batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
 else:
-    train_sampler = BatchSampler(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False)
+    train_sampler = BatchSampler(
+        SequentialSampler(train_ds),
+        batch_size=args.batch_size, drop_last=False)
 
-val_sampler = BatchSampler(SequentialSampler(val_ds), batch_size=args.batch_size, drop_last=False)
-test_sampler = BatchSampler(SequentialSampler(test_ds), batch_size=args.batch_size, drop_last=False)
+val_sampler = BatchSampler(
+    SequentialSampler(val_ds),
+    batch_size=args.batch_size, drop_last=False)
+test_sampler = BatchSampler(
+    SequentialSampler(test_ds),
+    batch_size=args.batch_size, drop_last=False)
 
 train_loader = torch.utils.data.DataLoader(
-            train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray,
+    num_workers=args.num_workers)
 val_loader = torch.utils.data.DataLoader(
-            val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray,
+    num_workers=args.num_workers)
 test_loader = torch.utils.data.DataLoader(
-            test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray,
+    num_workers=args.num_workers)
 
 
 # use the full data to build graph
@@ -179,13 +191,13 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 best_ap = 0
 best_e = 0
 
-epoch_sum = 0
+epoch_time_sum = 0
 for e in range(args.epoch):
     print("Epoch {}".format(e))
     epoch_time_start = time.time()
     total_loss = 0
-    iteration_time = 0
     sample_time = 0
+    feature_time = 0
     train_time = 0
 
     if args.reorder > 0:
@@ -218,8 +230,10 @@ for e in range(args.epoch):
         sample_end = time.time()
 
         # move mfgs to cuda
-        mfgs_to_cuda(mfgs)
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        mfgs_to_cuda(mfgs)
+
+        feature_end = time.time()
 
         optimizer.zero_grad()
 
@@ -240,19 +254,17 @@ for e in range(args.epoch):
 
         train_end = time.time()
 
-        iteration_time += train_end - time_start
         sample_time += sample_end - time_start
-        train_time += train_end - sample_end
-
-        if i % 300 == 0:
-            print('Iteration:{}. Train loss:{:.4f}'.format(i, loss))
-            print('Iteration time:{:.4f}s; sample time:{:.4f}s; train time:{:.4f}s.'
-                  .format(iteration_time / (i + 1), sample_time / (i + 1), train_time / (i + 1)))
+        feature_time += feature_end - sample_end
+        train_time += train_end - feature_end
+        torch.cuda.synchronize()
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
+    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.'.format(
+        epoch_time, epoch_time - sample_time - feature_time - train_time, sample_time, feature_time, train_time))
 
-    epoch_sum += iteration_time
+    epoch_time_sum += epoch_time
 
     # Validation
     print("***Start validation at epoch {}***".format(e))
@@ -291,4 +303,4 @@ ap, auc = val(test_loader, sampler, model, node_feats,
               identity=args.arch_identity,
               deliver_to_neighbors=args.deliver_to_neighbors)
 print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
-print('Avg epoch time: {}'.format(epoch_sum / args.epoch))
+print('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
