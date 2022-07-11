@@ -257,7 +257,7 @@ for e in range(args.epoch):
         sample_time += sample_end - time_start
         feature_time += feature_end - sample_end
         train_time += train_end - feature_end
-        torch.cuda.synchronize()
+        # torch.cuda.current_stream().synchronize()
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start

@@ -51,7 +51,8 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
 
   streams_ = new cudaStream_t[num_snapshots_];
   for (uint32_t i = 0; i < num_snapshots_; ++i) {
-    CUDA_CALL(cudaStreamCreate(&streams_[i]));
+    CUDA_CALL(
+        cudaStreamCreateWithPriority(&streams_[i], cudaStreamNonBlocking, -1));
   }
 
   cpu_buffer_ = new char*[num_snapshots_];
