@@ -13,6 +13,7 @@ from dgnn.utils import build_dynamic_graph, load_dataset
 from dgnn.utils import load_feat, get_batch
 from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from sklearn.metrics import average_precision_score, roc_auc_score
+from test import GeneralModel
 
 model_names = sorted(name for name in models.__dict__
                      if not name.startswith("__")
@@ -56,6 +57,40 @@ parser.add_argument("--graph-reverse",
                     help="build undirected graph", type=bool, default=True)
 
 args = parser.parse_args()
+
+sample_param = {
+    'layer': 2,
+    'neighbor': [10, 10],
+    'strategy': 'uniform',
+    'prop_time': False,
+    'history': 1,
+    'duration': 0,
+    'num_thread': 32,
+    # 'no_neg': True
+}
+
+memory_param = {
+    'type': 'none',
+            'dim_out': 0
+}
+
+gnn_param = {
+    'arch': 'transformer_attention',
+            'layer': 2,
+            'att_head': 2,
+            'dim_time': 100,
+            'dim_out': 100
+}
+
+train_param = {
+    'epoch': 100,
+    'batch_size': 600,
+    # reorder: 16
+    'lr': 0.0001,
+    'dropout': 0.1,
+    'att_dropout': 0.1,
+    'all_on_gpu': True
+}
 
 
 def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler, model: torch.nn.Module,
@@ -151,32 +186,39 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
-dgraph = build_dynamic_graph(df, add_reverse=args.graph_reverse)
+dgraph = build_dynamic_graph(df, add_reverse=True)
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-model = models.__dict__[args.model](
-    gnn_dim_node, gnn_dim_edge, dgraph.num_vertices())
-model.cuda()
+# model = models.__dict__[args.model](
+#     gnn_dim_node, gnn_dim_edge, dgraph.num_vertices())
+# model.cuda()
+
+model = GeneralModel(gnn_dim_node, gnn_dim_edge,
+                     sample_param, memory_param,
+                     gnn_param, train_param).cuda()
 
 args.arch_identity = args.model in ['JODIE', 'APAN']
 
 # assert
-assert args.sample_layer == model.gnn_layer, "sample layers must match the gnn layers"
-assert args.sample_layer == len(
-    args.sample_neighbor), "sample layer must match the length of sample_neighbors"
+# assert args.sample_layer == model.gnn_layer, "sample layers must match the gnn layers"
+# assert args.sample_layer == len(
+# args.sample_neighbor), "sample layer must match the length of sample_neighbors"
 
 sampler = None
 
+print(args.sample_neighbor, args.sample_strategy, args.sample_history,
+      args.sample_duration, args.prop_time, args.deliver_to_neighbors)
 if not args.no_sample:
     sampler = TemporalSampler(dgraph,
                               fanouts=args.sample_neighbor,
                               strategy=args.sample_strategy,
                               num_snapshots=args.sample_history,
                               snapshot_time_window=args.sample_duration,
-                              prop_time=args.prop_time,
-                              reverse=args.deliver_to_neighbors)
+                              #   prop_time=args.prop_time,
+                              #   reverse=args.deliver_to_neighbors)
+                              )
 
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -201,9 +243,9 @@ for e in range(args.epoch):
     # if mailbox is not None. reset!
     model.train()
 
-    model.mailbox_reset()
+    # model.mailbox_reset()
 
-    for i, (target_nodes, ts, eid) in enumerate(train_loader):
+    for i, (target_nodes, ts, eid) in enumerate(get_batch(train_df)):
         iter_start = time.time()
         mfgs = None
         if sampler is not None:
@@ -240,9 +282,9 @@ for e in range(args.epoch):
         optimizer.step()
 
         # MailBox Update:
-        model.update_mem_mail(target_nodes, ts, edge_feats, eid,
-                              mfgs_deliver_to_neighbors,
-                              args.deliver_to_neighbors)
+        # model.update_mem_mail(target_nodes, ts, edge_feats, eid,
+        #                       mfgs_deliver_to_neighbors,
+        #                       args.deliver_to_neighbors)
 
         train_end = time.time()
 

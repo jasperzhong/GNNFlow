@@ -5,7 +5,7 @@ from .memory_updater import *
 from .base import Model
 
 
-class TGAT(Model):
+class TGAT(torch.nn.Module):
 
     def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1,
                  memory_dim_out=0, layer=2, gnn_dim_out=100, gnn_dim_time=100,
