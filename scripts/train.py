@@ -52,7 +52,8 @@ parser.add_argument("--sample-history",
 parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
 parser.add_argument("--reorder", help="", type=int, default=0)
-parser.add_argument("--graph-reverse", help="build undirected graph", type=bool, default=True)
+parser.add_argument("--graph-reverse",
+                    help="build undirected graph", type=bool, default=True)
 
 args = parser.parse_args()
 
@@ -130,19 +131,23 @@ val_ds = DynamicGraphDataset(val_df)
 test_ds = DynamicGraphDataset(test_df)
 
 if args.reorder > 0:
-    train_sampler = BatchSamplerReorder(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
+    train_sampler = BatchSamplerReorder(SequentialSampler(
+        train_ds), batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
 else:
-    train_sampler = BatchSampler(SequentialSampler(train_ds), batch_size=args.batch_size, drop_last=False)
+    train_sampler = BatchSampler(SequentialSampler(
+        train_ds), batch_size=args.batch_size, drop_last=False)
 
-val_sampler = BatchSampler(SequentialSampler(val_ds), batch_size=args.batch_size, drop_last=False)
-test_sampler = BatchSampler(SequentialSampler(test_ds), batch_size=args.batch_size, drop_last=False)
+val_sampler = BatchSampler(SequentialSampler(
+    val_ds), batch_size=args.batch_size, drop_last=False)
+test_sampler = BatchSampler(SequentialSampler(
+    test_ds), batch_size=args.batch_size, drop_last=False)
 
 train_loader = torch.utils.data.DataLoader(
-            train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 val_loader = torch.utils.data.DataLoader(
-            val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 test_loader = torch.utils.data.DataLoader(
-            test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
 
 # use the full data to build graph
