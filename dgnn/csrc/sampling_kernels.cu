@@ -268,8 +268,7 @@ __global__ void SampleLayerUniformKernel(
           prop_time ? root_timestamp : curr->timestamps[end_idx - idx - 1];
       delta_timestamps[offset + sampled] =
           root_timestamp - curr->timestamps[end_idx - idx - 1];
-      idx = indices[sampled] - cumsum;
-      ++sampled;
+      idx = indices[++sampled] - cumsum;
     }
 
     if (sampled >= to_sample) {
