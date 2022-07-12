@@ -189,8 +189,7 @@ def prepare_input(
                             non_blocking=True)
                         i += 1
                     else:
-                        srch = edge_feats[b.edata['ID'].long()].float()
-                        b.edata['f'] = srch.cuda()
+                        b.edata['f'] = edge_feats[b.edata['ID'].long()].float()
     return mfgs
 
 
