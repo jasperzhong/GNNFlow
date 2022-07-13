@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <random>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -22,6 +23,44 @@ struct is_invalid_edge {
     return thrust::get<0>(edge) == kInvalidNID;
   }
 };
+
+void LowerBound(TimestampType* timestamps, int num_edges,
+                TimestampType timestamp, int* idx) {
+  int left = 0;
+  int right = num_edges;
+  while (left < right) {
+    int mid = (left + right) / 2;
+    if (timestamps[mid] < timestamp) {
+      left = mid + 1;
+    } else {
+      right = mid;
+    }
+  }
+  *idx = left;
+}
+
+template <typename T>
+__device__ void inline swap(T a, T b) {
+  T c(a);
+  a = b;
+  b = c;
+}
+
+__device__ void QuickSort(uint32_t* indices, int lo, int hi) {
+  if (lo >= hi || lo < 0 || hi < 0) return;
+
+  uint32_t pivot = indices[hi];
+  int i = lo - 1;
+  for (int j = lo; j < hi; ++j) {
+    if (indices[j] < pivot) {
+      swap(indices[++i], indices[j]);
+    }
+  }
+  swap(indices[++i], indices[hi]);
+
+  QuickSort(indices, lo, i - 1);
+  QuickSort(indices, i + 1, hi);
+}
 
 TemporalSampler::TemporalSampler(const DynamicGraph& graph,
                                  const std::vector<uint32_t>& fanouts,
@@ -109,8 +148,9 @@ void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
       sizeof(EIDType) + sizeof(uint32_t);
 
   for (uint32_t i = 0; i < num_snapshots_; ++i) {
+    // Double the CPU buffer to contain the data from GPU and CPU simultaneously.
     CUDA_CALL(
-        cudaMallocHost(&cpu_buffer_[i], per_node_size * maximum_sampled_nodes));
+        cudaMallocHost(&cpu_buffer_[i], per_node_size * maximum_sampled_nodes * 2));
 
     CUDA_CALL(cudaMalloc(&gpu_input_buffer_[i],
                          per_node_size * maximum_sampled_nodes));
@@ -398,4 +438,254 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
   }
   return results;
 }
+
+// Recent Snapshot
+void RecentLayerUniform(
+    const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
+    curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
+    const NIDType* root_nodes, const TimestampType* root_timestamps,
+    uint32_t snapshot_idx, uint32_t num_snapshots,
+    TimestampType snapshot_time_window, uint32_t num_root_nodes,
+    uint32_t fanout,
+    NIDType* src_nodes, EIDType* eids, // Return Value
+    TimestampType* timestamps, TimestampType* delta_timestamps, // Return Value
+    uint32_t* num_sampled // Return Value
+    ) {
+
+  // tid means the id of the node (probably the thread in the future)
+  uint32_t tid = 0;
+
+
+  // tot_sampled means the max index of the whole sampled result
+  // (e.g. the max index of <src_nodes>, <eids> etc.)
+  uint32_t tot_sampled = 0;
+
+  for(; tid < num_root_nodes; tid++) {
+    NIDType nid = root_nodes[tid];
+    TimestampType root_timestamp = root_timestamps[tid];
+    TimestampType start_timestamp, end_timestamp;
+
+    if (num_snapshots == 1) {
+      start_timestamp = 0;
+      end_timestamp = root_timestamp;
+    } else {
+      end_timestamp = root_timestamp -
+                      (num_snapshots - snapshot_idx - 1) * snapshot_time_window;
+      start_timestamp = end_timestamp - snapshot_time_window;
+    }
+
+    auto curr = node_table[nid].head;
+    int start_idx, end_idx;
+    uint32_t sampled = 0;
+    while(curr != nullptr && sampled < fanout) {
+      if (end_timestamp < curr->timestamps[0]) {
+        // search in the next block
+        curr = curr->next;
+        continue;
+      }
+
+      if (start_timestamp > curr->timestamps[curr->size - 1]) {
+        // no need to search in the next block
+        break;
+      }
+
+      // search in the current block
+      if (start_timestamp >= curr->timestamps[0] &&
+          end_timestamp <= curr->timestamps[curr->size - 1]) {
+        // all edges in the current block
+        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      } else if (start_timestamp < curr->timestamps[0] &&
+                 end_timestamp <= curr->timestamps[curr->size - 1]) {
+        // only the edges before end_timestamp are in the current block
+        start_idx = 0;
+        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      } else if (start_timestamp > curr->timestamps[0] &&
+                 end_timestamp > curr->timestamps[curr->size - 1]) {
+        // only the edges after start_timestamp are in the current block
+        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+        end_idx = curr->size;
+      } else {
+        // the whole block is in the range
+        start_idx = 0;
+        end_idx = curr->size;
+      }
+
+      // copy the edges to the output
+      for (int i = end_idx - 1; sampled < fanout && i >= start_idx; --i) {
+        src_nodes[tot_sampled] = curr->dst_nodes[i];
+        eids[tot_sampled] = curr->eids[i];
+        timestamps[tot_sampled] =
+            prop_time ? root_timestamp : curr->timestamps[i];
+        delta_timestamps[tot_sampled] = root_timestamp - curr->timestamps[i];
+        ++sampled;
+        ++tot_sampled;
+      }
+
+      curr = curr->next;
+    }
+
+    num_sampled[tid] = sampled;
+
+  }
+}
+
+// Single Snapshot
+void SampleLayerUniform(
+    const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
+    curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
+    const NIDType* root_nodes, const TimestampType* root_timestamps,
+    uint32_t snapshot_idx, uint32_t num_snapshots,
+    TimestampType snapshot_time_window, uint32_t num_root_nodes,
+    uint32_t fanout,
+    NIDType* src_nodes, EIDType* eids, // Return Value
+    TimestampType* timestamps, TimestampType* delta_timestamps, // Return Value
+    uint32_t* num_sampled // Return Value
+    ) {
+
+  // tid means the id of the node (probably the thread in the future)
+  uint32_t tid = 0;
+
+  // tot_sampled means the max index of the whole sampled result
+  // (e.g. the max index of <src_nodes>, <eids> etc.)
+  uint32_t tot_sampled = 0;
+
+  for(; tid < num_root_nodes; tid++) {
+    NIDType nid = root_nodes[tid];
+    TimestampType root_timestamp = root_timestamps[tid];
+    TimestampType start_timestamp, end_timestamp;
+
+    if(num_snapshots == 1) {
+      start_timestamp = 0;
+      end_timestamp = root_timestamp;
+    } else {
+      end_timestamp = root_timestamp -
+                      (num_snapshots - snapshot_idx - 1) * snapshot_time_window;
+      start_timestamp = end_timestamp - snapshot_time_window;
+    }
+
+    auto& list = node_table[nid];
+    uint32_t num_candidates = 0;
+
+    auto curr = list.head;
+    int start_idx, end_idx;
+    int curr_idx = 0;
+
+    // memory each block's candidate info
+    std::vector<SamplingRange*> ranges;
+
+    while(curr != nullptr) {
+      // ascending order internal, descending order external
+      if(end_timestamp < curr->timestamps[0]) {
+        // search in the next block
+        curr = curr->next;
+        curr_idx += 1;
+        continue ;
+      }
+
+      if(start_timestamp > curr->timestamps[curr->size - 1]) {
+        // no need to search in the next block
+        break;
+      }
+
+      //search in the current block
+      if(start_timestamp >= curr->timestamps[0] &&
+          end_timestamp <= curr->timestamps[curr->size - 1]) {
+        // all edges in the current block
+        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      } else if (start_timestamp < curr->timestamps[0] &&
+                 end_timestamp <= curr->timestamps[curr->size - 1]) {
+        // only the edges before end_timestamp are in the current block
+        start_idx = 0;
+        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
+      } else if (start_timestamp > curr->timestamps[0] &&
+                 end_timestamp > curr->timestamps[curr->size - 1]) {
+        // only the edges after start_timestamp are in the current block
+        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
+        end_idx = curr->size
+      } else {
+        // the whole block is in the range
+        start_idx = 0;
+        end_idx = curr->size;
+      }
+
+      // buffer the sampling range (the index is identical to <curr_idx>)
+      auto sampling_range = new SamplingRange();
+      sampling_range->start_idx = start_idx;
+      sampling_range->end_idx = end_idx;
+      ranges.push_back(sampling_range);
+
+      // update
+      num_candidates = num_candidates + (end_idx - start_idx);
+      curr = curr->next;
+      curr_idx = curr_idx + 1;
+    }
+
+    // indices[] contains the randomly picked positions with respect to the <num_candidates>.
+    uint32_t indices[MAX_FANOUT];
+    uint32_t to_sample = min(fanout, num_candidates);
+
+    // random engine
+    std::default_random_engine e;
+    e.seed(time(0));
+
+    for(uint32_t i = 0; i < to_sample; i++) {
+      indices[i] = e() % num_candidates;
+    }
+
+    QuickSort(indices, 0, to_sample - 1);
+
+    uint32_t sampled = 0;
+    curr = list.head;
+    curr_idx = 0;
+    uint32_t cumsum = 0;
+    while (curr != nullptr) {
+      if (end_timestamp < curr->timestamps[0]) {
+        // search in the next block
+        curr = curr->next;
+        curr_idx += 1;
+        continue;
+      }
+
+      if (start_timestamp > curr->timestamps[curr->size - 1]) {
+        // no need to search in the next block
+        break;
+      }
+
+      // directly get the data from the buffer
+      start_idx = ranges[curr_idx].start_idx;
+      end_idx = ranges[curr_idx].end_idx;
+
+      auto idx = indices[sampled] - cumsum;
+
+      // use tot_sampled as index;
+      while (sampled < to_sample && idx < end_idx - start_idx) {
+        src_nodes[tot_sampled] = curr->dst_nodes[end_idx - idx - 1];
+        eids[tot_sampled] = curr->eids[end_idx - idx - 1];
+        timestamps[tot_sampled] =
+            prop_time ? root_timestamp : curr->timestamps[end_idx - idx - 1];
+        delta_timestamps[tot_sampled] =
+            root_timestamp - curr->timestamps[end_idx - idx - 1];
+        idx = indices[++sampled] - cumsum;
+
+        // the differece between tot_sampled and sampled is:
+        // sampled is a locally version while the tot_sampled is the global version
+        tot_sampled ++;
+      }
+
+      if(sampled >= to_sample) {
+        break;
+      }
+
+      cumsum += end_idx - start_idx;
+      curr = curr->next;
+      curr_idx += 1;
+    }
+
+    // update num_sampled
+    num_sampled[tid] = sampled;
+  }
+}
+
 }  // namespace dgnn

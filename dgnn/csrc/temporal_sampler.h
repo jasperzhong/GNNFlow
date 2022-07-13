@@ -34,6 +34,17 @@ class TemporalSampler {
 
   void FreeBuffer();
 
+  // SampleLayerUniform for each snapshot
+  SamplingResult* SampleLayerUniform(
+      const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
+      curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
+      const NIDType* root_nodes, const TimestampType* root_timestamps,
+      uint32_t snapshot_idx, uint32_t num_snapshots,
+      TimestampType snapshot_time_window, uint32_t num_root_nodes,
+      uint32_t fanout, NIDType* src_nodes, EIDType* eids,
+      TimestampType* timestamps, TimestampType* delta_timestamps,
+      uint32_t* num_sampled);
+
  private:
   const DynamicGraph& graph_;
   std::vector<uint32_t> fanouts_;
