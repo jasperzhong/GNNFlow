@@ -14,9 +14,11 @@ using NIDType = int64_t;
 using TimestampType = float;
 using EIDType = int64_t;
 
-constexpr int MAX_FANOUT = 32;
+constexpr int kMaxFanout = 32;
 
 constexpr NIDType kInvalidNID = -1;
+
+constexpr int kNumStreams = 8;
 
 static constexpr std::size_t kBlockSpaceSize =
     (sizeof(NIDType) + sizeof(EIDType) + sizeof(TimestampType));

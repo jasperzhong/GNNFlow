@@ -27,7 +27,7 @@ class DynamicGraph {
   DynamicGraph(std::size_t max_gpu_mem_pool_size = kDefaultMaxGpuMemPoolSize,
                std::size_t min_block_size = kDefaultMinBlockSize,
                InsertionPolicy insertion_policy = kDefaultInsertionPolicy);
-  ~DynamicGraph() = default;
+  ~DynamicGraph();
 
   /**
    * @brief Add edges to the graph.
@@ -114,6 +114,8 @@ class DynamicGraph {
 
   TemporalBlockAllocator allocator_;
   InsertionPolicy insertion_policy_;
+
+  std::vector<cudaStream_t> streams_;
 
   std::size_t num_nodes_;  // the maximum node id + 1
   std::size_t num_edges_;

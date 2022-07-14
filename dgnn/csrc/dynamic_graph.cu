@@ -17,8 +17,6 @@
 #include "logging.h"
 #include "utils.h"
 
-#define NUM_THREADS 8
-
 namespace dgnn {
 
 DynamicGraph::DynamicGraph(std::size_t max_gpu_mem_pool_size,
@@ -27,7 +25,19 @@ DynamicGraph::DynamicGraph(std::size_t max_gpu_mem_pool_size,
     : allocator_(max_gpu_mem_pool_size, min_block_size),
       insertion_policy_(insertion_policy),
       num_nodes_(0),
-      num_edges_(0) {}
+      num_edges_(0) {
+  for (int i = 0; i < kNumStreams; i++) {
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+    streams_.push_back(stream);
+  }
+}
+
+DynamicGraph::~DynamicGraph() {
+  for (auto& stream : streams_) {
+    cudaStreamDestroy(stream);
+  }
+}
 
 void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
                             std::vector<NIDType>& dst_nodes,
@@ -56,9 +66,9 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
                *std::max_element(dst_nodes.begin(), dst_nodes.end()));
   AddNodes(max_node);  // little overhead
 
-  std::map<NIDType, std::vector<NIDType>> src_to_dst_map;
-  std::map<NIDType, std::vector<TimestampType>> src_to_ts_map;
-  std::map<NIDType, std::vector<EIDType>> src_to_eid_map;
+  std::unordered_map<NIDType, std::vector<NIDType>> src_to_dst_map;
+  std::unordered_map<NIDType, std::vector<TimestampType>> src_to_ts_map;
+  std::unordered_map<NIDType, std::vector<EIDType>> src_to_eid_map;
 
   for (std::size_t i = 0; i < src_nodes.size(); ++i) {
     src_to_dst_map[src_nodes[i]].push_back(dst_nodes[i]);
@@ -66,17 +76,8 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
     src_to_eid_map[src_nodes[i]].push_back(eids[i]);
   }
 
-  std::vector<cudaStream_t> streams;
-
-  // for (int i = 0; i < NUM_THREADS; i++) {
-  //   cudaStream_t stream;
-  //   cudaStreamCreate(&stream);
-  //   streams.push_back(stream);
-  // }
-
-  // TODO: change to index -> OMP: 0.4-0.5s Now
-  // #pragma omp parallel num_threads(NUM_THREADS)
-  for (std::map<NIDType, std::vector<NIDType>>::iterator iter =
+  int i = 0;
+  for (std::unordered_map<NIDType, std::vector<NIDType>>::iterator iter =
            std::begin(src_to_dst_map);
        iter != std::end(src_to_dst_map); iter++) {
     NIDType src_node = iter->first;
@@ -91,17 +92,13 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
     timestamps = sort_vector(timestamps, idx);
     eids = sort_vector(eids, idx);
 
-    // int thread_id = omp_get_thread_num();
-    // cudaStream_t stream;
-    // cudaStreamCreate(&stream);
-    // streams.push_back(stream);
-
-    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids, NULL);
+    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids,
+                       streams_[i % kNumStreams]);
+    i++;
   }
 
-  for (auto stream : streams) {
+  for (auto stream : streams_) {
     CUDA_CALL(cudaStreamSynchronize(stream));
-    CUDA_CALL(cudaStreamDestroy(stream));
   }
 }
 

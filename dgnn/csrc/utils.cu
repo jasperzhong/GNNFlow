@@ -50,7 +50,6 @@ void CopyEdgesToBlock(TemporalBlock* block,
   CUDA_CALL(cudaMemcpyAsync(static_cast<EIDType*>(block->eids) + block->size,
                             &eids[start_idx], sizeof(EIDType) * num_edges,
                             cudaMemcpyHostToDevice, stream));
-
   // thrust::copy(dst_nodes.begin() + start_idx,
   //              dst_nodes.begin() + start_idx + num_edges,
   //              thrust::device_ptr<NIDType>(block->dst_nodes) + block->size);
