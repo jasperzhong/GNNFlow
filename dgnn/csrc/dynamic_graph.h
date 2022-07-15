@@ -88,9 +88,10 @@ class DynamicGraph {
   void InsertBlock(NIDType node_id, TemporalBlock* block,
                    cudaStream_t stream = nullptr);
 
-  void DeleteTailBlock(NIDType node_id);
+  void DeleteTailBlock(NIDType node_id, cudaStream_t stream = nullptr);
 
-  void ReplaceBlock(NIDType node_id, TemporalBlock* block);
+  void ReplaceBlock(NIDType node_id, TemporalBlock* block,
+                    cudaStream_t stream = nullptr);
 
   void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
@@ -109,8 +110,7 @@ class DynamicGraph {
   HostNodeTable h_copy_of_d_node_table_;
 
   // mapping from the copied block on the CPU to the original block on the GPU
-  std::unordered_map<TemporalBlock*, thrust::device_ptr<TemporalBlock>>
-      h2d_mapping_;
+  std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
 
   TemporalBlockAllocator allocator_;
   InsertionPolicy insertion_policy_;
