@@ -136,6 +136,8 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
 
   // mapping
   h2d_mapping_[block] = d_block;
+
+  block_to_node_id_[block] = node_id;
 }
 
 void DynamicGraph::DeleteTailBlock(NIDType node_id) {
@@ -152,6 +154,7 @@ void DynamicGraph::DeleteTailBlock(NIDType node_id) {
   // delete
   thrust::device_delete(h2d_mapping_[tail]);
   h2d_mapping_.erase(tail);
+  block_to_node_id_.erase(tail);
   delete tail;
 }
 
@@ -235,23 +238,16 @@ std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
 
   // iterate over the list of blocks
   while (swapped_size < min_swap_size) {
-    for (std::size_t src_node = 0; src_node < num_nodes_; ++src_node) {
-      auto& list = h_copy_of_d_node_table_[src_node];
-      auto block = list.tail;
-      if (block != nullptr && block->size > 0) {
-        // block is not empty
-        // copy to CPU
-        auto block_on_host = allocator_.SwapBlockToHost(block);
-        InsertBlockToDoublyLinkedList(h_node_table_.data(), src_node,
-                                      block_on_host);
+    auto block = allocator_.GetTheOldestBlockOnDevice();
+    NIDType src_node = block_to_node_id_[block];
+    auto block_on_host = allocator_.SwapBlockToHost(block);
+    InsertBlockToDoublyLinkedList(h_node_table_.data(), src_node,
+                                  block_on_host);
+    DeleteTailBlock(src_node);
+    swapped_size += block->capacity;
 
-        DeleteTailBlock(src_node);
-        swapped_size += block->capacity;
-      }
-
-      if (swapped_size >= min_swap_size) {
-        break;
-      }
+    if (swapped_size >= min_swap_size) {
+      break;
     }
   }
 
