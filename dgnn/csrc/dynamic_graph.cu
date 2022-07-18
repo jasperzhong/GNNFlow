@@ -140,7 +140,7 @@ TemporalBlock* DynamicGraph::ReallocateBlock(TemporalBlock* block,
   CHECK_NOTNULL(block);
   auto new_block = AllocateBlock(num_edges, stream);
 
-  CopyTemporalBlock(block, new_block);
+  CopyTemporalBlock(block, new_block, stream);
 
   // release the old block
   allocator_.Deallocate(block, stream);
@@ -180,7 +180,6 @@ void DynamicGraph::DeleteTailBlock(NIDType node_id, cudaStream_t stream) {
   // device
   DeleteTailFromDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id);
-  // CUDA_CALL(cudaDeviceSynchronize());
 
   // delete
   auto mr = rmm::mr::get_current_device_resource();
