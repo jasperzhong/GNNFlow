@@ -6,20 +6,24 @@
 #include "utils.h"
 
 namespace dgnn {
-void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst) {
+void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst,
+                       cudaStream_t stream) {
   CHECK_NOTNULL(src);
   CHECK_NOTNULL(dst);
   CHECK_GE(dst->capacity, src->capacity);
 
   // assume that the src block is on the GPU
-  thrust::copy(thrust::device_ptr<NIDType>(src->dst_nodes),
-               thrust::device_ptr<NIDType>(src->dst_nodes) + src->size,
-               dst->dst_nodes);
-  thrust::copy(thrust::device_ptr<TimestampType>(src->timestamps),
-               thrust::device_ptr<TimestampType>(src->timestamps) + src->size,
-               dst->timestamps);
-  thrust::copy(thrust::device_ptr<EIDType>(src->eids),
-               thrust::device_ptr<EIDType>(src->eids + src->size), dst->eids);
+  CUDA_CALL(cudaMemcpyAsync(static_cast<NIDType*>(dst->dst_nodes),
+                            src->dst_nodes, src->size * sizeof(NIDType),
+                            cudaMemcpyDeviceToHost, stream));
+
+  CUDA_CALL(cudaMemcpyAsync(static_cast<TimestampType*>(dst->timestamps),
+                            src->timestamps, src->size * sizeof(TimestampType),
+                            cudaMemcpyDeviceToHost, stream));
+
+  CUDA_CALL(cudaMemcpyAsync(static_cast<EIDType*>(dst->eids), src->eids,
+                            src->size * sizeof(EIDType), cudaMemcpyDeviceToHost,
+                            stream));
 
   dst->size = src->size;
   dst->prev = src->prev;
@@ -50,18 +54,6 @@ void CopyEdgesToBlock(TemporalBlock* block,
   CUDA_CALL(cudaMemcpyAsync(static_cast<EIDType*>(block->eids) + block->size,
                             &eids[start_idx], sizeof(EIDType) * num_edges,
                             cudaMemcpyHostToDevice, stream));
-  // thrust::copy(dst_nodes.begin() + start_idx,
-  //              dst_nodes.begin() + start_idx + num_edges,
-  //              thrust::device_ptr<NIDType>(block->dst_nodes) + block->size);
-
-  // thrust::copy(
-  //     timestamps.begin() + start_idx,
-  //     timestamps.begin() + start_idx + num_edges,
-  //     thrust::device_ptr<TimestampType>(block->timestamps) + block->size);
-
-  // thrust::copy(eids.begin() + start_idx, eids.begin() + start_idx +
-  // num_edges,
-  //              thrust::device_ptr<EIDType>(block->eids) + block->size);
 
   block->size += num_edges;
 }

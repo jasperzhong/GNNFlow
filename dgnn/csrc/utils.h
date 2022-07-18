@@ -47,7 +47,8 @@ std::vector<T> sort_vector(const std::vector<T>& v,
  * @param dst The destination temporal block.
  * @param src The source temporal block.
  */
-void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst);
+void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst,
+                       cudaStream_t stream = nullptr);
 
 /**
  * @brief Copy edges on the CPU to the block on the GPU.
