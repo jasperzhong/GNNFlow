@@ -57,7 +57,7 @@ class TemporalBlockAllocator {
    *
    * @param block The temporal block to deallocate.
    */
-  void Deallocate(TemporalBlock* block, cudaStream_t stream);
+  void Deallocate(TemporalBlock* block, cudaStream_t stream = nullptr);
 
   /**
    * @brief Copy a temporal block from GPU to CPU.
@@ -66,7 +66,8 @@ class TemporalBlockAllocator {
    *
    * @return A pointer to the temporal block on the CPU.
    */
-  TemporalBlock* SwapBlockToHost(TemporalBlock* block, cudaStream_t stream);
+  TemporalBlock* SwapBlockToHost(TemporalBlock* block,
+                                 cudaStream_t stream = nullptr);
 
   /**
    * @brief Align up a size to the min_block_size.
@@ -92,7 +93,7 @@ class TemporalBlockAllocator {
   void AllocateInternal(TemporalBlock* block, std::size_t size,
                         cudaStream_t stream = nullptr) noexcept(false);
 
-  void DeallocateInternal(TemporalBlock* block, cudaStream_t stream);
+  void DeallocateInternal(TemporalBlock* block, cudaStream_t stream = nullptr);
 
   std::size_t min_block_size_;
   std::stack<rmm::mr::device_memory_resource*> gpu_resources_;

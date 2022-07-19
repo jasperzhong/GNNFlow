@@ -23,7 +23,7 @@ TemporalBlockAllocator::TemporalBlockAllocator(
 
 TemporalBlockAllocator::~TemporalBlockAllocator() {
   for (auto &block : blocks_on_device_) {
-    DeallocateInternal(block.second, NULL);
+    DeallocateInternal(block.second);
     delete block.second;
   }
 
@@ -87,7 +87,7 @@ TemporalBlock *TemporalBlockAllocator::Allocate(
 }
 
 void TemporalBlockAllocator::Deallocate(TemporalBlock *block,
-                                        cudaStream_t stream = NULL) {
+                                        cudaStream_t stream) {
   CHECK_NOTNULL(block);
   DeallocateInternal(block, stream);
 
@@ -120,7 +120,7 @@ void TemporalBlockAllocator::AllocateInternal(
 }
 
 void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block,
-                                                cudaStream_t stream = NULL) {
+                                                cudaStream_t stream) {
   auto mr = rmm::mr::get_current_device_resource();
   if (block->dst_nodes != nullptr) {
     mr->deallocate(block->dst_nodes, block->capacity * sizeof(NIDType),
@@ -139,7 +139,6 @@ void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block,
   }
 }
 
-
 TemporalBlock *TemporalBlockAllocator::GetTheOldestBlockOnDevice() const {
   auto the_oldest_block_on_device = blocks_on_device_.begin()->second;
   LOG(DEBUG) << "The oldest block on device is "
@@ -148,7 +147,8 @@ TemporalBlock *TemporalBlockAllocator::GetTheOldestBlockOnDevice() const {
   return the_oldest_block_on_device;
 }
 
-TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block, cudaStream_t stream) {
+TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block,
+                                                       cudaStream_t stream) {
   CHECK_NOTNULL(block);
   CHECK_NE(block_to_seq_.find(block), block_to_seq_.end());
   CHECK_GT(block->size, 0);
@@ -165,7 +165,7 @@ TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block, cud
   block_on_host->timestamps = new TimestampType[block_on_host->capacity];
   block_on_host->eids = new EIDType[block_on_host->capacity];
 
-  CopyTemporalBlock(block, block_on_host);
+  CopyTemporalBlock(block, block_on_host, stream);
 
   // release GPU memory
   Deallocate(block, stream);

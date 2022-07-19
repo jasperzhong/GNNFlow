@@ -281,10 +281,10 @@ std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size,
   while (swapped_size < min_swap_size) {
     auto block = allocator_.GetTheOldestBlockOnDevice();
     NIDType src_node = block_to_node_id_[block];
-    auto block_on_host = allocator_.SwapBlockToHost(block);
+    auto block_on_host = allocator_.SwapBlockToHost(block, stream);
     InsertBlockToDoublyLinkedList(h_node_table_.data(), src_node,
                                   block_on_host);
-    DeleteTailBlock(src_node);
+    DeleteTailBlock(src_node, stream);
     swapped_size += block->capacity;
 
     if (swapped_size >= min_swap_size) {
