@@ -1,5 +1,4 @@
 #include <cuda_runtime.h>
-#include <omp.h>
 #include <thrust/copy.h>
 #include <thrust/device_delete.h>
 #include <thrust/device_new.h>
