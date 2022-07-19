@@ -80,6 +80,8 @@ class TemporalBlockAllocator {
    */
   std::size_t AlignUp(std::size_t size);
 
+  TemporalBlock* GetTheOldestBlockOnDevice() const;
+
   std::size_t num_blocks_on_device() const;
   std::size_t num_blocks_on_host() const;
 
@@ -95,14 +97,14 @@ class TemporalBlockAllocator {
   std::size_t min_block_size_;
   std::stack<rmm::mr::device_memory_resource*> gpu_resources_;
 
-  // id -> block raw pointer
+  // sequence number -> block raw pointer
   std::map<uint64_t, TemporalBlock*> blocks_on_device_;
   std::map<uint64_t, TemporalBlock*> blocks_on_host_;
 
-  std::unordered_map<TemporalBlock*, uint64_t> block_to_id_;
+  std::unordered_map<TemporalBlock*, uint64_t> block_to_seq_;
 
   // a monotonically increasing sequence number
-  uint64_t block_id_counter_;
+  uint64_t block_sequence_number_;
 
   std::mutex mutex_;
 };

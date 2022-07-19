@@ -2,12 +2,11 @@ import unittest
 
 import numpy as np
 
-from dgnn import DynamicGraph
-from dgnn import TemporalSampler
+from dgnn import DynamicGraph, TemporalSampler
+from dgnn.utils import build_dynamic_graph, load_dataset
 
 
 class TestTemporalSampler(unittest.TestCase):
-
     def test_sample_layer(self):
         # build the dynamic graph
         dgraph = DynamicGraph()
@@ -169,20 +168,20 @@ class TestTemporalSampler(unittest.TestCase):
         block = blocks[0][0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2, 2, 1, 2, 1, 2, 1,
-            2, 1, 2, 1, 2, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1])
+            2, 1, 2, 1, 2, 1, 1, 1, 1])
         self.assertEqual(block.srcdata['ts'].tolist(), [
             1.5, 1.5, 1.5, 1, 0, 1, 0, 1, 0,
-            1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0])
+            1, 0, 1, 0, 1, 0, 0, 0, 0])
         self.assertEqual(block.edata['dt'].tolist(), [
-            0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0, 1, 0, 0, 1, 0, 0, 1, 0])
+            0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 1, 1, 1])
         self.assertEqual(block.edata['ID'].tolist(), [
-            1, 0, 4, 3, 7, 6, 7, 6, 3, 7, 6, 3, 7, 6, 3])
-        self.assertEqual(block.num_src_nodes(), 24)
+            1, 0, 4, 3, 7, 6, 6, 6, 6])
+        self.assertEqual(block.num_src_nodes(), 18)
         self.assertEqual(block.num_dst_nodes(), 9)
         self.assertEqual(block.edges()[0].tolist(), [
-            9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
+            9, 10, 11, 12, 13, 14, 15, 16, 17])
         self.assertEqual(block.edges()[1].tolist(), [
-            0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8])
+            0, 0, 1, 1, 2, 2, 3, 5, 7])
 
         print("Test sample_multi_layers passed")
 
@@ -206,41 +205,41 @@ class TestTemporalSampler(unittest.TestCase):
                                 np.array([5, 5, 5]))
         blocks = blocks[0]
 
-        block = blocks[1]  # timestamp range: [4, 5]
+        block = blocks[1]  # timestamp range: [4, 5)
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2,
-            6, 5, 6, 5, 6, 5])
+            5, 5, 5])
         self.assertEqual(block.srcdata['ts'].tolist(), [
             5, 5, 5,
-            5, 4, 5, 4, 5, 4])
+            4, 4, 4])
         self.assertEqual(block.edata['dt'].tolist(), [
-            0, 1, 0, 1, 0, 1])
+            1, 1, 1])
         self.assertEqual(block.edata['ID'].tolist(), [
-            5, 4, 11, 10, 17, 16])
-        self.assertEqual(block.num_src_nodes(), 9)
+            4, 10, 16])
+        self.assertEqual(block.num_src_nodes(), 6)
         self.assertEqual(block.num_dst_nodes(), 3)
         self.assertEqual(block.edges()[0].tolist(), [
-            3, 4, 5, 6, 7, 8])
+            3, 4, 5])
         self.assertEqual(block.edges()[1].tolist(), [
-            0, 0, 1, 1, 2, 2])
+            0, 1, 2])
 
-        block = blocks[0]  # timestamp range: [3, 4]
+        block = blocks[0]  # timestamp range: [3, 4)
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2,
-            5, 4, 5, 4, 5, 4])
+            4, 4, 4])
         self.assertEqual(block.srcdata['ts'].tolist(), [
             5, 5, 5,
-            4, 3, 4, 3, 4, 3])
+            3, 3, 3])
         self.assertEqual(block.edata['dt'].tolist(), [
-            1, 2, 1, 2, 1, 2])
+            2, 2, 2])
         self.assertEqual(block.edata['ID'].tolist(), [
-            4, 3, 10, 9, 16, 15])
-        self.assertEqual(block.num_src_nodes(), 9)
+            3, 9, 15])
+        self.assertEqual(block.num_src_nodes(), 6)
         self.assertEqual(block.num_dst_nodes(), 3)
         self.assertEqual(block.edges()[0].tolist(), [
-            3, 4, 5, 6, 7, 8])
+            3, 4, 5])
         self.assertEqual(block.edges()[1].tolist(), [
-            0, 0, 1, 1, 2, 2])
+            0, 1, 2])
 
         print("Test sample_multi_snapshots passed")
 
@@ -263,73 +262,73 @@ class TestTemporalSampler(unittest.TestCase):
         blocks = sampler.sample(target_vertices,
                                 np.array([5, 5, 5]))
 
-        # root -> layer 1, timestamp range: [4, 5]
+        # root -> layer 1, timestamp range: [4, 5)
         block = blocks[1][1]
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2,
-            6, 5, 6, 5, 6, 5])
+            5, 5, 5])
         self.assertEqual(block.srcdata['ts'].tolist(), [
             5, 5, 5,
-            5, 4, 5, 4, 5, 4])
+            4, 4, 4])
         self.assertEqual(block.edata['dt'].tolist(), [
-            0, 1, 0, 1, 0, 1])
+            1, 1, 1])
         self.assertEqual(block.edata['ID'].tolist(), [
-            5, 4, 11, 10, 17, 16])
-        self.assertEqual(block.num_src_nodes(), 9)
+            4, 10, 16])
+        self.assertEqual(block.num_src_nodes(), 6)
         self.assertEqual(block.num_dst_nodes(), 3)
         self.assertEqual(block.edges()[0].tolist(), [
-            3, 4, 5, 6, 7, 8])
+            3, 4, 5])
         self.assertEqual(block.edges()[1].tolist(), [
-            0, 0, 1, 1, 2, 2])
+            0, 1, 2])
 
-        # root -> layer 1, timestamp range: [3, 4]
+        # root -> layer 1, timestamp range: [3, 4)
         block = blocks[1][0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2,
-            5, 4, 5, 4, 5, 4])
+            4, 4, 4])
         self.assertEqual(block.srcdata['ts'].tolist(), [
             5, 5, 5,
-            4, 3, 4, 3, 4, 3])
+            3, 3, 3])
         self.assertEqual(block.edata['dt'].tolist(), [
-            1, 2, 1, 2, 1, 2])
+            2, 2, 2])
         self.assertEqual(block.edata['ID'].tolist(), [
-            4, 3, 10, 9, 16, 15])
-        self.assertEqual(block.num_src_nodes(), 9)
+            3, 9, 15])
+        self.assertEqual(block.num_src_nodes(), 6)
         self.assertEqual(block.num_dst_nodes(), 3)
         self.assertEqual(block.edges()[0].tolist(), [
-            3, 4, 5, 6, 7, 8])
+            3, 4, 5])
         self.assertEqual(block.edges()[1].tolist(), [
-            0, 0, 1, 1, 2, 2])
+            0, 1, 2])
 
-        # root -> layer 0, timestamp range: [4, 5]
+        # root -> layer 0, timestamp range: [4, 5)
         block = blocks[0][1]
         self.assertEqual(block.srcdata['ID'].tolist(), [
-            0, 1, 2, 6, 5, 6, 5, 6, 5,
-            6, 5, 6, 5, 6, 5])
+            0, 1, 2, 5, 5, 5,
+            5, 5, 5])
         self.assertEqual(block.srcdata['ts'].tolist(), [
-            5, 5, 5, 5, 4, 5, 4, 5, 4,
-            5, 4, 5, 4, 5, 4])
-        self.assertEqual(block.edata['dt'].tolist(), [0, 1, 0, 1, 0, 1])
-        self.assertEqual(block.edata['ID'].tolist(), [5, 4, 11, 10, 17, 16])
-        self.assertEqual(block.num_src_nodes(), 15)
-        self.assertEqual(block.num_dst_nodes(), 9)
-        self.assertEqual(block.edges()[0].tolist(), [9, 10, 11, 12, 13, 14])
-        self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
+            5, 5, 5, 4, 4, 4,
+            4, 4, 4])
+        self.assertEqual(block.edata['dt'].tolist(), [1, 1, 1])
+        self.assertEqual(block.edata['ID'].tolist(), [4, 10, 16])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 6)
+        self.assertEqual(block.edges()[0].tolist(), [6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 1, 2])
 
-        # root -> layer 0, timestamp range: [3, 4]
+        # root -> layer 0, timestamp range: [3, 4)
         block = blocks[0][0]
         self.assertEqual(block.srcdata['ID'].tolist(), [
-            0, 1, 2, 5, 4, 5, 4, 5, 4,
-            5, 4, 5, 4, 5, 4])
+            0, 1, 2, 4, 4, 4,
+            4, 4, 4])
         self.assertEqual(block.srcdata['ts'].tolist(), [
-            5, 5, 5, 4, 3, 4, 3, 4, 3,
-            4, 3, 4, 3, 4, 3])
-        self.assertEqual(block.edata['dt'].tolist(), [1, 2, 1, 2, 1, 2])
-        self.assertEqual(block.edata['ID'].tolist(), [4, 3, 10, 9, 16, 15])
-        self.assertEqual(block.num_src_nodes(), 15)
-        self.assertEqual(block.num_dst_nodes(), 9)
-        self.assertEqual(block.edges()[0].tolist(), [9, 10, 11, 12, 13, 14])
-        self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
+            5, 5, 5, 3, 3, 3,
+            3, 3, 3])
+        self.assertEqual(block.edata['dt'].tolist(), [2, 2, 2])
+        self.assertEqual(block.edata['ID'].tolist(), [3, 9, 15])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 6)
+        self.assertEqual(block.edges()[0].tolist(), [6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 1, 2])
 
         print("Test sample_multi_layers_multi_snapshots passed")
 
@@ -351,3 +350,47 @@ class TestTemporalSampler(unittest.TestCase):
                            timestamps)
 
         print("Test sample_layer_with_different_batch_size passed")
+
+    @unittest.skip("debug only")
+    def test_sampler_use_df(self):
+        train_df, _, _, df = load_dataset(dataset="REDDIT")
+        train_edge_end = df[df['ext_roll'].gt(0)].index[0]
+        df = df[:train_edge_end]
+        df = df.astype({'time': np.float32})
+        dgraph = build_dynamic_graph(train_df, add_reverse=True)
+        sampler = TemporalSampler(
+            dgraph, fanouts=[10], strategy="recent")
+
+        for _, rows in df.groupby(df.index // 600):
+            root_nodes = np.concatenate(
+                [rows.src.values, rows.dst.values]).astype(np.int64)
+            ts = np.concatenate(
+                [rows.time.values, rows.time.values]).astype(
+                np.float32)
+
+            try:
+                for i in range(len(root_nodes)):
+                    block = sampler.sample(root_nodes[i:i+1], ts[i:i+1])[0][0]
+                    df_temp = df[df['src'] == root_nodes[i]]
+                    if df_temp.empty:
+                        df_temp = df[df['dst'] == root_nodes[i]]
+                    time = np.array(df_temp[df_temp['time'] < ts[i]]['time'])
+                    time = np.flip(time)[:10]
+                    origin_id = np.array(
+                        df_temp[df_temp['time'] < ts[i]]['dst'])
+                    if len(origin_id) == 0:
+                        origin_id = np.array(
+                            df_temp[df_temp['time'] < ts[i]]['src'])
+                    self.assertEqual(len(block.srcdata['ID'][1:]), len(time))
+                    self.assertTrue(np.allclose(block.srcdata['ts'][1:], time))
+            except AssertionError:
+                print("root_nodes: {}".format(root_nodes[i]))
+                print("ts: {}".format(ts[i]))
+                print("sample ID: {}".format(block.srcdata['ID']))
+                print("origin ID: {}".format(origin_id))
+                print("sample time: {}".format(block.srcdata['ts']))
+                print("orgin time: {}".format(time))
+
+
+if __name__ == '__main__':
+    unittest.main()

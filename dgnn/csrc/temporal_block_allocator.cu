@@ -10,7 +10,7 @@ namespace dgnn {
 
 TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t max_gpu_mem_pool_size, std::size_t min_block_size)
-    : min_block_size_(min_block_size), block_id_counter_(0) {
+    : min_block_size_(min_block_size), block_sequence_number_(0) {
   // create a memory pool
   auto mem_res = new rmm::mr::cuda_memory_resource();
   gpu_resources_.push(mem_res);
@@ -51,7 +51,7 @@ TemporalBlockAllocator::~TemporalBlockAllocator() {
 
   blocks_on_device_.clear();
   blocks_on_host_.clear();
-  block_to_id_.clear();
+  block_to_seq_.clear();
 }
 
 std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
@@ -79,9 +79,9 @@ TemporalBlock *TemporalBlockAllocator::Allocate(
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_on_device_[block_id_counter_] = block;
-    block_to_id_[block] = block_id_counter_;
-    block_id_counter_++;
+    blocks_on_device_[block_sequence_number_] = block;
+    block_to_seq_[block] = block_sequence_number_;
+    block_sequence_number_++;
   }
   return block;
 }
@@ -93,8 +93,8 @@ void TemporalBlockAllocator::Deallocate(TemporalBlock *block,
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_on_device_.erase(block_to_id_[block]);
-    block_to_id_.erase(block);
+    blocks_on_device_.erase(block_to_seq_[block]);
+    block_to_seq_.erase(block);
   }
 }
 
@@ -139,24 +139,24 @@ void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block,
   }
 }
 
-TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(
-    TemporalBlock *block, cudaStream_t stream = NULL) {
-  if (block_to_id_.find(block) == block_to_id_.end()) {
-    LOG(WARNING) << "Block not found in block_to_id_";
-    return nullptr;
-  }
 
-  auto block_id = block_to_id_[block];
-  if (block->size == 0) {
-    LOG(WARNING) << "Block " << block_id << " is empty";
-    return block;
-  }
+TemporalBlock *TemporalBlockAllocator::GetTheOldestBlockOnDevice() const {
+  auto the_oldest_block_on_device = blocks_on_device_.begin()->second;
+  LOG(DEBUG) << "The oldest block on device is "
+             << blocks_on_device_.begin()->first
+             << " sequence number : " << block_sequence_number_;
+  return the_oldest_block_on_device;
+}
 
-  if (blocks_on_device_.find(block_id) == blocks_on_device_.end() &&
-      blocks_on_host_.find(block_id) != blocks_on_host_.end()) {
-    LOG(WARNING) << "Block " << block_id << " is already on host";
-    return block;
-  }
+TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block, cudaStream_t stream) {
+  CHECK_NOTNULL(block);
+  CHECK_NE(block_to_seq_.find(block), block_to_seq_.end());
+  CHECK_GT(block->size, 0);
+
+  auto block_id = block_to_seq_[block];
+
+  CHECK(blocks_on_device_.find(block_id) != blocks_on_device_.end() &&
+        blocks_on_host_.find(block_id) == blocks_on_host_.end());
 
   // allocate CPU memory for the block
   auto block_on_host = new TemporalBlock();
@@ -173,7 +173,7 @@ TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(
   {
     std::lock_guard<std::mutex> lock(mutex_);
     blocks_on_host_[block_id] = block_on_host;
-    block_to_id_[block_on_host] = block_id;
+    block_to_seq_[block_on_host] = block_id;
   }
 
   return block_on_host;

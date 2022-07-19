@@ -119,6 +119,9 @@ class DynamicGraph {
 
   std::size_t num_nodes_;  // the maximum node id + 1
   std::size_t num_edges_;
+
+  // block in the CPU memory but points to the GPU buffers -> src node
+  std::unordered_map<TemporalBlock*, NIDType> block_to_node_id_;
 };
 
 }  // namespace dgnn

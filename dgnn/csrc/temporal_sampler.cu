@@ -51,7 +51,8 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
 
   streams_ = new cudaStream_t[num_snapshots_];
   for (uint32_t i = 0; i < num_snapshots_; ++i) {
-    CUDA_CALL(cudaStreamCreateWithFlags(&streams_[i], cudaStreamNonBlocking));
+    CUDA_CALL(
+        cudaStreamCreateWithPriority(&streams_[i], cudaStreamNonBlocking, -1));
   }
 
   cpu_buffer_ = new char*[num_snapshots_];
@@ -276,6 +277,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
             d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
         new_end);
 
+    LOG(DEBUG) << "Number of sampled nodes: " << num_sampled_nodes;
     num_sampled_nodes_list[snapshot] = num_sampled_nodes;
 
     NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_[snapshot]);
@@ -367,6 +369,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
       std::fill_n(sampling_result.row.begin() + cumsum, num_sampled[i], i);
       cumsum += num_sampled[i];
     }
+
+    CHECK_EQ(cumsum, num_sampled_nodes);
   }
 
   return sampling_results;
