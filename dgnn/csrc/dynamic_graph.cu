@@ -204,7 +204,6 @@ void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block,
   TemporalBlock* d_block = static_cast<TemporalBlock*>(
       mr->allocate(sizeof(*block), rmm::cuda_stream_view(stream)));
 
-  // *d_block = *block;
   cudaMemcpyAsync(&d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
                   stream);
 
