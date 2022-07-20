@@ -1,5 +1,6 @@
 #include <math.h>
 
+#include "common.h"
 #include "sampling_kernels.h"
 
 namespace dgnn {
@@ -206,7 +207,7 @@ __global__ void SampleLayerUniformKernel(
     curr_idx += 1;
   }
 
-  uint32_t indices[MAX_FANOUT];
+  uint32_t indices[kMaxFanout];
   uint32_t to_sample = min(fanout, num_candidates);
   for (uint32_t i = 0; i < to_sample; i++) {
     indices[i] = curand(rand_states + tid) % num_candidates;

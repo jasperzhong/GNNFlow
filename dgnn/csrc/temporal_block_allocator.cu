@@ -62,15 +62,15 @@ std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
   return 1 << (64 - __builtin_clzl(size - 1));
 }
 
-TemporalBlock *TemporalBlockAllocator::Allocate(std::size_t size) noexcept(
-    false) {
+TemporalBlock *TemporalBlockAllocator::Allocate(
+    std::size_t size, cudaStream_t stream) noexcept(false) {
   auto block = new TemporalBlock();
 
   try {
-    AllocateInternal(block, size);
+    AllocateInternal(block, size, stream);
   } catch (rmm::bad_alloc &) {
     // failed to allocate memory
-    DeallocateInternal(block);
+    DeallocateInternal(block, stream);
 
     LOG(WARNING) << "Failed to allocate memory for temporal block of size "
                  << size;
@@ -86,9 +86,10 @@ TemporalBlock *TemporalBlockAllocator::Allocate(std::size_t size) noexcept(
   return block;
 }
 
-void TemporalBlockAllocator::Deallocate(TemporalBlock *block) {
+void TemporalBlockAllocator::Deallocate(TemporalBlock *block,
+                                        cudaStream_t stream) {
   CHECK_NOTNULL(block);
-  DeallocateInternal(block);
+  DeallocateInternal(block, stream);
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -98,7 +99,8 @@ void TemporalBlockAllocator::Deallocate(TemporalBlock *block) {
 }
 
 void TemporalBlockAllocator::AllocateInternal(
-    TemporalBlock *block, std::size_t size) noexcept(false) {
+    TemporalBlock *block, std::size_t size,
+    cudaStream_t stream) noexcept(false) {
   std::size_t capacity = AlignUp(size);
 
   block->size = 0;  // empty block
@@ -109,26 +111,30 @@ void TemporalBlockAllocator::AllocateInternal(
   // allocate GPU memory for the block
   // NB: rmm is thread-safe
   auto mr = rmm::mr::get_current_device_resource();
-  block->dst_nodes =
-      static_cast<NIDType *>(mr->allocate(capacity * sizeof(NIDType)));
-  block->timestamps = static_cast<TimestampType *>(
-      mr->allocate(capacity * sizeof(TimestampType)));
-  block->eids =
-      static_cast<EIDType *>(mr->allocate(capacity * sizeof(EIDType)));
+  block->dst_nodes = static_cast<NIDType *>(
+      mr->allocate(capacity * sizeof(NIDType), rmm::cuda_stream_view(stream)));
+  block->timestamps = static_cast<TimestampType *>(mr->allocate(
+      capacity * sizeof(TimestampType), rmm::cuda_stream_view(stream)));
+  block->eids = static_cast<EIDType *>(
+      mr->allocate(capacity * sizeof(EIDType), rmm::cuda_stream_view(stream)));
 }
 
-void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block) {
+void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block,
+                                                cudaStream_t stream) {
   auto mr = rmm::mr::get_current_device_resource();
   if (block->dst_nodes != nullptr) {
-    mr->deallocate(block->dst_nodes, block->capacity * sizeof(NIDType));
+    mr->deallocate(block->dst_nodes, block->capacity * sizeof(NIDType),
+                   rmm::cuda_stream_view(stream));
     block->dst_nodes = nullptr;
   }
   if (block->timestamps != nullptr) {
-    mr->deallocate(block->timestamps, block->capacity * sizeof(TimestampType));
+    mr->deallocate(block->timestamps, block->capacity * sizeof(TimestampType),
+                   rmm::cuda_stream_view(stream));
     block->timestamps = nullptr;
   }
   if (block->eids != nullptr) {
-    mr->deallocate(block->eids, block->capacity * sizeof(EIDType));
+    mr->deallocate(block->eids, block->capacity * sizeof(EIDType),
+                   rmm::cuda_stream_view(stream));
     block->eids = nullptr;
   }
 }
@@ -141,7 +147,8 @@ TemporalBlock *TemporalBlockAllocator::GetTheOldestBlockOnDevice() const {
   return the_oldest_block_on_device;
 }
 
-TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block) {
+TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block,
+                                                       cudaStream_t stream) {
   CHECK_NOTNULL(block);
   CHECK_NE(block_to_seq_.find(block), block_to_seq_.end());
   CHECK_GT(block->size, 0);
@@ -158,10 +165,10 @@ TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block) {
   block_on_host->timestamps = new TimestampType[block_on_host->capacity];
   block_on_host->eids = new EIDType[block_on_host->capacity];
 
-  CopyTemporalBlock(block, block_on_host);
+  CopyTemporalBlock(block, block_on_host, stream);
 
   // release GPU memory
-  Deallocate(block);
+  Deallocate(block, stream);
 
   {
     std::lock_guard<std::mutex> lock(mutex_);

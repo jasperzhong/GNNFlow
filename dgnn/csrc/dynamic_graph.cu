@@ -4,11 +4,14 @@
 #include <thrust/device_new.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <rmm/detail/error.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
+#include "common.h"
 #include "dynamic_graph.h"
 #include "logging.h"
 #include "utils.h"
@@ -21,7 +24,19 @@ DynamicGraph::DynamicGraph(std::size_t max_gpu_mem_pool_size,
     : allocator_(max_gpu_mem_pool_size, min_block_size),
       insertion_policy_(insertion_policy),
       num_nodes_(0),
-      num_edges_(0) {}
+      num_edges_(0) {
+  for (int i = 0; i < kNumStreams; i++) {
+    cudaStream_t stream;
+    cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+    streams_.push_back(stream);
+  }
+}
+
+DynamicGraph::~DynamicGraph() {
+  for (auto& stream : streams_) {
+    cudaStreamDestroy(stream);
+  }
+}
 
 void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
                             std::vector<NIDType>& dst_nodes,
@@ -48,20 +63,24 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
   NIDType max_node =
       std::max(*std::max_element(src_nodes.begin(), src_nodes.end()),
                *std::max_element(dst_nodes.begin(), dst_nodes.end()));
-  AddNodes(max_node);
+  AddNodes(max_node);  // little overhead
 
-  std::map<NIDType, std::vector<NIDType>> src_to_dst_map;
-  std::map<NIDType, std::vector<TimestampType>> src_to_ts_map;
-  std::map<NIDType, std::vector<EIDType>> src_to_eid_map;
+  std::unordered_map<NIDType, std::vector<NIDType>> src_to_dst_map;
+  std::unordered_map<NIDType, std::vector<TimestampType>> src_to_ts_map;
+  std::unordered_map<NIDType, std::vector<EIDType>> src_to_eid_map;
+
   for (std::size_t i = 0; i < src_nodes.size(); ++i) {
     src_to_dst_map[src_nodes[i]].push_back(dst_nodes[i]);
     src_to_ts_map[src_nodes[i]].push_back(timestamps[i]);
     src_to_eid_map[src_nodes[i]].push_back(eids[i]);
   }
 
-  for (auto& src_to_dst : src_to_dst_map) {
-    NIDType src_node = src_to_dst.first;
-    auto& dst_nodes = src_to_dst.second;
+  int i = 0;
+  for (std::unordered_map<NIDType, std::vector<NIDType>>::iterator iter =
+           std::begin(src_to_dst_map);
+       iter != std::end(src_to_dst_map); iter++) {
+    NIDType src_node = iter->first;
+    auto& dst_nodes = iter->second;
     auto& timestamps = src_to_ts_map[src_node];
     auto& eids = src_to_eid_map[src_node];
 
@@ -72,7 +91,13 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
     timestamps = sort_vector(timestamps, idx);
     eids = sort_vector(eids, idx);
 
-    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids);
+    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids,
+                       streams_[i % kNumStreams]);
+    i++;
+  }
+
+  for (auto stream : streams_) {
+    CUDA_CALL(cudaStreamSynchronize(stream));
   }
 }
 
@@ -90,49 +115,56 @@ std::size_t DynamicGraph::num_nodes() const { return num_nodes_; }
 
 std::size_t DynamicGraph::num_edges() const { return num_edges_; }
 
-TemporalBlock* DynamicGraph::AllocateBlock(std::size_t num_edges) {
+TemporalBlock* DynamicGraph::AllocateBlock(std::size_t num_edges,
+                                           cudaStream_t stream) {
   TemporalBlock* block;
   try {
-    block = allocator_.Allocate(num_edges);
+    block = allocator_.Allocate(num_edges, stream);
   } catch (rmm::bad_alloc) {
     // if we can't allocate the block, we need to free some memory
     std::size_t min_swap_size = allocator_.AlignUp(num_edges);
-    auto swapped_size = SwapOldBlocksToCPU(min_swap_size);
+    auto swapped_size = SwapOldBlocksToCPU(min_swap_size, stream);
     LOG(INFO) << "Swapped " << swapped_size << " bytes to CPU";
 
     // try again
-    block = allocator_.Allocate(num_edges);
+    block = allocator_.Allocate(num_edges, stream);
   }
 
   return block;
 }
 
 TemporalBlock* DynamicGraph::ReallocateBlock(TemporalBlock* block,
-                                             std::size_t num_edges) {
+                                             std::size_t num_edges,
+                                             cudaStream_t stream) {
   CHECK_NOTNULL(block);
-  auto new_block = AllocateBlock(num_edges);
+  auto new_block = AllocateBlock(num_edges, stream);
 
-  CopyTemporalBlock(block, new_block);
+  CopyTemporalBlock(block, new_block, stream);
 
   // release the old block
-  allocator_.Deallocate(block);
+  allocator_.Deallocate(block, stream);
 
   return new_block;
 }
 
-void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
+void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
+                               cudaStream_t stream) {
   CHECK_NOTNULL(block);
   // host
   InsertBlockToDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id, block);
 
   // device
-  thrust::device_ptr<TemporalBlock> d_block =
-      thrust::device_new<TemporalBlock>(1);
-  *d_block = *block;
+  // allocator
+  auto mr = rmm::mr::get_current_device_resource();
+  TemporalBlock* d_block = static_cast<TemporalBlock*>(
+      mr->allocate(sizeof(*block), rmm::cuda_stream_view(stream)));
 
-  InsertBlockToDoublyLinkedListKernel<<<1, 1>>>(
-      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
-  CUDA_CALL(cudaDeviceSynchronize());
+  cudaMemcpyAsync(&d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
+                  stream);
+
+  // TODO: Use a dedicated Stream & cudaStreamSynchronize
+  InsertBlockToDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
+      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block);
 
   // mapping
   h2d_mapping_[block] = d_block;
@@ -140,25 +172,27 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block) {
   block_to_node_id_[block] = node_id;
 }
 
-void DynamicGraph::DeleteTailBlock(NIDType node_id) {
+void DynamicGraph::DeleteTailBlock(NIDType node_id, cudaStream_t stream) {
   // host
   auto tail = h_copy_of_d_node_table_[node_id].tail;
 
   DeleteTailFromDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id);
 
   // device
-  DeleteTailFromDoublyLinkedListKernel<<<1, 1>>>(
+  DeleteTailFromDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id);
-  CUDA_CALL(cudaDeviceSynchronize());
 
   // delete
-  thrust::device_delete(h2d_mapping_[tail]);
+  auto mr = rmm::mr::get_current_device_resource();
+  mr->deallocate(h2d_mapping_[tail], sizeof(*h2d_mapping_[tail]),
+                 rmm::cuda_stream_view(stream));
   h2d_mapping_.erase(tail);
   block_to_node_id_.erase(tail);
   delete tail;
 }
 
-void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
+void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block,
+                                cudaStream_t stream) {
   CHECK_NOTNULL(block);
   // host
   auto old_block = h_copy_of_d_node_table_[node_id].head;
@@ -166,35 +200,39 @@ void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block) {
                                  block);
 
   // device
-  thrust::device_ptr<TemporalBlock> d_block =
-      thrust::device_new<TemporalBlock>(1);
-  *d_block = *block;
+  auto mr = rmm::mr::get_current_device_resource();
+  TemporalBlock* d_block = static_cast<TemporalBlock*>(
+      mr->allocate(sizeof(*block), rmm::cuda_stream_view(stream)));
 
-  ReplaceBlockInDoublyLinkedListKernel<<<1, 1>>>(
-      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block.get());
-  CUDA_CALL(cudaDeviceSynchronize());
+  cudaMemcpyAsync(&d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
+                  stream);
+
+  ReplaceBlockInDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
+      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block);
 
   // mapping
   h2d_mapping_[block] = d_block;
 
   // delete
-  thrust::device_delete(h2d_mapping_[old_block]);
+  mr->deallocate(h2d_mapping_[old_block], sizeof(*h2d_mapping_[old_block]),
+                 rmm::cuda_stream_view(stream));
   h2d_mapping_.erase(old_block);
   delete old_block;
 }
 
-void DynamicGraph::SyncBlock(TemporalBlock* block) {
+void DynamicGraph::SyncBlock(TemporalBlock* block, cudaStream_t stream) {
   CHECK_NE(h2d_mapping_.find(block), h2d_mapping_.end());
   // update size
-  CUDA_CALL(cudaMemcpy(reinterpret_cast<char*>(h2d_mapping_[block].get()) + 24,
-                       reinterpret_cast<char*>(block) + 24, sizeof(std::size_t),
-                       cudaMemcpyHostToDevice));
+  CUDA_CALL(cudaMemcpyAsync(reinterpret_cast<char*>(h2d_mapping_[block]) + 24,
+                            reinterpret_cast<char*>(block) + 24,
+                            sizeof(std::size_t), cudaMemcpyHostToDevice,
+                            stream));
 }
 
 void DynamicGraph::AddEdgesForOneNode(
     NIDType src_node, const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& timestamps,
-    const std::vector<EIDType>& eids) {
+    const std::vector<EIDType>& eids, cudaStream_t stream) {
   std::size_t num_edges = dst_nodes.size();
 
   auto& head = h_copy_of_d_node_table_[src_node].head;
@@ -202,8 +240,8 @@ void DynamicGraph::AddEdgesForOneNode(
   std::size_t start_idx = 0;
   if (head == nullptr) {
     // empty list
-    auto block = AllocateBlock(num_edges);
-    InsertBlock(src_node, block);
+    auto block = AllocateBlock(num_edges, stream);
+    InsertBlock(src_node, block, stream);
   } else if (head->size + num_edges > head->capacity) {
     // not enough space in the current block
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
@@ -211,39 +249,41 @@ void DynamicGraph::AddEdgesForOneNode(
       std::size_t num_edges_to_existing_block = head->capacity - head->size;
       if (num_edges_to_existing_block > 0) {
         CopyEdgesToBlock(head, dst_nodes, timestamps, eids, 0,
-                         num_edges_to_existing_block);
-        SyncBlock(head);
+                         num_edges_to_existing_block, stream);
+        SyncBlock(head, stream);
         start_idx = num_edges_to_existing_block;
 
         num_edges -= num_edges_to_existing_block;
       }
 
       // insert new block
-      auto new_block = AllocateBlock(num_edges);
-      InsertBlock(src_node, new_block);
+      auto new_block = AllocateBlock(num_edges, stream);
+      InsertBlock(src_node, new_block, stream);
     } else {
       // reallocate block
-      auto new_block = ReallocateBlock(head, head->size + num_edges);
-      ReplaceBlock(src_node, new_block);
+      auto new_block = ReallocateBlock(head, head->size + num_edges, stream);
+      ReplaceBlock(src_node, new_block, stream);
     }
   }
 
   // copy data to block
-  CopyEdgesToBlock(head, dst_nodes, timestamps, eids, start_idx, num_edges);
-  SyncBlock(head);
+  CopyEdgesToBlock(head, dst_nodes, timestamps, eids, start_idx, num_edges,
+                   stream);
+  SyncBlock(head, stream);
 }
 
-std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size) {
+std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size,
+                                             cudaStream_t stream) {
   std::size_t swapped_size = 0;
 
   // iterate over the list of blocks
   while (swapped_size < min_swap_size) {
     auto block = allocator_.GetTheOldestBlockOnDevice();
     NIDType src_node = block_to_node_id_[block];
-    auto block_on_host = allocator_.SwapBlockToHost(block);
+    auto block_on_host = allocator_.SwapBlockToHost(block, stream);
     InsertBlockToDoublyLinkedList(h_node_table_.data(), src_node,
                                   block_on_host);
-    DeleteTailBlock(src_node);
+    DeleteTailBlock(src_node, stream);
     swapped_size += block->capacity;
 
     if (swapped_size >= min_swap_size) {
