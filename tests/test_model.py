@@ -31,7 +31,7 @@ class TestModel(unittest.TestCase):
         target_nodes, ts, eid = it.__next__()
         mfgs = sampler.sample(target_nodes, ts)
 
-        mfgs_to_cuda(mfgs)
         mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        mfgs_to_cuda(mfgs)
 
         pred_pos, pred_neg = model(mfgs)

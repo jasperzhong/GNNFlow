@@ -159,7 +159,7 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
   TemporalBlock* d_block = static_cast<TemporalBlock*>(
       mr->allocate(sizeof(*block), rmm::cuda_stream_view(stream)));
 
-  cudaMemcpyAsync(&d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
+  cudaMemcpyAsync(d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
                   stream);
 
   // TODO: Use a dedicated Stream & cudaStreamSynchronize
@@ -204,7 +204,7 @@ void DynamicGraph::ReplaceBlock(NIDType node_id, TemporalBlock* block,
   TemporalBlock* d_block = static_cast<TemporalBlock*>(
       mr->allocate(sizeof(*block), rmm::cuda_stream_view(stream)));
 
-  cudaMemcpyAsync(&d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
+  cudaMemcpyAsync(d_block, block, sizeof(*block), cudaMemcpyHostToDevice,
                   stream);
 
   ReplaceBlockInDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
