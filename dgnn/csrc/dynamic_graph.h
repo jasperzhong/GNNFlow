@@ -27,7 +27,7 @@ class DynamicGraph {
   DynamicGraph(std::size_t max_gpu_mem_pool_size = kDefaultMaxGpuMemPoolSize,
                std::size_t min_block_size = kDefaultMinBlockSize,
                InsertionPolicy insertion_policy = kDefaultInsertionPolicy);
-  ~DynamicGraph() = default;
+  ~DynamicGraph();
 
   /**
    * @brief Add edges to the graph.
@@ -73,21 +73,27 @@ class DynamicGraph {
   void AddEdgesForOneNode(NIDType src_node,
                           const std::vector<NIDType>& dst_nodes,
                           const std::vector<TimestampType>& timestamps,
-                          const std::vector<EIDType>& eids);
+                          const std::vector<EIDType>& eids,
+                          cudaStream_t stream = nullptr);
 
-  std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size);
+  std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size,
+                                 cudaStream_t stream = nullptr);
 
-  TemporalBlock* AllocateBlock(std::size_t num_edges);
+  TemporalBlock* AllocateBlock(std::size_t num_edges,
+                               cudaStream_t stream = nullptr);
 
-  TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges);
+  TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges,
+                                 cudaStream_t stream = nullptr);
 
-  void InsertBlock(NIDType node_id, TemporalBlock* block);
+  void InsertBlock(NIDType node_id, TemporalBlock* block,
+                   cudaStream_t stream = nullptr);
 
-  void DeleteTailBlock(NIDType node_id);
+  void DeleteTailBlock(NIDType node_id, cudaStream_t stream = nullptr);
 
-  void ReplaceBlock(NIDType node_id, TemporalBlock* block);
+  void ReplaceBlock(NIDType node_id, TemporalBlock* block,
+                    cudaStream_t stream = nullptr);
 
-  void SyncBlock(TemporalBlock* block);
+  void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
  private:
   // The device node table. Blocks are allocated in the GPU memory pool.
@@ -104,14 +110,18 @@ class DynamicGraph {
   HostNodeTable h_copy_of_d_node_table_;
 
   // mapping from the copied block on the CPU to the original block on the GPU
-  std::unordered_map<TemporalBlock*, thrust::device_ptr<TemporalBlock>>
-      h2d_mapping_;
+  std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
 
   TemporalBlockAllocator allocator_;
   InsertionPolicy insertion_policy_;
 
+  std::vector<cudaStream_t> streams_;
+
   std::size_t num_nodes_;  // the maximum node id + 1
   std::size_t num_edges_;
+
+  // block in the CPU memory but points to the GPU buffers -> src node
+  std::unordered_map<TemporalBlock*, NIDType> block_to_node_id_;
 };
 
 }  // namespace dgnn
