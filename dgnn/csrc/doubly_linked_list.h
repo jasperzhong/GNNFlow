@@ -17,6 +17,9 @@ struct DoublyLinkedList {
   TemporalBlock* tail;
   uint32_t size;
 
+  // TODO: num_edges
+  // uint32_t num_edges;
+
   __host__ __device__ DoublyLinkedList()
       : head(nullptr), tail(nullptr), size(0) {}
 };

@@ -135,7 +135,7 @@ __global__ void SampleLayerUniformKernel(
     TimestampType snapshot_time_window, uint32_t num_root_nodes,
     uint32_t fanout, NIDType* src_nodes, EIDType* eids,
     TimestampType* timestamps, TimestampType* delta_timestamps,
-    uint32_t* num_sampled) {
+    uint32_t* num_sampled, uint32_t num_candidates_list) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= num_root_nodes) {
     return;
@@ -202,13 +202,19 @@ __global__ void SampleLayerUniformKernel(
       ranges[offset_by_thread + curr_idx].end_idx = end_idx;
     }
 
+    // TODO: return num_candidates
     num_candidates += end_idx - start_idx;
     curr = curr->next;
     curr_idx += 1;
   }
 
+  // record the number of candidates
+  num_candidates_list[tid] = num_candidates;
+
   uint32_t indices[kMaxFanout];
   uint32_t to_sample = min(fanout, num_candidates);
+
+  // TODO: random with time weight
   for (uint32_t i = 0; i < to_sample; i++) {
     indices[i] = curand(rand_states + tid) % num_candidates;
   }

@@ -24,7 +24,7 @@ __global__ void SampleLayerUniformKernel(
     TimestampType snapshot_time_window, uint32_t num_root_nodes,
     uint32_t fanout, NIDType* src_nodes, EIDType* eids,
     TimestampType* timestamps, TimestampType* delta_timestamps,
-    uint32_t* num_sampled);
+    uint32_t* num_sampled, uint32_t num_candidates_list);
 
 }  // namespace dgnn
 

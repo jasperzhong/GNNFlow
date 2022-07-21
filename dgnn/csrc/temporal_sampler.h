@@ -34,8 +34,20 @@ class TemporalSampler {
 
   void FreeBuffer();
 
+  // SamplerLayerRecent for each snapshot
+  void SampleLayerRecent(
+      const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
+      const NIDType* root_nodes, const TimestampType* root_timestamps,
+      uint32_t snapshot_idx, uint32_t num_snapshots,
+      TimestampType snapshot_time_window, uint32_t num_root_nodes,
+      uint32_t fanout,
+      NIDType* src_nodes, EIDType* eid,
+      TimestampType* timestamps, TimestampType* delta_timestamps,
+      uint32_t* num_sampled
+      );
+
   // SampleLayerUniform for each snapshot
-  SamplingResult* SampleLayerUniform(
+  void SampleLayerUniform(
       const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
       curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
       const NIDType* root_nodes, const TimestampType* root_timestamps,
@@ -43,7 +55,18 @@ class TemporalSampler {
       TimestampType snapshot_time_window, uint32_t num_root_nodes,
       uint32_t fanout, NIDType* src_nodes, EIDType* eids,
       TimestampType* timestamps, TimestampType* delta_timestamps,
-      uint32_t* num_sampled);
+      uint32_t& tot_num_sampled,
+      uint32_t& tot_num_candidates
+      );
+
+  // Merge GPU and CPU sampler Results
+  void MergeHostDeviceResultByPolicy(
+      char* gpu_sampler_buffer_on_cpu, char* cpu_sampler_buffer,
+      std::size_t gpu_num_sampled, std::size_t cpu_num_sampled, std::size_t max_num_sampled,
+      std::size_t cpu_num_candidates,
+      std::size_t num_root_nodes,
+      SamplingPolicy policy
+      );
 
  private:
   const DynamicGraph& graph_;
