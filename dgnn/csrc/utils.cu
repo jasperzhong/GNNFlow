@@ -13,17 +13,16 @@ void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst,
   CHECK_GE(dst->capacity, src->capacity);
 
   // assume that the src block is on the GPU
-  CUDA_CALL(cudaMemcpyAsync(static_cast<NIDType*>(dst->dst_nodes),
-                            src->dst_nodes, src->size * sizeof(NIDType),
-                            cudaMemcpyDeviceToHost, stream));
-
-  CUDA_CALL(cudaMemcpyAsync(static_cast<TimestampType*>(dst->timestamps),
-                            src->timestamps, src->size * sizeof(TimestampType),
-                            cudaMemcpyDeviceToHost, stream));
-
-  CUDA_CALL(cudaMemcpyAsync(static_cast<EIDType*>(dst->eids), src->eids,
-                            src->size * sizeof(EIDType), cudaMemcpyDeviceToHost,
+  CUDA_CALL(cudaMemcpyAsync(dst->dst_nodes, src->dst_nodes,
+                            src->size * sizeof(NIDType), cudaMemcpyDeviceToHost,
                             stream));
+
+  CUDA_CALL(cudaMemcpyAsync(dst->timestamps, src->timestamps,
+                            src->size * sizeof(TimestampType),
+                            cudaMemcpyDeviceToHost, stream));
+
+  CUDA_CALL(cudaMemcpyAsync(dst->eids, src->eids, src->size * sizeof(EIDType),
+                            cudaMemcpyDeviceToHost, stream));
 
   dst->size = src->size;
   dst->prev = src->prev;
@@ -41,19 +40,17 @@ void CopyEdgesToBlock(TemporalBlock* block,
   CHECK_LE(block->size + num_edges, block->capacity);
   // assume that the block is on the GPU
 
-  CUDA_CALL(
-      cudaMemcpyAsync(static_cast<NIDType*>(block->dst_nodes) + block->size,
-                      &dst_nodes[start_idx], sizeof(NIDType) * num_edges,
-                      cudaMemcpyHostToDevice, stream));
+  CUDA_CALL(cudaMemcpyAsync(block->dst_nodes + block->size,
+                            &dst_nodes[start_idx], sizeof(NIDType) * num_edges,
+                            cudaMemcpyHostToDevice, stream));
 
   CUDA_CALL(cudaMemcpyAsync(
-      static_cast<TimestampType*>(block->timestamps) + block->size,
-      &timestamps[start_idx], sizeof(TimestampType) * num_edges,
-      cudaMemcpyHostToDevice, stream));
+      block->timestamps + block->size, &timestamps[start_idx],
+      sizeof(TimestampType) * num_edges, cudaMemcpyHostToDevice, stream));
 
-  CUDA_CALL(cudaMemcpyAsync(static_cast<EIDType*>(block->eids) + block->size,
-                            &eids[start_idx], sizeof(EIDType) * num_edges,
-                            cudaMemcpyHostToDevice, stream));
+  CUDA_CALL(cudaMemcpyAsync(block->eids + block->size, &eids[start_idx],
+                            sizeof(EIDType) * num_edges, cudaMemcpyHostToDevice,
+                            stream));
 
   block->size += num_edges;
 }
