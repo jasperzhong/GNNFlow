@@ -1,7 +1,7 @@
 import argparse
 import os
 import time
-import random 
+import random
 import numpy as np
 
 import torch
@@ -48,7 +48,7 @@ parser.add_argument("--sample-strategy",
                     help="sample strategy", type=str, default='recent')
 parser.add_argument("--sample-neighbor",
                     help="how many neighbors to sample in each layer",
-                    type=int, nargs="+", default=[10])
+                    type=int, nargs="+", default=[10, 10])
 parser.add_argument("--sample-history",
                     help="the number of snapshot", type=int, default=1)
 parser.add_argument("--sample-duration",
@@ -60,13 +60,16 @@ parser.add_argument("--seed", type=int, default=42)
 
 args = parser.parse_args()
 
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+
 set_seed(args.seed)
+
 
 def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
         model: torch.nn.Module, node_feats: torch.Tensor,
