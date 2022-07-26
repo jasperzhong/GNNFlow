@@ -64,7 +64,7 @@ std::vector<uint32_t> randomized_shuffle(uint32_t origin_size, uint32_t need_siz
 }
 
 
-void LowerBound(TimestampType* timestamps, int num_edges,
+__host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
                 TimestampType timestamp, int* idx) {
   int left = 0;
   int right = num_edges;
