@@ -37,7 +37,6 @@ void random_shuffle_unique(TIter begin, TIter end, size_t m) {
     ++begin;
     --left;
   }
-  return begin;
 }
 
 // generate a sorted randomized array with O(n)
@@ -489,7 +488,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         cpu_buffer_[snapshot], cpu_sampler_buffer,
         gpu_num_sampled_nodes, max_sampled_nodes, cpu_num_sampled_nodes,
         cpu_num_candidates,
-        num_root_nodes_snapshot, sampling_policy_);
+        num_root_nodes_snapshot, sampling_policy_, snapshot);
   }
 
 
@@ -592,14 +591,15 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
 void TemporalSampler:: MergeHostDeviceResultByPolicy(
     char* gpu_sampler_buffer_on_cpu, char* cpu_sampler_buffer,
     std::size_t gpu_num_sampled, std::size_t cpu_num_sampled, std::size_t max_num_sampled,
-    std::size_t cpu_num_candidates, std::size_t num_root_nodes, SamplingPolicy policy) {
+    std::size_t cpu_num_candidates, std::size_t num_root_nodes, SamplingPolicy policy,
+    uint32_t snapshot) {
 
   // Offset Configuration
-  std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
-  std::size_t offset2 = offset1 + max_sampled_nodes * sizeof(EIDType);
-  std::size_t offset3 = offset2 + max_sampled_nodes * sizeof(TimestampType);
-  std::size_t offset4 = offset3 + max_sampled_nodes * sizeof(TimestampType);
-  std::size_t offset5 = offset4 + max_sampled_nodes * sizeof(uint32_t);
+  std::size_t offset1 = max_num_sampled * sizeof(NIDType);
+  std::size_t offset2 = offset1 + max_num_sampled * sizeof(EIDType);
+  std::size_t offset3 = offset2 + max_num_sampled * sizeof(TimestampType);
+  std::size_t offset4 = offset3 + max_num_sampled * sizeof(TimestampType);
+  std::size_t offset5 = offset4 + max_num_sampled * sizeof(uint32_t);
 
   // GPU sampler position pointer cast (on CPU)
   NIDType* d_src_nodes = reinterpret_cast<NIDType*>(gpu_sampler_buffer_on_cpu[snapshot]);
@@ -670,10 +670,10 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
 
       if(gpu_num_sampled + cpu_num_sampled < max_num_sampled) {
         // concatenate
-        // TODO: change with memcpy
+        // TODO: change with memcpy ?
         uint32_t cpu_sampler_offset = 0;
         uint32_t gpu_sampler_offset = gpu_num_sampled;
-        while(cpu_sampler_index < cpu_num_sampled
+        while(cpu_sampler_offset < cpu_num_sampled
                && gpu_sampler_offset < max_num_sampled) {
           d_src_nodes[gpu_sampler_offset] = h_src_nodes[cpu_sampler_offset];
           d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
@@ -691,7 +691,7 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         for(uint32_t current_offset = 0; current_offset < max_num_sampled; ++current_offset) {
 
           // get virtual index
-          uint32_t theoretical_randomized_offset = randomized_array[i];
+          uint32_t theoretical_randomized_offset = randomized_array[current_offset];
 
           if(theoretical_randomized_offset < gpu_num_sampled) {
             // on GPU buffer
@@ -730,7 +730,7 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       uint32_t cpu_actual_size = (uint32_t) ( ( (double) gpu_num_sampled ) * (1.00 - alpha) );
 
       // TODO: precision control (ceiling or flooring)?
-      uint32_t actual_size = std::min(max_num_sampled, gpu_actual_size + cpu_actual_size);
+      uint32_t actual_size = std::min(max_num_sampled, (std::size_t) (gpu_actual_size + cpu_actual_size));
 
       std::vector<uint32_t> gpu_randomized_array = randomized_shuffle(gpu_num_sampled, gpu_actual_size);
       std::vector<uint32_t> cpu_randomized_array = randomized_shuffle(cpu_num_sampled, cpu_actual_size);
@@ -769,8 +769,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         d_eids[current_offset] = h_eids[cpu_idx];
         d_timestamps[current_offset] = h_timestamps[cpu_idx];
         d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
-        d_num_sampled[current_offset] = h_num_sampled[gpu_idx];
-        d_num_candidates[current_offset] = h_num_candidates[gpu_idx];
+        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
+        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
 
         current_offset = current_offset + 1;
       }
@@ -854,7 +854,7 @@ void TemporalSampler::SampleLayerRecent(
       // copy the edges to the output
       for (int i = end_idx - 1; sampled < fanout && i >= start_idx; --i) {
         src_nodes[tot_sampled] = curr->dst_nodes[i];
-        eids[tot_sampled] = curr->eids[i];
+        eid[tot_sampled] = curr->eids[i];
         timestamps[tot_sampled] =
             prop_time ? root_timestamp : curr->timestamps[i];
         delta_timestamps[tot_sampled] = root_timestamp - curr->timestamps[i];
@@ -913,7 +913,7 @@ void TemporalSampler::SampleLayerUniform(
     int curr_idx = 0;
 
     // memory each block's candidate info
-    std::vector<SamplingRange*> ranges;
+    std::vector<SamplingRange> ranges;
 
     while(curr != nullptr) {
       // ascending order internal, descending order external
@@ -944,7 +944,7 @@ void TemporalSampler::SampleLayerUniform(
                  end_timestamp > curr->timestamps[curr->size - 1]) {
         // only the edges after start_timestamp are in the current block
         LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-        end_idx = curr->size
+        end_idx = curr->size;
       } else {
         // the whole block is in the range
         start_idx = 0;
@@ -952,9 +952,9 @@ void TemporalSampler::SampleLayerUniform(
       }
 
       // buffer the sampling range (the index is identical to <curr_idx>)
-      auto sampling_range = new SamplingRange();
-      sampling_range->start_idx = start_idx;
-      sampling_range->end_idx = end_idx;
+      SamplingRange sampling_range;
+      sampling_range.start_idx = start_idx;
+      sampling_range.end_idx = end_idx;
       ranges.push_back(sampling_range);
 
       // update
@@ -967,7 +967,7 @@ void TemporalSampler::SampleLayerUniform(
     num_candidates_arr[tid] = num_candidates;
 
     // indices[] contains the randomly picked positions with respect to the <num_candidates>.
-    uint32_t indices[MAX_FANOUT];
+    uint32_t indices[kMaxFanout];
     uint32_t to_sample = min(fanout, num_candidates);
 
     // random engine
@@ -1030,9 +1030,6 @@ void TemporalSampler::SampleLayerUniform(
     num_sampled_arr[tid] = sampled;
 
   }
-
-  // record the total num sampled nodes
-  tot_sampled_nodes = tot_sampled;
 }
 
 }  // namespace dgnn

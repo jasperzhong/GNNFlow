@@ -65,7 +65,8 @@ class TemporalSampler {
       std::size_t gpu_num_sampled, std::size_t cpu_num_sampled, std::size_t max_num_sampled,
       std::size_t cpu_num_candidates,
       std::size_t num_root_nodes,
-      SamplingPolicy policy
+      SamplingPolicy policy,
+      uint32_t snapshot
       );
 
  private:
