@@ -80,7 +80,7 @@ void LowerBound(TimestampType* timestamps, int num_edges,
 }
 
 template <typename T>
-__device__ void inline swap(T a, T b) {
+__host__ __device__ void inline swap(T a, T b) {
   T c(a);
   a = b;
   b = c;
