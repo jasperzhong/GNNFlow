@@ -297,9 +297,9 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     std::size_t offset7 = offset6 + max_sampled_nodes * sizeof(NIDType);
     std::size_t offset8 = offset7 + max_sampled_nodes * sizeof(EIDType);
 
-    // cpu sampler's num_sampled and num_candidates can directly use local variables to denote.
-//    std::size_t offset9 = offset8 + max_sampled_nodes * sizeof(TimestampType);
-//    std::size_t offset10 = offset9 + max_sampled_nodes * sizeof(TimestampType);
+    // cpu sampler's num_sampled[] and num_candidates[]
+    std::size_t offset9 = offset8 + max_sampled_nodes * sizeof(TimestampType);
+    std::size_t offset10 = offset9 + max_sampled_nodes * sizeof(TimestampType);
 
 
     std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
@@ -362,22 +362,29 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
           cpu_buffer_[snapshot] + offset7);
       TimestampType* hs_delta_timestamps = reinterpret_cast<TimestampType*>(
           cpu_buffer_[snapshot] + offset8);
-//      uint32_t* hs_num_sampled =
-//          reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset9);
+      uint32_t* hs_num_sampled =
+          reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset9);
+      uint32_t* hs_num_candidates =
+          reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset10);
 
       // CPU Uniformly Sampling
-      int32_t cpu_snapshot_num_sampled_nodes = 0;
-      int32_t cpu_snapshot_num_candidates = 0;
       SampleLayerUniform(graph_.get_host_node_table(), graph_.num_nodes(), prop_time_,
                          rand_states_[snapshot], seed_, offset_per_thread, hs_root_nodes,
                          hs_root_timestamps, snapshot, num_snapshots_, snapshot_time_window_,
                          num_root_nodes, fanouts_[layer],
                          hs_src_nodes, hs_eids, hs_timestamps, hs_delta_timestamps,
-                         cpu_snapshot_num_sampled_nodes,
-                         cpu_snapshot_num_candidates);
+                         hs_num_sampled, hs_num_candidates);
+
+      // calculate the cpu sampler's num_sampled_nodes and num_candidates
+      uint32_t cpu_snapshot_num_sampled_nodes = 0;
+      uint32_t cpu_snapshot_num_candidates = 0;
+      for(int i = 0; i < num_root_nodes; ++i) {
+        cpu_snapshot_num_sampled_nodes = cpu_snapshot_num_sampled_nodes + hs_num_sampled[i];
+        cpu_snapshot_num_candidates = cpu_snapshot_num_candidates + hs_num_candidates[i];
+      }
 
       cpu_num_sampled_nodes_list.push_back(cpu_snapshot_num_sampled_nodes);
-      cpu_num_sampled_nodes_list.push_back(cpu_snapshot_num_candidates);
+      cpu_num_candidates_list.push_back(cpu_snapshot_num_candidates);
     }
   }
 
@@ -448,7 +455,6 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     CUDA_CALL(cudaMemcpyAsync(num_sampled, d_num_sampled,
                               sizeof(uint32_t) * num_root_nodes,
                               cudaMemcpyDeviceToHost, streams_[snapshot]));
-    // TODO; copy num_candidates (Need to do extra copy? save GPU memory space)
     CUDA_CALL(cudaMemcpyAsync(num_candidates, d_num_candidates,
                               sizeof(uint32_t) * num_root_nodes,
                               cudaMemcpyDeviceToHost, streams_[snapshot]));
@@ -474,6 +480,10 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
     char* cpu_sampler_buffer = cpu_buffer_[snapshot]
                                + max_sampled_nodes * per_node_size;
+
+    // NEW: Synchronize Memcpy
+    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
+
     // Merge
     MergeHostDeviceResultByPolicy(
         cpu_buffer_[snapshot], cpu_sampler_buffer,
@@ -530,8 +540,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     sampling_result.delta_timestamps.reserve(num_sampled_nodes);
     sampling_result.eids.reserve(num_sampled_nodes);
 
-    // synchronize memcpy
-    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
+    // CHANGED synchronize memcpy
+//    CUDA_CALL(cudaStreamSynchronize(streams_[snapshot]));
 
     std::copy(src_nodes, src_nodes + num_sampled_nodes,
               std::back_inserter(sampling_result.all_nodes));
@@ -612,37 +622,39 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       reinterpret_cast<TimestampType*>(cpu_sampler_buffer[snapshot] + offset3);
 
   // TODO: CPU num_sampled and num_candidates ?
-//  uint32_t* d_num_sampled =
-//      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset4);
-//  uint32_t* d_num_candidates =
-//      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset5);
+  uint32_t* h_num_sampled =
+      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset4);
+  uint32_t* h_num_candidates =
+      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset5);
 
 
   if (policy == SamplingPolicy::kSamplingPolicyRecent) {
 
-    // If no cpu sampled or enough gpu sampled, return;
-    if(cpu_num_sampled == 0 || gpu_num_sampled == max_num_sampled) {
-      return ;
-    }
-
-    // fill gpu sampled
-    // TODO: change with memcpy
-    uint32_t cpu_sampler_offset = 0;
-    uint32_t gpu_sampler_offset = gpu_num_sampled;
-    while(cpu_sampler_index < cpu_num_sampled
-           && gpu_sampler_offset < max_num_sampled) {
-      d_src_nodes[gpu_sampler_offset] = h_src_nodes[cpu_sampler_offset];
-      d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
-      d_timestamps[gpu_sampler_offset] = h_timestamps[cpu_sampler_offset];
-      d_delta_timestamps[gpu_sampler_offset] = h_delta_timestamps[cpu_sampler_offset];
-
-      // TODO: CPU num_sampled and num_candidates ?
-//      d_num_sampled[gpu_sampler_offset] = h_num_sampled[cpu_sampler_offset];
-//      d_num_candidates[gpu_sampler_offset] = h_num_candidates[cpu_sampler_offset];
-
-      gpu_sampler_offset = gpu_sampler_offset + 1;
-      cpu_sampler_offset = cpu_sampler_offset + 1;
-    }
+    // Deprecated - DO Nothing
+    return ;
+//    // If no cpu sampled or enough gpu sampled, return;
+//    if(cpu_num_sampled == 0 || gpu_num_sampled == max_num_sampled) {
+//      return ;
+//    }
+//
+//    // fill gpu sampled
+//    // TODO: change with memcpy
+//    uint32_t cpu_sampler_offset = 0;
+//    uint32_t gpu_sampler_offset = gpu_num_sampled;
+//    while(cpu_sampler_index < cpu_num_sampled
+//           && gpu_sampler_offset < max_num_sampled) {
+//      d_src_nodes[gpu_sampler_offset] = h_src_nodes[cpu_sampler_offset];
+//      d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
+//      d_timestamps[gpu_sampler_offset] = h_timestamps[cpu_sampler_offset];
+//      d_delta_timestamps[gpu_sampler_offset] = h_delta_timestamps[cpu_sampler_offset];
+//
+//      // TODO: CPU num_sampled and num_candidates ?
+////      d_num_sampled[gpu_sampler_offset] = h_num_sampled[cpu_sampler_offset];
+////      d_num_candidates[gpu_sampler_offset] = h_num_candidates[cpu_sampler_offset];
+//
+//      gpu_sampler_offset = gpu_sampler_offset + 1;
+//      cpu_sampler_offset = cpu_sampler_offset + 1;
+//    }
 
   } else if(policy == SamplingPolicy::kSamplingPolicyUniform) {
     // uniform (3 cases)
@@ -667,10 +679,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
           d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
           d_timestamps[gpu_sampler_offset] = h_timestamps[cpu_sampler_offset];
           d_delta_timestamps[gpu_sampler_offset] = h_delta_timestamps[cpu_sampler_offset];
-
-          // TODO: CPU num_sampled and num_candidates ?
-          //      d_num_sampled[gpu_sampler_offset] = h_num_sampled[cpu_sampler_offset];
-          //      d_num_candidates[gpu_sampler_offset] = h_num_candidates[cpu_sampler_offset];
+          d_num_sampled[gpu_sampler_offset] = h_num_sampled[cpu_sampler_offset];
+          d_num_candidates[gpu_sampler_offset] = h_num_candidates[cpu_sampler_offset];
 
           gpu_sampler_offset = gpu_sampler_offset + 1;
           cpu_sampler_offset = cpu_sampler_offset + 1;
@@ -704,10 +714,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
             d_eids[current_offset] = h_eids[real_randomized_offset];
             d_timestamps[current_offset] = h_timestamps[real_randomized_offset];
             d_delta_timestamps[current_offset] = h_delta_timestamps[real_randomized_offset];
-
-            // TODO:CPU num_sampled and num_candidates ?
-//            d_num_sampled[current_offset] = h_num_sampled[real_randomized_offset];
-//            d_num_candidates[current_offset] = h_num_candidates[real_randomized_offset];
+            d_num_sampled[current_offset] = h_num_sampled[real_randomized_offset];
+            d_num_candidates[current_offset] = h_num_candidates[real_randomized_offset];
           }
         }
       }
@@ -716,6 +724,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       // randomized with ratio (gpu_sampler * alpha + cpu_sampler * (1 - alpha))
       // alpha = gpu_num_candidates / (gpu_num_candidates + cpu_num_candidates)
       double alpha = (double) gpu_num_candidates / (double) (gpu_num_candidates + cpu_num_candidates);
+
+      // TODO: round
       uint32_t gpu_actual_size = (uint32_t) ( ( (double) gpu_num_sampled ) * alpha );
       uint32_t cpu_actual_size = (uint32_t) ( ( (double) gpu_num_sampled ) * (1.00 - alpha) );
 
@@ -759,10 +769,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         d_eids[current_offset] = h_eids[cpu_idx];
         d_timestamps[current_offset] = h_timestamps[cpu_idx];
         d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
-
-        // TODO:CPU num_sampled and num_candidates ?
-//        d_num_sampled[current_offset] = h_num_sampled[gpu_idx];
-//        d_num_candidates[current_offset] = h_num_candidates[gpu_idx];
+        d_num_sampled[current_offset] = h_num_sampled[gpu_idx];
+        d_num_candidates[current_offset] = h_num_candidates[gpu_idx];
 
         current_offset = current_offset + 1;
       }
@@ -872,11 +880,11 @@ void TemporalSampler::SampleLayerUniform(
     uint32_t fanout,
     NIDType* src_nodes, EIDType* eids, // Return Value
     TimestampType* timestamps, TimestampType* delta_timestamps, // Return Value
-    uint32_t& tot_num_sampled, // Return Value
-    uint32_t& tot_num_candidates // Return Value
+    uint32_t* num_sampled_arr, // Return Value
+    uint32_t* num_candidates_arr // Return Value
     ) {
 
-  // tid means the id of the node (probably the thread in the future)
+  // TODO: multithread optimization
   uint32_t tid = 0;
 
   // tot_sampled means the max index of the whole sampled result
@@ -956,7 +964,7 @@ void TemporalSampler::SampleLayerUniform(
     }
 
     // record the total of num_candidates
-    tot_num_candidates = tot_num_candidates + num_candidates;
+    num_candidates_arr[tid] = num_candidates;
 
     // indices[] contains the randomly picked positions with respect to the <num_candidates>.
     uint32_t indices[MAX_FANOUT];
@@ -1019,9 +1027,9 @@ void TemporalSampler::SampleLayerUniform(
       curr_idx += 1;
     }
 
-  }
+    num_sampled_arr[tid] = sampled;
 
-  // TODO: CPU num_sampled and num_candidates ?
+  }
 
   // record the total num sampled nodes
   tot_sampled_nodes = tot_sampled;

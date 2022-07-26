@@ -34,7 +34,7 @@ class TemporalSampler {
 
   void FreeBuffer();
 
-  // SamplerLayerRecent for each snapshot
+  // (Deprecated) SamplerLayerRecent for each snapshot
   void SampleLayerRecent(
       const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
       const NIDType* root_nodes, const TimestampType* root_timestamps,
@@ -55,8 +55,8 @@ class TemporalSampler {
       TimestampType snapshot_time_window, uint32_t num_root_nodes,
       uint32_t fanout, NIDType* src_nodes, EIDType* eids,
       TimestampType* timestamps, TimestampType* delta_timestamps,
-      uint32_t& tot_num_sampled,
-      uint32_t& tot_num_candidates
+      uint32_t* num_sampled_arr,
+      uint32_t* num_candidates_arr
       );
 
   // Merge GPU and CPU sampler Results
