@@ -15,6 +15,7 @@ from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
                         load_dataset, load_feat, mfgs_to_cuda,
                         node_to_dgl_blocks, prepare_input)
+from dgnn.cache import LRUCache
 
 model_names = sorted(name for name in models.__dict__
                      if not name.startswith("__")
@@ -48,7 +49,7 @@ parser.add_argument("--sample-strategy",
                     help="sample strategy", type=str, default='recent')
 parser.add_argument("--sample-neighbor",
                     help="how many neighbors to sample in each layer",
-                    type=int, nargs="+", default=[10, 10])
+                    type=int, nargs="+", default=[10])
 parser.add_argument("--sample-history",
                     help="the number of snapshot", type=int, default=1)
 parser.add_argument("--sample-duration",
@@ -184,6 +185,12 @@ model.cuda()
 
 args.arch_identity = args.model in ['JODIE', 'APAN']
 
+# Cache
+# TODO: capacity
+cache = LRUCache(dgraph.num_edges() / 2,
+                 dgraph.num_vertices(), dgraph.num_edges(), node_feats, edge_feats, 'cuda:0')
+cache.init_cache()
+
 # assert
 assert args.sample_layer == model.gnn_layer, "sample layers must match the gnn layers"
 assert args.sample_layer == len(
@@ -215,6 +222,9 @@ for e in range(args.epoch):
     sample_time = 0
     feature_time = 0
     train_time = 0
+    fetch_all_time = 0
+    update_all_time = 0
+    cache_ratio_avg = 0
 
     if args.reorder > 0:
         train_sampler.reset()
@@ -246,8 +256,9 @@ for e in range(args.epoch):
         sample_end = time.time()
 
         # move mfgs to cuda
-        mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mfgs_to_cuda(mfgs)
+        mfgs, fetch_time, update_time, cache_ratio = cache.fetch_feature(mfgs)
         feature_end = time.time()
 
         optimizer.zero_grad()
@@ -272,11 +283,14 @@ for e in range(args.epoch):
         sample_time += sample_end - time_start
         feature_time += feature_end - sample_end
         train_time += train_end - feature_end
+        fetch_all_time += fetch_time
+        update_all_time += update_time
+        cache_ratio_avg += cache_ratio
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
-    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.'.format(
-        epoch_time, epoch_time - sample_time - feature_time - train_time, sample_time, feature_time, train_time))
+    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
+        epoch_time, epoch_time - sample_time - feature_time - train_time, sample_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
 
     epoch_time_sum += epoch_time
 
