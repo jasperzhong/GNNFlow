@@ -2,46 +2,9 @@
 
 #include "common.h"
 #include "sampling_kernels.h"
+#include "utils.h"
 
 namespace dgnn {
-
-__host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
-                                    TimestampType timestamp, int* idx) {
-  int left = 0;
-  int right = num_edges;
-  while (left < right) {
-    int mid = (left + right) / 2;
-    if (timestamps[mid] < timestamp) {
-      left = mid + 1;
-    } else {
-      right = mid;
-    }
-  }
-  *idx = left;
-}
-
-template <typename T>
-__device__ void inline swap(T a, T b) {
-  T c(a);
-  a = b;
-  b = c;
-}
-
-__device__ void QuickSort(uint32_t* indices, int lo, int hi) {
-  if (lo >= hi || lo < 0 || hi < 0) return;
-
-  uint32_t pivot = indices[hi];
-  int i = lo - 1;
-  for (int j = lo; j < hi; ++j) {
-    if (indices[j] < pivot) {
-      swap(indices[++i], indices[j]);
-    }
-  }
-  swap(indices[++i], indices[hi]);
-
-  QuickSort(indices, lo, i - 1);
-  QuickSort(indices, i + 1, hi);
-}
 
 __global__ void SampleLayerRecentKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
