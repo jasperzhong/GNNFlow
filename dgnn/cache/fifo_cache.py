@@ -2,111 +2,63 @@ import time
 import numpy as np
 import torch
 
+from .cache import Cache
 
-class FIFOCache:
+
+class FIFOCache(Cache):
     """The class for caching mechanism and feature fetching
     Caching the node features in GPU
     Fetching features from the caching, CPU mem or remote server automatically
     """
 
-    def __init__(self, capacity, num_nodes, feature_dim, g, device):
+    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu'):
         """
         Args:
             capacity: The capacity of the caching (# nodes cached at most)
             num_nodes: number of nodes in the graph
             feature_dim: feature dimensions
-            g: DGL distributed graph
         """
+        super(FIFOCache, self).__init__(capacity, num_nodes,
+                                        num_edges, node_features, edge_features, device)
         # name
         self.name = 'fifo'
-        # capacity
-        self.capacity = min(capacity, num_nodes)
-        # number of nodes in graph
-        self.num_nodes = num_nodes
-        # feature dimension
-        self.feature_dim = feature_dim
-        # graph
-        self.g = g
-        # log_file
-        self.log = None
-
-        # storing node in GPU
-        self.device = device
-        # stores node's features
-        self.cache_buffer = torch.zeros(self.capacity, feature_dim, dtype=torch.float32, device=self.device,
-                                        requires_grad=False)
         # pointer to the last entry for the recent cached nodes
-        self.cache_pointer = 0
-        # flag for indicating those cached nodes
-        self.cache_flag = torch.zeros(
-            num_nodes, dtype=torch.bool, device=self.device, requires_grad=False)
-        # maps node id -> index
-        self.cache_map = torch.zeros(
-            num_nodes, dtype=torch.int64, device=self.device, requires_grad=False) - 1
-        # maps index -> node id
-        self.cache_index_to_node_id = torch.zeros(self.capacity, dtype=torch.int64, device=self.device,
-                                                  requires_grad=False) - 1
+        self.cache_node_pointer = 0
+        self.cache_edge_pointer = 0
+
+        self.cache_node_count = None
+        self.cache_edge_count = None
 
     def init_cache(self):
         """Init the caching with node features
         """
-        cache_node_id = torch.tensor(
-            list(range(self.capacity)), dtype=torch.int64).to(self.device)
+        if self.node_features != None:
+            cache_node_id = torch.arange(
+                self.capacity, dtype=torch.int64).to(self.device)
 
-        # Init parameters related to feature fetching
-        self.cache_buffer[cache_node_id] = self.g.ndata['features'][cache_node_id].to(
-            self.device)
-        self.cache_flag[cache_node_id] = True
-        self.cache_index_to_node_id = torch.tensor(
-            cache_node_id, device=self.device)
-        node_id = cache_node_id
-        index = cache_node_id
-        self.cache_map[node_id] = index
-        self.cache_pointer = self.capacity - 1
+            # Init parameters related to feature fetching
+            self.cache_node_buffer[cache_node_id] = self.node_features[cache_node_id].to(
+                self.device)
+            self.cache_node_flag[cache_node_id] = True
+            self.cache_index_to_node_id = torch.tensor(
+                cache_node_id, device=self.device)
+            self.cache_node_map[cache_node_id] = cache_node_id
+            self.cache_node_pointer = self.capacity - 1
 
-    def fetch_feature(self, input_node_id, update_cache=True):
-        """Fetching the node features of input_node_ids
-        Args:
-            input_node_id: node ids of all the input nodes
-            update_cache: update cache or not
-        Returns:
-            node_feature: tensor
-                Tensor stores node features, with a shape of [len(input_node_id), self.feature_dim]
-            cache_ratio: (# cached nodes)/(# uncached nodes)
-            fetch_time: time to fetch the features
-            cache_update_time: time to update the cache
-        """
-        start_time = time.time()
-        cache_mask = self.cache_flag[input_node_id]
-        cache_ratio = torch.sum(cache_mask) / len(input_node_id)
+        if self.edge_features != None:
+            cache_edge_id = torch.arange(
+                self.capacity, dtype=torch.int64).to(self.device)
 
-        node_feature = torch.zeros(len(input_node_id), self.feature_dim, dtype=torch.float32, device=self.device,
-                                   requires_grad=False)
+            # Init parameters related to feature fetching
+            self.cache_edge_buffer[cache_edge_id] = self.edge_features[cache_edge_id].to(
+                self.device)
+            self.cache_edge_flag[cache_edge_id] = True
+            self.cache_index_to_edge_id = torch.tensor(
+                cache_edge_id, device=self.device)
+            self.cache_edge_map[cache_edge_id] = cache_edge_id
+            self.cache_edge_pointer = self.capacity - 1
 
-        # fetch the cached features
-        cached_node_index = self.cache_map[input_node_id[cache_mask]]
-        assert torch.min(cached_node_index) >= 0, "look up non-existing keys"
-        node_feature[cache_mask] = self.cache_buffer[cached_node_index]
-
-        # fetch the uncached features
-        uncached_mask = ~cache_mask
-        node_feature[uncached_mask] = self.g.ndata['features'][input_node_id[uncached_mask]].to(
-            self.device)
-
-        fetch_time = time.time() - start_time
-
-        # update the cache buffer
-        if update_cache:
-            start_time = time.time()
-            self.update_cache(cached_node_index=cached_node_index, uncached_node_id=input_node_id[uncached_mask],
-                              uncached_node_feature=node_feature[uncached_mask])
-            cache_update_time = time.time() - start_time
-        else:
-            cache_update_time = 0
-
-        return node_feature, cache_ratio, fetch_time, cache_update_time
-
-    def update_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):
+    def update_node_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):
         # If the number of nodes to cache is larger than the cache capacity, we only cache the first
         # self.capacity nodes
         if len(uncached_node_id) > self.capacity:
@@ -116,33 +68,58 @@ class FIFOCache:
         node_id_to_cache = uncached_node_id[:num_node_to_cache]
         node_feature_to_cache = uncached_node_feature[:num_node_to_cache]
 
-        # # update cached node index first
-        # self.cache_count[cached_node_index] = 0
-        #
-        # # get the k node id with the least water level
-        # removing_node_index = torch.topk(self.cache_count, k=num_node_to_cache, largest=False).indices
-        # assert len(removing_node_index) == len(node_id_to_cache) == len(node_feature_to_cache)
-        # removing_node_id = self.cache_index_to_node_id[removing_node_index]
-
-        if self.cache_pointer + num_node_to_cache < self.capacity:
+        if self.cache_node_pointer + num_node_to_cache < self.capacity:
             removing_node_index = torch.arange(
-                self.cache_pointer + 1, self.cache_pointer + num_node_to_cache + 1)
-            self.cache_pointer = self.cache_pointer + num_node_to_cache
+                self.cache_node_pointer + 1, self.cache_node_pointer + num_node_to_cache + 1)
+            self.cache_node_pointer = self.cache_node_pointer + num_node_to_cache
         else:
-            removing_node_index = torch.cat([torch.arange(num_node_to_cache - (self.capacity - 1 - self.cache_pointer)),
-                                             torch.arange(self.cache_pointer + 1, self.capacity)])
-            self.cache_pointer = num_node_to_cache - \
-                (self.capacity - 1 - self.cache_pointer) - 1
+            removing_node_index = torch.cat([torch.arange(num_node_to_cache - (self.capacity - 1 - self.cache_node_pointer)),
+                                             torch.arange(self.cache_node_pointer + 1, self.capacity)])
+            self.cache_node_pointer = num_node_to_cache - \
+                (self.capacity - 1 - self.cache_node_pointer) - 1
         assert len(removing_node_index) == len(
             node_id_to_cache) == len(node_feature_to_cache)
         removing_node_index = removing_node_index.to(device=self.device)
         removing_node_id = self.cache_index_to_node_id[removing_node_index]
 
         # update cache attributes
-        self.cache_buffer[removing_node_index] = node_feature_to_cache
-        self.cache_flag[removing_node_id] = False
-        self.cache_flag[node_id_to_cache] = True
-        self.cache_map[removing_node_id] = -1
-        self.cache_map[node_id_to_cache] = removing_node_index
+        self.cache_node_buffer[removing_node_index] = node_feature_to_cache
+        self.cache_node_flag[removing_node_id] = False
+        self.cache_node_flag[node_id_to_cache] = True
+        self.cache_node_map[removing_node_id] = -1
+        self.cache_node_map[node_id_to_cache] = removing_node_index
         self.cache_index_to_node_id[removing_node_index] = node_id_to_cache.to(
+            self.device)
+
+    def update_edge_cache(self, cached_edge_index, uncached_edge_id, uncached_edge_feature):
+        # If the number of edges to cache is larger than the cache capacity, we only cache the first
+        # self.capacity edges
+        if len(uncached_edge_id) > self.capacity:
+            num_edge_to_cache = self.capacity
+        else:
+            num_edge_to_cache = len(uncached_edge_id)
+        edge_id_to_cache = uncached_edge_id[:num_edge_to_cache]
+        edge_feature_to_cache = uncached_edge_feature[:num_edge_to_cache]
+
+        if self.cache_edge_pointer + num_edge_to_cache < self.capacity:
+            removing_edge_index = torch.arange(
+                self.cache_edge_pointer + 1, self.cache_edge_pointer + num_edge_to_cache + 1)
+            self.cache_edge_pointer = self.cache_edge_pointer + num_edge_to_cache
+        else:
+            removing_edge_index = torch.cat([torch.arange(num_edge_to_cache - (self.capacity - 1 - self.cache_edge_pointer)),
+                                             torch.arange(self.cache_edge_pointer + 1, self.capacity)])
+            self.cache_edge_pointer = num_edge_to_cache - \
+                (self.capacity - 1 - self.cache_edge_pointer) - 1
+        assert len(removing_edge_index) == len(
+            edge_id_to_cache) == len(edge_feature_to_cache)
+        removing_edge_index = removing_edge_index.to(device=self.device)
+        removing_edge_id = self.cache_index_to_edge_id[removing_edge_index]
+
+        # update cache attributes
+        self.cache_edge_buffer[removing_edge_index] = edge_feature_to_cache
+        self.cache_edge_flag[removing_edge_id] = False
+        self.cache_edge_flag[edge_id_to_cache] = True
+        self.cache_edge_map[removing_edge_id] = -1
+        self.cache_edge_map[edge_id_to_cache] = removing_edge_index
+        self.cache_index_to_edge_id[removing_edge_index] = edge_id_to_cache.to(
             self.device)

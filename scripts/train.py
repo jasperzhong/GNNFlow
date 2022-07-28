@@ -15,7 +15,7 @@ from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
                         load_dataset, load_feat, mfgs_to_cuda,
                         node_to_dgl_blocks, prepare_input)
-from dgnn.cache import LRUCache
+from dgnn.cache import LRUCache, LFUCache, FIFOCache
 
 model_names = sorted(name for name in models.__dict__
                      if not name.startswith("__")
@@ -58,7 +58,7 @@ parser.add_argument("--reorder", help="", type=int, default=0)
 parser.add_argument("--graph-reverse",
                     help="build undirected graph", type=bool, default=True)
 parser.add_argument("--seed", type=int, default=42)
-
+# TODO: rand node & edge features
 args = parser.parse_args()
 
 
@@ -187,8 +187,8 @@ args.arch_identity = args.model in ['JODIE', 'APAN']
 
 # Cache
 # TODO: capacity
-cache = LRUCache(dgraph.num_edges() / 2,
-                 dgraph.num_vertices(), dgraph.num_edges(), node_feats, edge_feats, 'cuda:0')
+cache = FIFOCache(dgraph.num_edges() / 5,
+                  dgraph.num_vertices(), dgraph.num_edges(), node_feats, edge_feats, 'cuda:0')
 cache.init_cache()
 
 # assert
