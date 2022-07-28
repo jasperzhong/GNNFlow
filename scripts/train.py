@@ -225,6 +225,7 @@ for e in range(args.epoch):
     fetch_all_time = 0
     update_all_time = 0
     cache_ratio_avg = 0
+    cuda_time = 0
 
     if args.reorder > 0:
         train_sampler.reset()
@@ -258,6 +259,7 @@ for e in range(args.epoch):
         # move mfgs to cuda
         # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mfgs_to_cuda(mfgs)
+        cuda_end = time.time()
         mfgs, fetch_time, update_time, cache_ratio = cache.fetch_feature(mfgs)
         feature_end = time.time()
 
@@ -281,7 +283,8 @@ for e in range(args.epoch):
         train_end = time.time()
 
         sample_time += sample_end - time_start
-        feature_time += feature_end - sample_end
+        cuda_time += cuda_end - sample_end
+        feature_time += feature_end - cuda_end
         train_time += train_end - feature_end
         fetch_all_time += fetch_time
         update_all_time += update_time
@@ -289,8 +292,8 @@ for e in range(args.epoch):
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
-    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
-        epoch_time, epoch_time - sample_time - feature_time - train_time, sample_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
+    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
+        epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
 
     epoch_time_sum += epoch_time
 
