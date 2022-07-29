@@ -50,7 +50,7 @@ std::vector<uint32_t> randomized_shuffle(uint32_t origin_size, uint32_t need_siz
   }
 
   for(uint32_t i = 0; i < origin_size; i++) {
-    randomized_array[i] = i;
+    randomized_array.push_back(i);
   }
 
   // all shuffle
