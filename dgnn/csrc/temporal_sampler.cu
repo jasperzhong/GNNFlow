@@ -592,8 +592,28 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
 
   if (policy == SamplingPolicy::kSamplingPolicyRecent) {
 
-    // If the policy is recent, we will do nothing.
-    return ;
+    // If no cpu sampled or enough gpu sampled, return;
+    if(cpu_num_sampled == 0 || gpu_num_sampled == max_num_sampled) {
+      return ;
+    }
+    // fill gpu sampled
+    // TODO: change with memcpy
+    uint32_t cpu_sampler_offset = 0;
+    uint32_t gpu_sampler_offset = gpu_num_sampled;
+    while(cpu_sampler_index < cpu_num_sampled
+           && gpu_sampler_offset < max_num_sampled) {
+      d_src_nodes[gpu_sampler_offset] = h_src_nodes[cpu_sampler_offset];
+      d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
+      d_timestamps[gpu_sampler_offset] = h_timestamps[cpu_sampler_offset];
+      d_delta_timestamps[gpu_sampler_offset] = h_delta_timestamps[cpu_sampler_offset];
+
+      // num_sampled and num_candidates
+      d_num_sampled[gpu_sampler_offset] = h_num_sampled[cpu_sampler_offset];
+      d_num_candidates[gpu_sampler_offset] = h_num_candidates[cpu_sampler_offset];
+
+      gpu_sampler_offset = gpu_sampler_offset + 1;
+      cpu_sampler_offset = cpu_sampler_offset + 1;
+    }
 
   } else if(policy == SamplingPolicy::kSamplingPolicyUniform) {
     // uniform (3 cases)
