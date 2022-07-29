@@ -63,45 +63,6 @@ std::vector<uint32_t> randomized_shuffle(uint32_t origin_size, uint32_t need_siz
   return randomized_array;
 }
 
-
-__host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
-                TimestampType timestamp, int* idx) {
-  int left = 0;
-  int right = num_edges;
-  while (left < right) {
-    int mid = (left + right) / 2;
-    if (timestamps[mid] < timestamp) {
-      left = mid + 1;
-    } else {
-      right = mid;
-    }
-  }
-  *idx = left;
-}
-
-template <typename T>
-__host__ __device__ void inline swap(T a, T b) {
-  T c(a);
-  a = b;
-  b = c;
-}
-
-__host__ __device__ void QuickSort(uint32_t* indices, int lo, int hi) {
-  if (lo >= hi || lo < 0 || hi < 0) return;
-
-  uint32_t pivot = indices[hi];
-  int i = lo - 1;
-  for (int j = lo; j < hi; ++j) {
-    if (indices[j] < pivot) {
-      swap(indices[++i], indices[j]);
-    }
-  }
-  swap(indices[++i], indices[hi]);
-
-  QuickSort(indices, lo, i - 1);
-  QuickSort(indices, i + 1, hi);
-}
-
 TemporalSampler::TemporalSampler(const DynamicGraph& graph,
                                  const std::vector<uint32_t>& fanouts,
                                  SamplingPolicy sampling_policy,
@@ -525,6 +486,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
               prev_sampling_results.at(snapshot).all_timestamps.end(),
               std::back_inserter(sampling_result.all_timestamps));
 
+    // TODO: change it to new size
     uint32_t num_sampled_nodes = num_sampled_nodes_list[snapshot];
 
     sampling_result.col.resize(num_sampled_nodes);
@@ -630,31 +592,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
 
   if (policy == SamplingPolicy::kSamplingPolicyRecent) {
 
-    // Deprecated - DO Nothing
+    // If the policy is recent, we will do nothing.
     return ;
-//    // If no cpu sampled or enough gpu sampled, return;
-//    if(cpu_num_sampled == 0 || gpu_num_sampled == max_num_sampled) {
-//      return ;
-//    }
-//
-//    // fill gpu sampled
-//    // TODO: change with memcpy
-//    uint32_t cpu_sampler_offset = 0;
-//    uint32_t gpu_sampler_offset = gpu_num_sampled;
-//    while(cpu_sampler_index < cpu_num_sampled
-//           && gpu_sampler_offset < max_num_sampled) {
-//      d_src_nodes[gpu_sampler_offset] = h_src_nodes[cpu_sampler_offset];
-//      d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
-//      d_timestamps[gpu_sampler_offset] = h_timestamps[cpu_sampler_offset];
-//      d_delta_timestamps[gpu_sampler_offset] = h_delta_timestamps[cpu_sampler_offset];
-//
-//      // TODO: CPU num_sampled and num_candidates ?
-////      d_num_sampled[gpu_sampler_offset] = h_num_sampled[cpu_sampler_offset];
-////      d_num_candidates[gpu_sampler_offset] = h_num_candidates[cpu_sampler_offset];
-//
-//      gpu_sampler_offset = gpu_sampler_offset + 1;
-//      cpu_sampler_offset = cpu_sampler_offset + 1;
-//    }
 
   } else if(policy == SamplingPolicy::kSamplingPolicyUniform) {
     // uniform (3 cases)
