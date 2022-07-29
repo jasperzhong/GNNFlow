@@ -564,30 +564,30 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
   std::size_t offset5 = offset4 + max_num_sampled * sizeof(uint32_t);
 
   // GPU sampler position pointer cast (on CPU)
-  NIDType* d_src_nodes = reinterpret_cast<NIDType*>(gpu_sampler_buffer_on_cpu[snapshot]);
-  EIDType* d_eids = reinterpret_cast<EIDType*>(gpu_sampler_buffer_on_cpu[snapshot] + offset1);
+  NIDType* d_src_nodes = reinterpret_cast<NIDType*>(gpu_sampler_buffer_on_cpu);
+  EIDType* d_eids = reinterpret_cast<EIDType*>(gpu_sampler_buffer_on_cpu + offset1);
   TimestampType* d_timestamps =
-      reinterpret_cast<TimestampType*>(gpu_sampler_buffer_on_cpu[snapshot] + offset2);
+      reinterpret_cast<TimestampType*>(gpu_sampler_buffer_on_cpu + offset2);
   TimestampType* d_delta_timestamps =
-      reinterpret_cast<TimestampType*>(gpu_sampler_buffer_on_cpu[snapshot] + offset3);
+      reinterpret_cast<TimestampType*>(gpu_sampler_buffer_on_cpu + offset3);
   uint32_t* d_num_sampled =
-      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset4);
+      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu + offset4);
   uint32_t* d_num_candidates =
-      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset5);
+      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu + offset5);
 
   // CPU sampler position pointer cast
-  NIDType* h_src_nodes = reinterpret_cast<NIDType*>(cpu_sampler_buffer[snapshot]);
-  EIDType* h_eids = reinterpret_cast<EIDType*>(cpu_sampler_buffer[snapshot] + offset1);
+  NIDType* h_src_nodes = reinterpret_cast<NIDType*>(cpu_sampler_buffer);
+  EIDType* h_eids = reinterpret_cast<EIDType*>(cpu_sampler_buffer + offset1);
   TimestampType* h_timestamps =
-      reinterpret_cast<TimestampType*>(cpu_sampler_buffer[snapshot] + offset2);
+      reinterpret_cast<TimestampType*>(cpu_sampler_buffer + offset2);
   TimestampType* h_delta_timestamps =
-      reinterpret_cast<TimestampType*>(cpu_sampler_buffer[snapshot] + offset3);
+      reinterpret_cast<TimestampType*>(cpu_sampler_buffer + offset3);
 
   // TODO: CPU num_sampled and num_candidates ?
   uint32_t* h_num_sampled =
-      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset4);
+      reinterpret_cast<uint32_t*>(cpu_sampler_buffer + offset4);
   uint32_t* h_num_candidates =
-      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu[snapshot] + offset5);
+      reinterpret_cast<uint32_t*>(cpu_sampler_buffer + offset5);
 
 
   if (policy == SamplingPolicy::kSamplingPolicyRecent) {
