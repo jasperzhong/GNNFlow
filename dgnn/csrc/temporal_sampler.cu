@@ -600,7 +600,7 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
     // TODO: change with memcpy
     uint32_t cpu_sampler_offset = 0;
     uint32_t gpu_sampler_offset = gpu_num_sampled;
-    while(cpu_sampler_index < cpu_num_sampled
+    while(cpu_sampler_offset < cpu_num_sampled
            && gpu_sampler_offset < max_num_sampled) {
       d_src_nodes[gpu_sampler_offset] = h_src_nodes[cpu_sampler_offset];
       d_eids[gpu_sampler_offset] = h_eids[cpu_sampler_offset];
