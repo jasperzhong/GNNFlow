@@ -447,7 +447,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     // Merge
     MergeHostDeviceResultByPolicy(
         cpu_buffer_[snapshot], cpu_sampler_buffer,
-        gpu_num_sampled_nodes, max_sampled_nodes, cpu_num_sampled_nodes,
+        gpu_num_sampled_nodes, cpu_num_sampled_nodes, max_sampled_nodes,
         cpu_num_candidates,
         num_root_nodes_snapshot, sampling_policy_, snapshot);
   }
