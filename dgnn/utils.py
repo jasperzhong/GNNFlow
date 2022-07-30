@@ -81,8 +81,10 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
         elif dataset == 'MOOC':
             node_feats = torch.randn(7144, rand_dn)
 
-    node_feats = node_feats.pin_memory()
-    edge_feats = edge_feats.pin_memory()
+    if node_feats is not None:
+        node_feats = node_feats.pin_memory()
+    if edge_feats is not None:
+        edge_feats = edge_feats.pin_memory()
     return node_feats, edge_feats
 
 
