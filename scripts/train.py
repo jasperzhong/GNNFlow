@@ -282,13 +282,14 @@ for e in range(args.epoch):
 
         sample_end.record()
         # move mfgs to cuda
-        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        feature_end.record()
         mfgs_to_cuda(mfgs)
         cuda_end.record()
-        mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
-            mfgs)
+        # mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
+        #     mfgs)
         # feature_end = torch.cuda.Event(enable_timing=True)
-        feature_end.record()
+        # feature_end.record()
         optimizer.zero_grad()
 
         # move pre_input_mail to forward()
@@ -312,23 +313,24 @@ for e in range(args.epoch):
         # cuda_time += cuda_end - sample_end
         # feature_time += feature_end - cuda_end
         # train_time += train_end - feature_end
-        # sample_time += time_start.elapsed_time(sample_end)
-        # cuda_time += feature_end.elapsed_time(cuda_end)
-        # feature_time += sample_end.elapsed_time(feature_end)
         sample_time += time_start.elapsed_time(sample_end)
-        cuda_time += sample_end.elapsed_time(cuda_end)
-        feature_time += cuda_end.elapsed_time(feature_end)
+        cuda_time += feature_end.elapsed_time(cuda_end)
+        feature_time += sample_end.elapsed_time(feature_end)
+        # sample_time += time_start.elapsed_time(sample_end)
+        # cuda_time += sample_end.elapsed_time(cuda_end)
+        # feature_time += cuda_end.elapsed_time(feature_end)
         # train_time += feature_end.elapsed_time(train_end)
         train_end.synchronize()
-        train_time += feature_end.elapsed_time(train_end)
-        fetch_all_time += fetch_time
-        update_all_time += update_time
-        cache_ratio_avg += cache_ratio
-        fetch_cache_all += fetch_cache
-        fetch_uncache_all += fetch_uncache
-        apply_all += apply
-        uncache_get_id_all += uncache_get_id
-        uncache_to_cuda_all += uncache_to_cuda
+        # train_time += feature_end.elapsed_time(train_end)
+        train_time += cuda_end.elapsed_time(train_end)
+        # fetch_all_time += fetch_time
+        # update_all_time += update_time
+        # cache_ratio_avg += cache_ratio
+        # fetch_cache_all += fetch_cache
+        # fetch_uncache_all += fetch_uncache
+        # apply_all += apply
+        # uncache_get_id_all += uncache_get_id
+        # uncache_to_cuda_all += uncache_to_cuda
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
