@@ -140,6 +140,7 @@ class Cache:
                         # save the edge feature into the mfgs
                         b.edata['f'] = edge_feature
                         apply_end.record()
+                        apply_end.synchronize()
                         fetch_cache += fetch_cache_start.elapsed_time(
                             fetch_cache_end)
                         fetch_uncache += fetch_cache_end.elapsed_time(
