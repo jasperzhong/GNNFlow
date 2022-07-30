@@ -59,7 +59,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
     node_feats = None
     if os.path.exists(node_feat_path):
         node_feats = torch.load(node_feat_path)
-        if node_feats.dtyep == torch.bool:
+        if node_feats.dtype == torch.bool:
             node_feats = node_feats.type(torch.float32)
 
     edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
@@ -79,8 +79,10 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
         if dataset == 'LASTFM':
             node_feats = torch.randn(1980, rand_dn)
         elif dataset == 'MOOC':
-            edge_feats = torch.randn(7144, rand_dn)
+            node_feats = torch.randn(7144, rand_dn)
 
+    node_feats = node_feats.pin_memory()
+    edge_feats = edge_feats.pin_memory()
     return node_feats, edge_feats
 
 

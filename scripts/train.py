@@ -15,17 +15,29 @@ from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
                         load_dataset, load_feat, mfgs_to_cuda,
                         node_to_dgl_blocks, prepare_input)
-from dgnn.cache import LRUCache, LFUCache, FIFOCache
+import dgnn.cache as caches
 
 model_names = sorted(name for name in models.__dict__
                      if not name.startswith("__")
                      and callable(models.__dict__[name]))
+cache_names = sorted(name for name in caches.__dict__
+                     if not name.startswith("__")
+                     and callable(caches.__dict__[name]))
+print(cache_names)
+
+datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", choices=model_names, default='TGN',
                     help="model architecture" +
                     '|'.join(model_names) +
                     '(default: tgn)')
+parser.add_argument("--data", choices=datasets,
+                    default='REDDIT', help="dataset:" +
+                    '|'.join(datasets) + '(default: REDDIT)')
+parser.add_argument("--cache", choices=cache_names,
+                    default='LFUCache', help="cache:" +
+                    '|'.join(cache_names) + '(default: LFUCache)')
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
@@ -49,7 +61,7 @@ parser.add_argument("--sample-strategy",
                     help="sample strategy", type=str, default='recent')
 parser.add_argument("--sample-neighbor",
                     help="how many neighbors to sample in each layer",
-                    type=int, nargs="+", default=[10])
+                    type=int, nargs="+", default=[10, 10])
 parser.add_argument("--sample-history",
                     help="the number of snapshot", type=int, default=1)
 parser.add_argument("--sample-duration",
@@ -137,8 +149,10 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
-node_feats, edge_feats = load_feat('REDDIT')
-train_df, val_df, test_df, df = load_dataset('REDDIT')
+node_feats, edge_feats = load_feat(args.data)
+# for test
+node_feats = None
+train_df, val_df, test_df, df = load_dataset(args.data)
 
 train_ds = DynamicGraphDataset(train_df)
 val_ds = DynamicGraphDataset(val_df)
@@ -187,8 +201,11 @@ args.arch_identity = args.model in ['JODIE', 'APAN']
 
 # Cache
 # TODO: capacity
-cache = FIFOCache(dgraph.num_edges() / 5,
-                  dgraph.num_vertices(), dgraph.num_edges(), node_feats, edge_feats, 'cuda:0')
+print(args.cache)
+cache = caches.__dict__[args.cache](0.4,
+                                    dgraph.num_vertices(), int(dgraph.num_edges() / 2) + 1, node_feats, edge_feats, 'cuda:0')
+# cache = LFUCache(dgraph.num_edges() / 5,
+#                  dgraph.num_vertices(), dgraph.num_edges(), node_feats, edge_feats, 'cuda:0')
 cache.init_cache()
 
 # assert
@@ -226,6 +243,11 @@ for e in range(args.epoch):
     update_all_time = 0
     cache_ratio_avg = 0
     cuda_time = 0
+    fetch_cache_all = 0
+    fetch_uncache_all = 0
+    apply_all = 0
+    uncache_get_id_all = 0
+    uncache_to_cuda_all = 0
 
     if args.reorder > 0:
         train_sampler.reset()
@@ -236,9 +258,13 @@ for e in range(args.epoch):
     model.train()
 
     model.mailbox_reset()
-
+    time_start = torch.cuda.Event(enable_timing=True)
+    sample_end = torch.cuda.Event(enable_timing=True)
+    feature_end = torch.cuda.Event(enable_timing=True)
+    cuda_end = torch.cuda.Event(enable_timing=True)
+    train_end = torch.cuda.Event(enable_timing=True)
     for i, (target_nodes, ts, eid) in enumerate(train_loader):
-        time_start = time.time()
+        time_start.record()
         mfgs = None
         if sampler is not None:
             if args.no_neg:
@@ -254,15 +280,15 @@ for e in range(args.epoch):
             mfgs_deliver_to_neighbors = mfgs
             mfgs = node_to_dgl_blocks(target_nodes, ts)
 
-        sample_end = time.time()
-
+        sample_end.record()
         # move mfgs to cuda
         # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mfgs_to_cuda(mfgs)
-        cuda_end = time.time()
-        mfgs, fetch_time, update_time, cache_ratio = cache.fetch_feature(mfgs)
-        feature_end = time.time()
-
+        cuda_end.record()
+        mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
+            mfgs)
+        # feature_end = torch.cuda.Event(enable_timing=True)
+        feature_end.record()
         optimizer.zero_grad()
 
         # move pre_input_mail to forward()
@@ -280,23 +306,45 @@ for e in range(args.epoch):
                               mfgs_deliver_to_neighbors,
                               args.deliver_to_neighbors)
 
-        train_end = time.time()
+        train_end.record()
 
-        sample_time += sample_end - time_start
-        cuda_time += cuda_end - sample_end
-        feature_time += feature_end - cuda_end
-        train_time += train_end - feature_end
+        # sample_time += sample_end - time_start
+        # cuda_time += cuda_end - sample_end
+        # feature_time += feature_end - cuda_end
+        # train_time += train_end - feature_end
+        # sample_time += time_start.elapsed_time(sample_end)
+        # cuda_time += feature_end.elapsed_time(cuda_end)
+        # feature_time += sample_end.elapsed_time(feature_end)
+        sample_time += time_start.elapsed_time(sample_end)
+        cuda_time += sample_end.elapsed_time(cuda_end)
+        feature_time += cuda_end.elapsed_time(feature_end)
+        # train_time += feature_end.elapsed_time(train_end)
+        train_end.synchronize()
+        train_time += feature_end.elapsed_time(train_end)
         fetch_all_time += fetch_time
         update_all_time += update_time
         cache_ratio_avg += cache_ratio
+        fetch_cache_all += fetch_cache
+        fetch_uncache_all += fetch_uncache
+        apply_all += apply
+        uncache_get_id_all += uncache_get_id
+        uncache_to_cuda_all += uncache_to_cuda
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
+    sample_time /= 1000
+    cuda_time /= 1000
+    feature_time /= 1000
+    train_time /= 1000
     print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
         epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
-
+    print(
+        'fetch_cache: {:.2f}s, fetch_uncache: {:.2f}s, apply: {:.2f}s, uncache_get_id: {:.2f}s, uncache_to_cuda: {:.2f}s'.format(
+            fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all))
     epoch_time_sum += epoch_time
 
+# print("********************************")
+# print("********************************")
     # Validation
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()

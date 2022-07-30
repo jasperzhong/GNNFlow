@@ -28,11 +28,11 @@ class LRUCache(Cache):
         """
         if self.node_features != None:
             cache_node_id = torch.arange(
-                self.capacity, dtype=torch.int64).to(self.device)
+                self.node_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
 
             # Init parameters related to feature fetching
             self.cache_node_buffer[cache_node_id] = self.node_features[cache_node_id].to(
-                self.device)
+                self.device, non_blocking=True)
             self.cache_node_flag[cache_node_id] = True
             self.cache_index_to_node_id = torch.tensor(
                 cache_node_id, device=self.device)
@@ -40,11 +40,11 @@ class LRUCache(Cache):
 
         if self.edge_features != None:
             cache_edge_id = torch.arange(
-                self.capacity, dtype=torch.int64).to(self.device)
+                self.edge_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
 
             # Init parameters related to feature fetching
             self.cache_edge_buffer[cache_edge_id] = self.edge_features[cache_edge_id].to(
-                self.device)
+                self.device, non_blocking=True)
             self.cache_edge_flag[cache_edge_id] = True
             self.cache_index_to_edge_id = torch.tensor(
                 cache_edge_id, device=self.device)
@@ -53,8 +53,8 @@ class LRUCache(Cache):
     def update_edge_cache(self, cached_edge_index, uncached_edge_id, uncached_edge_feature):
         # If the number of edges to cache is larger than the cache capacity, we only cache the first
         # self.capacity edges
-        if len(uncached_edge_id) > self.capacity:
-            num_edge_to_cache = self.capacity
+        if len(uncached_edge_id) > self.edge_capacity:
+            num_edge_to_cache = self.edge_capacity
         else:
             num_edge_to_cache = len(uncached_edge_id)
         edge_id_to_cache = uncached_edge_id[:num_edge_to_cache]
@@ -80,13 +80,13 @@ class LRUCache(Cache):
         self.cache_edge_map[removing_edge_id] = -1
         self.cache_edge_map[edge_id_to_cache] = removing_edge_index
         self.cache_index_to_edge_id[removing_edge_index] = edge_id_to_cache.to(
-            self.device)
+            self.device, non_blocking=True)
 
     def update_node_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):
         # If the number of nodes to cache is larger than the cache capacity, we only cache the first
         # self.capacity nodes
-        if len(uncached_node_id) > self.capacity:
-            num_node_to_cache = self.capacity
+        if len(uncached_node_id) > self.node_capacity:
+            num_node_to_cache = self.node_capacity
         else:
             num_node_to_cache = len(uncached_node_id)
         node_id_to_cache = uncached_node_id[:num_node_to_cache]
@@ -112,4 +112,4 @@ class LRUCache(Cache):
         self.cache_map[removing_node_id] = -1
         self.cache_map[node_id_to_cache] = removing_node_index
         self.cache_index_to_node_id[removing_node_index] = node_id_to_cache.to(
-            self.device)
+            self.device, non_blocking=True)

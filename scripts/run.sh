@@ -1,6 +1,10 @@
 #!/bin/bash
 
 MODEL=$1
+STRATEGY=$2
+DATA=$3
+CACHE=$4
+
 
 # TGN
 if [ $MODEL == "tgn" ] || [ $MODEL == "TGN" ];then
@@ -11,7 +15,10 @@ fi
 if [ $MODEL == "tgat" ] || [ $MODEL == "TGAT" ];then
     cmd="python train.py --model TGAT --dropout 0.1 --attn-dropout 0.1 \
                     --sample-layer 2 --sample-neighbor 10 10 \
-                    --sample-strategy uniform"
+                    --sample-strategy"
+    cmd="$cmd $STRATEGY"
+    cmd="$cmd --data $DATA"
+    cmd="$cmd --cache $CACHE"
 fi
 
 # JODIE
