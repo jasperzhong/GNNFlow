@@ -3,7 +3,7 @@ import time
 
 
 class Cache:
-    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu'):
+    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
         # TODO
         self.node_capacity = int(capacity * num_nodes)
         self.edge_capacity = int(capacity * num_edges)
@@ -19,6 +19,11 @@ class Cache:
 
         # storing node in GPU
         self.device = device
+
+        # TODO: maybe use dgl's index_select
+        # so that these pin_buffers is unnecessary
+        self.pinned_nfeat_buffs = pinned_nfeat_buffs
+        self.pinned_efeat_buffs = pinned_efeat_buffs
 
         # stores node's features
         if self.node_feature_dim != 0:
@@ -112,6 +117,7 @@ class Cache:
         apply_end = torch.cuda.Event(enable_timing=True)
         update_start = torch.cuda.Event(enable_timing=True)
         update_end = torch.cuda.Event(enable_timing=True)
+        i = 0
         if self.edge_features is not None:
             for mfg in mfgs:
                 for b in mfg:
@@ -130,14 +136,31 @@ class Cache:
                         fetch_cache_end.record()
                         # fetch the uncached features
                         uncached_mask = ~cache_mask
+                        # uncached_edge_id = b.edata['ID'][uncached_mask].to(
+                        #     'cpu')
                         uncached_edge_id = b.edata['ID'][uncached_mask]
+                        # unique_cached_edge_id, inverse, counts = torch.unique_consecutive(
+                        #     uncached_edge_id, return_counts=True, return_inverse=True)
                         uncached_get_id_end.record()
-                        # TODO: is pin?
-                        edge_feature[uncached_mask] = self.edge_features[uncached_edge_id].to(
-                            self.device, non_blocking=True)
+                        torch.index_select(self.edge_features, 0, uncached_edge_id.to('cpu'),
+                                           out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
+
+                        # torch.index_select(self.edge_features, 0, uncached_edge_id,
+                        #                    out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
+                        # unique_edge_feats = self.edge_features[unique_cached_edge_id].to(
+                        #     self.device)
+                        # unique_edge_feats = unique_edge_feats.repeat_interleave(
+                        #     counts, dim=0)
+                        # temp = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].cuda(
+                        #     non_blocking=True)
+                        # edge_feature[uncached_mask] = temp.repeat_interleave(
+                        #     counts, dim=0)
+
+                        edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].cuda(
+                            non_blocking=True)
+                        i += 1
                         fetch_uncache_end.record()
 
-                        # save the edge feature into the mfgs
                         b.edata['f'] = edge_feature
                         apply_end.record()
                         apply_end.synchronize()
@@ -158,7 +181,7 @@ class Cache:
                                                    uncached_edge_feature=edge_feature[uncached_mask])
                             update_end.record()
                             update_end.synchronize()
-                            cache_update_time = update_end.elapsed_time(
+                            cache_update_time = update_start.elapsed_time(
                                 update_end)
                             update_time += cache_update_time
                         else:

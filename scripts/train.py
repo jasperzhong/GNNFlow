@@ -14,7 +14,7 @@ from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
                         load_dataset, load_feat, mfgs_to_cuda,
-                        node_to_dgl_blocks, prepare_input)
+                        node_to_dgl_blocks, prepare_input, get_pinned_buffers)
 import dgnn.cache as caches
 
 model_names = sorted(name for name in models.__dict__
@@ -199,13 +199,17 @@ model.cuda()
 
 args.arch_identity = args.model in ['JODIE', 'APAN']
 
+# TODO: maybe use dgl's index_select
+# so that these pin_buffers is unnecessary
+pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
+    args.sample_neighbor, args.sample_history, args.batch_size, node_feats, edge_feats)
+
 # Cache
-# TODO: capacity
 print(args.cache)
-cache = caches.__dict__[args.cache](0.4,
-                                    dgraph.num_vertices(), int(dgraph.num_edges() / 2) + 1, node_feats, edge_feats, 'cuda:0')
-# cache = LFUCache(dgraph.num_edges() / 5,
-#                  dgraph.num_vertices(), dgraph.num_edges(), node_feats, edge_feats, 'cuda:0')
+cache = caches.__dict__[args.cache](0.4, dgraph.num_vertices(),
+                                    int(dgraph.num_edges() / 2) + 1,
+                                    node_feats, edge_feats, 'cuda:0',
+                                    pinned_nfeat_buffs, pinned_efeat_buffs)
 cache.init_cache()
 
 # assert
@@ -282,14 +286,17 @@ for e in range(args.epoch):
 
         sample_end.record()
         # move mfgs to cuda
-        mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
-        feature_end.record()
-        mfgs_to_cuda(mfgs)
-        cuda_end.record()
+        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         # mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
         #     mfgs)
-        # feature_end = torch.cuda.Event(enable_timing=True)
         # feature_end.record()
+        mfgs_to_cuda(mfgs)
+        cuda_end.record()
+        mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
+            mfgs)
+        # feature_end = torch.cuda.Event(enable_timing=True)
+        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+        feature_end.record()
         optimizer.zero_grad()
 
         # move pre_input_mail to forward()
@@ -313,24 +320,24 @@ for e in range(args.epoch):
         # cuda_time += cuda_end - sample_end
         # feature_time += feature_end - cuda_end
         # train_time += train_end - feature_end
-        sample_time += time_start.elapsed_time(sample_end)
-        cuda_time += feature_end.elapsed_time(cuda_end)
-        feature_time += sample_end.elapsed_time(feature_end)
         # sample_time += time_start.elapsed_time(sample_end)
-        # cuda_time += sample_end.elapsed_time(cuda_end)
-        # feature_time += cuda_end.elapsed_time(feature_end)
+        # cuda_time += feature_end.elapsed_time(cuda_end)
+        # feature_time += sample_end.elapsed_time(feature_end)
+        sample_time += time_start.elapsed_time(sample_end)
+        cuda_time += sample_end.elapsed_time(cuda_end)
+        feature_time += cuda_end.elapsed_time(feature_end)
         # train_time += feature_end.elapsed_time(train_end)
         train_end.synchronize()
         # train_time += feature_end.elapsed_time(train_end)
-        train_time += cuda_end.elapsed_time(train_end)
-        # fetch_all_time += fetch_time
-        # update_all_time += update_time
-        # cache_ratio_avg += cache_ratio
-        # fetch_cache_all += fetch_cache
-        # fetch_uncache_all += fetch_uncache
-        # apply_all += apply
-        # uncache_get_id_all += uncache_get_id
-        # uncache_to_cuda_all += uncache_to_cuda
+        train_time += feature_end.elapsed_time(train_end)
+        fetch_all_time += fetch_time
+        update_all_time += update_time
+        cache_ratio_avg += cache_ratio
+        fetch_cache_all += fetch_cache
+        fetch_uncache_all += fetch_uncache
+        apply_all += apply
+        uncache_get_id_all += uncache_get_id
+        uncache_to_cuda_all += uncache_to_cuda
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start

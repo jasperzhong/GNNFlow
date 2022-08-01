@@ -11,7 +11,7 @@ class FIFOCache(Cache):
     Fetching features from the caching, CPU mem or remote server automatically
     """
 
-    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu'):
+    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
         """
         Args:
             capacity: The capacity of the caching (# nodes cached at most)
@@ -19,7 +19,10 @@ class FIFOCache(Cache):
             feature_dim: feature dimensions
         """
         super(FIFOCache, self).__init__(capacity, num_nodes,
-                                        num_edges, node_features, edge_features, device)
+                                       num_edges, node_features,
+                                       edge_features, device,
+                                       pinned_nfeat_buffs,
+                                       pinned_efeat_buffs)
         # name
         self.name = 'fifo'
         # pointer to the last entry for the recent cached nodes
