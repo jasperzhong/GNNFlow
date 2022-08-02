@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
+from dgnn.cache.cache import Cache
 
 import dgnn.models as models
 from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
@@ -85,7 +86,7 @@ set_seed(args.seed)
 
 
 def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
-        model: torch.nn.Module, node_feats: torch.Tensor,
+        model: torch.nn.Module, cache: Cache, node_feats: torch.Tensor,
         edge_feats: torch.Tensor, creterion: torch.nn.Module, neg_samples=1,
         no_neg=False, identity=False, deliver_to_neighbors=False):
     model.eval()
@@ -112,9 +113,9 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
                 mfgs_deliver_to_neighbors = mfgs
                 mfgs = node_to_dgl_blocks(target_nodes, ts)
 
-            mfgs = prepare_input(
-                mfgs, node_feats, edge_feats, combine_first=False)
             mfgs_to_cuda(mfgs)
+            # TODO: update caceh maybe False
+            mfgs = cache.fetch_feature(mfgs, update_cache=True)
 
             pred_pos, pred_neg = model(mfgs, neg_samples)
 
@@ -283,20 +284,14 @@ for e in range(args.epoch):
         if args.arch_identity:
             mfgs_deliver_to_neighbors = mfgs
             mfgs = node_to_dgl_blocks(target_nodes, ts)
-
         sample_end.record()
-        # move mfgs to cuda
-        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
-        # mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
-        #     mfgs)
-        # feature_end.record()
+
         mfgs_to_cuda(mfgs)
         cuda_end.record()
-        mfgs, fetch_time, update_time, cache_ratio, fetch_cache, fetch_uncache, apply, uncache_get_id, uncache_to_cuda = cache.fetch_feature(
-            mfgs)
-        # feature_end = torch.cuda.Event(enable_timing=True)
-        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+
+        mfgs = cache.fetch_feature(mfgs)
         feature_end.record()
+        # Train
         optimizer.zero_grad()
 
         # move pre_input_mail to forward()
@@ -316,28 +311,19 @@ for e in range(args.epoch):
 
         train_end.record()
 
-        # sample_time += sample_end - time_start
-        # cuda_time += cuda_end - sample_end
-        # feature_time += feature_end - cuda_end
-        # train_time += train_end - feature_end
-        # sample_time += time_start.elapsed_time(sample_end)
-        # cuda_time += feature_end.elapsed_time(cuda_end)
-        # feature_time += sample_end.elapsed_time(feature_end)
         sample_time += time_start.elapsed_time(sample_end)
         cuda_time += sample_end.elapsed_time(cuda_end)
         feature_time += cuda_end.elapsed_time(feature_end)
-        # train_time += feature_end.elapsed_time(train_end)
         train_end.synchronize()
-        # train_time += feature_end.elapsed_time(train_end)
         train_time += feature_end.elapsed_time(train_end)
-        fetch_all_time += fetch_time
-        update_all_time += update_time
-        cache_ratio_avg += cache_ratio
-        fetch_cache_all += fetch_cache
-        fetch_uncache_all += fetch_uncache
-        apply_all += apply
-        uncache_get_id_all += uncache_get_id
-        uncache_to_cuda_all += uncache_to_cuda
+        fetch_all_time += cache.fetch_time
+        update_all_time += cache.update_time
+        cache_ratio_avg += cache.cache_ratio
+        fetch_cache_all += cache.fetch_cache
+        fetch_uncache_all += cache.fetch_uncache
+        apply_all += cache.apply
+        uncache_get_id_all += cache.uncache_get_id
+        uncache_to_cuda_all += cache.uncache_to_cuda
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
@@ -345,6 +331,7 @@ for e in range(args.epoch):
     cuda_time /= 1000
     feature_time /= 1000
     train_time /= 1000
+    fetch_cache_all /= 1000
     print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
         epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
     print(
@@ -352,12 +339,10 @@ for e in range(args.epoch):
             fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all))
     epoch_time_sum += epoch_time
 
-# print("********************************")
-# print("********************************")
     # Validation
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
-    ap, auc = val(val_loader, sampler, model, node_feats,
+    ap, auc = val(val_loader, sampler, model, cache, node_feats,
                   edge_feats, creterion, no_neg=args.no_neg,
                   identity=args.arch_identity,
                   deliver_to_neighbors=args.deliver_to_neighbors)
@@ -377,16 +362,16 @@ model.load_state_dict(torch.load(path_saver))
 # To update the memory
 if model.use_mailbox():
     model.mailbox_reset()
-    val(train_loader, sampler, model, node_feats,
+    val(train_loader, sampler, model, cache, node_feats,
         edge_feats, creterion, no_neg=args.no_neg,
         identity=args.arch_identity,
         deliver_to_neighbors=args.deliver_to_neighbors)
-    val(val_loader, sampler, model, node_feats,
+    val(val_loader, sampler, model, cache, node_feats,
         edge_feats, creterion, no_neg=args.no_neg,
         identity=args.arch_identity,
         deliver_to_neighbors=args.deliver_to_neighbors)
 
-ap, auc = val(test_loader, sampler, model, node_feats,
+ap, auc = val(test_loader, sampler, model, cache, node_feats,
               edge_feats, creterion, no_neg=args.no_neg,
               identity=args.arch_identity,
               deliver_to_neighbors=args.deliver_to_neighbors)

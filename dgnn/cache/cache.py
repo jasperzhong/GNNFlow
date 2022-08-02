@@ -4,7 +4,6 @@ import time
 
 class Cache:
     def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
-        # TODO
         self.node_capacity = int(capacity * num_nodes)
         self.edge_capacity = int(capacity * num_edges)
         # number of nodes in graph
@@ -118,6 +117,7 @@ class Cache:
         update_start = torch.cuda.Event(enable_timing=True)
         update_end = torch.cuda.Event(enable_timing=True)
         i = 0
+        cache_edge_ratio_sum = 0
         if self.edge_features is not None:
             for mfg in mfgs:
                 for b in mfg:
@@ -126,6 +126,7 @@ class Cache:
                         cache_mask = self.cache_edge_flag[b.edata['ID']]
                         cache_edge_ratio = torch.sum(
                             cache_mask) / len(b.edata['ID'])
+                        cache_edge_ratio_sum += cache_edge_ratio
 
                         edge_feature = torch.zeros(len(b.edata['ID']), self.edge_feature_dim, dtype=torch.float32, device=self.device,
                                                    requires_grad=False)
@@ -136,25 +137,10 @@ class Cache:
                         fetch_cache_end.record()
                         # fetch the uncached features
                         uncached_mask = ~cache_mask
-                        # uncached_edge_id = b.edata['ID'][uncached_mask].to(
-                        #     'cpu')
                         uncached_edge_id = b.edata['ID'][uncached_mask]
-                        # unique_cached_edge_id, inverse, counts = torch.unique_consecutive(
-                        #     uncached_edge_id, return_counts=True, return_inverse=True)
                         uncached_get_id_end.record()
                         torch.index_select(self.edge_features, 0, uncached_edge_id.to('cpu'),
                                            out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
-
-                        # torch.index_select(self.edge_features, 0, uncached_edge_id,
-                        #                    out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
-                        # unique_edge_feats = self.edge_features[unique_cached_edge_id].to(
-                        #     self.device)
-                        # unique_edge_feats = unique_edge_feats.repeat_interleave(
-                        #     counts, dim=0)
-                        # temp = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].cuda(
-                        #     non_blocking=True)
-                        # edge_feature[uncached_mask] = temp.repeat_interleave(
-                        #     counts, dim=0)
 
                         edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].cuda(
                             non_blocking=True)
@@ -190,4 +176,14 @@ class Cache:
         end.record()
         end.synchronize()
         fetch_time = start.elapsed_time(end) - update_time
-        return mfgs, fetch_time, update_time, cache_edge_ratio, fetch_cache / 1000, fetch_uncache / 1000, apply / 1000, uncache_get_id / 1000, uncache_to_cuda / 1000
+
+        self.cache_ratio = cache_edge_ratio_sum / i
+        self.fetch_time = fetch_time / 1000
+        self.update_time = update_time / 1000
+        self.fetch_cache = fetch_cache / 1000
+        self.fetch_uncache = fetch_uncache / 1000
+        self.apply = apply / 1000
+        self.uncache_get_id = uncache_get_id / 1000
+        self.uncache_to_cuda = uncache_to_cuda / 1000
+
+        return mfgs
