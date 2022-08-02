@@ -60,6 +60,36 @@ class Cache:
             self.cache_index_to_edge_id = torch.zeros(self.edge_capacity, dtype=torch.int64, device=self.device,
                                                       requires_grad=False) - 1
 
+    def init_cache(self):
+        """
+        Init the caching with node features
+        """
+        cache_node_id = None
+        cache_edge_id = None
+        if self.node_features != None:
+            cache_node_id = torch.arange(
+                self.node_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
+
+            # Init parameters related to feature fetching
+            self.cache_node_buffer[cache_node_id] = self.node_features[:self.node_capacity].to(
+                self.device, non_blocking=True)
+            self.cache_node_flag[cache_node_id] = True
+            self.cache_index_to_node_id = cache_node_id.clone().detach()
+            self.cache_node_map[cache_node_id] = cache_node_id
+
+        if self.edge_features != None:
+            cache_edge_id = torch.arange(
+                self.edge_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
+
+            # Init parameters related to feature fetching
+            self.cache_edge_buffer[cache_edge_id] = self.edge_features[:self.edge_capacity].to(
+                self.device, non_blocking=True)
+            self.cache_edge_flag[cache_edge_id] = True
+            self.cache_index_to_edge_id = cache_edge_id.clone().detach()
+            self.cache_edge_map[cache_edge_id] = cache_edge_id
+
+        return cache_node_id, cache_edge_id
+
     def fetch_feature(self, mfgs, update_cache=True):
         """Fetching the node features of input_node_ids
         Args:
@@ -133,10 +163,10 @@ class Cache:
                     fetch_node_cache_end)
                 fetch_node_uncache_time += fetch_node_cache_end.elapsed_time(
                     fetch_node_uncache_end)
-            self.update_node_time = update_node_time
+            self.update_node_time = update_node_time / 1000
             self.cache_node_ratio = cache_node_ratio_sum / i
 
-        self.fetch_node_cache_time = fetch_node_cache_time / 1000
+        self.fetch_node_cache_time = fetch_node_cache_time
         self.fetch_node_uncache_time = fetch_node_uncache_time
 
         # Edge feature

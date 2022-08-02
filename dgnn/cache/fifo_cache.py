@@ -35,28 +35,11 @@ class FIFOCache(Cache):
     def init_cache(self):
         """Init the caching with node features
         """
+        _, _ = super(FIFOCache, self).init_cache()
         if self.node_features != None:
-            cache_node_id = torch.arange(
-                self.node_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
-
-            # Init parameters related to feature fetching
-            self.cache_node_buffer[cache_node_id] = self.node_features[:self.node_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_node_flag[cache_node_id] = True
-            self.cache_index_to_node_id = cache_node_id.clone().detach()
-            self.cache_node_map[cache_node_id] = cache_node_id
             self.cache_node_pointer = self.node_capacity - 1
 
         if self.edge_features != None:
-            cache_edge_id = torch.arange(
-                self.edge_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
-
-            # Init parameters related to feature fetching
-            self.cache_edge_buffer[cache_edge_id] = self.edge_features[:self.edge_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_edge_flag[cache_edge_id] = True
-            self.cache_index_to_edge_id = cache_edge_id.clone().detach()
-            self.cache_edge_map[cache_edge_id] = cache_edge_id
             self.cache_edge_pointer = self.edge_capacity - 1
 
     def update_node_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):

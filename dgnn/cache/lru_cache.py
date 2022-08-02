@@ -29,27 +29,7 @@ class LRUCache(Cache):
         """
         Init the caching with node features
         """
-        if self.node_features != None:
-            cache_node_id = torch.arange(
-                self.node_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
-
-            # Init parameters related to feature fetching
-            self.cache_node_buffer[cache_node_id] = self.node_features[:self.node_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_node_flag[cache_node_id] = True
-            self.cache_index_to_node_id = cache_node_id.clone().detach()
-            self.cache_node_map[cache_node_id] = cache_node_id
-
-        if self.edge_features != None:
-            cache_edge_id = torch.arange(
-                self.edge_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
-
-            # Init parameters related to feature fetching
-            self.cache_edge_buffer[cache_edge_id] = self.edge_features[:self.edge_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_edge_flag[cache_edge_id] = True
-            self.cache_index_to_edge_id = cache_edge_id.clone().detach()
-            self.cache_edge_map[cache_edge_id] = cache_edge_id
+        _, _ = super(LRUCache, self).init_cache()
 
     def update_edge_cache(self, cached_edge_index, uncached_edge_id, uncached_edge_feature):
         # If the number of edges to cache is larger than the cache capacity, we only cache the first
