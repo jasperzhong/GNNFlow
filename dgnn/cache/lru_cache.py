@@ -100,7 +100,7 @@ class LRUCache(Cache):
 
         # get the k node id with the least water level
         removing_node_index = torch.topk(
-            self.cache_count, k=num_node_to_cache, largest=False).indices
+            self.cache_node_count, k=num_node_to_cache, largest=False).indices
         assert len(removing_node_index) == len(
             node_id_to_cache) == len(node_feature_to_cache)
         removing_node_id = self.cache_index_to_node_id[removing_node_index]
