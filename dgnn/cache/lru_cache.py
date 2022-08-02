@@ -94,9 +94,9 @@ class LRUCache(Cache):
         node_feature_to_cache = uncached_node_feature[:num_node_to_cache]
 
         # first all -1
-        self.cache_count -= 1
+        self.cache_node_count -= 1
         # update cached node index to 0 (0 is the highest priority)
-        self.cache_count[cached_node_index] = 0
+        self.cache_node_count[cached_node_index] = 0
 
         # get the k node id with the least water level
         removing_node_index = torch.topk(
@@ -106,11 +106,11 @@ class LRUCache(Cache):
         removing_node_id = self.cache_index_to_node_id[removing_node_index]
 
         # update cache attributes
-        self.cache_buffer[removing_node_index] = node_feature_to_cache
-        self.cache_count[removing_node_index] = 0
-        self.cache_flag[removing_node_id] = False
-        self.cache_flag[node_id_to_cache] = True
-        self.cache_map[removing_node_id] = -1
-        self.cache_map[node_id_to_cache] = removing_node_index
+        self.cache_node_buffer[removing_node_index] = node_feature_to_cache
+        self.cache_node_count[removing_node_index] = 0
+        self.cache_node_flag[removing_node_id] = False
+        self.cache_node_flag[node_id_to_cache] = True
+        self.cache_node_map[removing_node_id] = -1
+        self.cache_node_map[node_id_to_cache] = removing_node_index
         self.cache_index_to_node_id[removing_node_index] = node_id_to_cache.to(
             self.device, non_blocking=True)
