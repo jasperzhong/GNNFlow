@@ -234,7 +234,7 @@ class NegLinkSampler:
 def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_feats):
     pinned_nfeat_buffs = list()
     pinned_efeat_buffs = list()
-    limit = int(batch_size * 3.3)
+    limit = int(batch_size * 3)
     for i in fanouts:
         limit *= i
         if edge_feats is not None:
