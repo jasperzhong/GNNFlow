@@ -362,41 +362,43 @@ for e in range(args.epoch):
     ))
     epoch_time_sum += epoch_time
 
-    # Validation
-    print("***Start validation at epoch {}***".format(e))
-    val_start = time.time()
-    ap, auc = val(val_loader, sampler, model, cache, node_feats,
-                  edge_feats, creterion, no_neg=args.no_neg,
-                  identity=args.arch_identity,
-                  deliver_to_neighbors=args.deliver_to_neighbors)
-    val_end = time.time()
-    val_time = val_end - val_start
-    print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
-          .format(epoch_time, val_time, ap, auc))
-    if e > 1 and ap > best_ap:
-        best_e = e
-        best_ap = ap
-        torch.save(model.state_dict(), path_saver)
-        print("Best val AP: {:.4f} & val AUC: {:.4f}".format(ap, auc))
+#     # Validation
+#     print("***Start validation at epoch {}***".format(e))
+#     val_start = time.time()
+#     ap, auc = val(val_loader, sampler, model, cache, node_feats,
+#                   edge_feats, creterion, no_neg=args.no_neg,
+#                   identity=args.arch_identity,
+#                   deliver_to_neighbors=args.deliver_to_neighbors)
+#     val_end = time.time()
+#     val_time = val_end - val_start
+#     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
+#           .format(epoch_time, val_time, ap, auc))
+#     if e > 1 and ap > best_ap:
+#         best_e = e
+#         best_ap = ap
+#         torch.save(model.state_dict(), path_saver)
+#         print("Best val AP: {:.4f} & val AUC: {:.4f}".format(ap, auc))
 
-print('Loading model at epoch {}...'.format(best_e))
-model.load_state_dict(torch.load(path_saver))
+# print('Loading model at epoch {}...'.format(best_e))
+# model.load_state_dict(torch.load(path_saver))
 
-# To update the memory
-if model.use_mailbox():
-    model.mailbox_reset()
-    val(train_loader, sampler, model, cache, node_feats,
-        edge_feats, creterion, no_neg=args.no_neg,
-        identity=args.arch_identity,
-        deliver_to_neighbors=args.deliver_to_neighbors)
-    val(val_loader, sampler, model, cache, node_feats,
-        edge_feats, creterion, no_neg=args.no_neg,
-        identity=args.arch_identity,
-        deliver_to_neighbors=args.deliver_to_neighbors)
+# # To update the memory
+# if model.use_mailbox():
+#     model.mailbox_reset()
+#     val(train_loader, sampler, model, cache, node_feats,
+#         edge_feats, creterion, no_neg=args.no_neg,
+#         identity=args.arch_identity,
+#         deliver_to_neighbors=args.deliver_to_neighbors)
+#     val(val_loader, sampler, model, cache, node_feats,
+#         edge_feats, creterion, no_neg=args.no_neg,
+#         identity=args.arch_identity,
+#         deliver_to_neighbors=args.deliver_to_neighbors)
 
-ap, auc = val(test_loader, sampler, model, cache, node_feats,
-              edge_feats, creterion, no_neg=args.no_neg,
-              identity=args.arch_identity,
-              deliver_to_neighbors=args.deliver_to_neighbors)
-print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+# ap, auc = val(test_loader, sampler, model, cache, node_feats,
+#               edge_feats, creterion, no_neg=args.no_neg,
+#               identity=args.arch_identity,
+#               deliver_to_neighbors=args.deliver_to_neighbors)
+# print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 print('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+print("*********************")
+print("*********************")
