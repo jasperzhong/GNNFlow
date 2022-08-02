@@ -257,6 +257,10 @@ for e in range(args.epoch):
     if args.reorder > 0:
         train_sampler.reset()
 
+    # init cache every epoch
+    # TODO: maybe a better way to init cache in every epoch
+    cache.init_cache()
+
     # TODO: we can overwrite train():
     # a new class inherit torch.nn.Module which has self.mailbox = None.
     # if mailbox is not None. reset!
@@ -331,7 +335,6 @@ for e in range(args.epoch):
     cuda_time /= 1000
     feature_time /= 1000
     train_time /= 1000
-    fetch_cache_all /= 1000
     print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
         epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
     print(

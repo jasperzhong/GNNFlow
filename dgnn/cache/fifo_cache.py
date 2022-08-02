@@ -19,10 +19,10 @@ class FIFOCache(Cache):
             feature_dim: feature dimensions
         """
         super(FIFOCache, self).__init__(capacity, num_nodes,
-                                       num_edges, node_features,
-                                       edge_features, device,
-                                       pinned_nfeat_buffs,
-                                       pinned_efeat_buffs)
+                                        num_edges, node_features,
+                                        edge_features, device,
+                                        pinned_nfeat_buffs,
+                                        pinned_efeat_buffs)
         # name
         self.name = 'fifo'
         # pointer to the last entry for the recent cached nodes
@@ -40,11 +40,10 @@ class FIFOCache(Cache):
                 self.node_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
 
             # Init parameters related to feature fetching
-            self.cache_node_buffer[cache_node_id] = self.node_features[cache_node_id].to(
+            self.cache_node_buffer[cache_node_id] = self.node_features[:self.node_capacity].to(
                 self.device, non_blocking=True)
             self.cache_node_flag[cache_node_id] = True
-            self.cache_index_to_node_id = torch.tensor(
-                cache_node_id, device=self.device)
+            self.cache_index_to_node_id = cache_node_id.clone().detach()
             self.cache_node_map[cache_node_id] = cache_node_id
             self.cache_node_pointer = self.node_capacity - 1
 
@@ -53,11 +52,10 @@ class FIFOCache(Cache):
                 self.edge_capacity, dtype=torch.int64).to(self.device, non_blocking=True)
 
             # Init parameters related to feature fetching
-            self.cache_edge_buffer[cache_edge_id] = self.edge_features[cache_edge_id].to(
+            self.cache_edge_buffer[cache_edge_id] = self.edge_features[:self.edge_capacity].to(
                 self.device, non_blocking=True)
             self.cache_edge_flag[cache_edge_id] = True
-            self.cache_index_to_edge_id = torch.tensor(
-                cache_edge_id, device=self.device)
+            self.cache_index_to_edge_id = cache_edge_id.clone().detach()
             self.cache_edge_map[cache_edge_id] = cache_edge_id
             self.cache_edge_pointer = self.edge_capacity - 1
 

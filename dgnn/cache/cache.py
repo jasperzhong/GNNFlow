@@ -117,7 +117,7 @@ class Cache:
                 else:
                     cache_update_node_time = 0
 
-        self.cache_node_ratio = cache_node_ratio_sum / i
+            self.cache_node_ratio = cache_node_ratio_sum / i
 
         # Edge feature
         fetch_cache = 0
@@ -188,13 +188,13 @@ class Cache:
                             update_edge_time += cache_update_time
                         else:
                             cache_update_time = 0
+            self.cache_edge_ratio = cache_edge_ratio_sum / i
 
         end.record()
         end.synchronize()
         fetch_time = start.elapsed_time(
             end) - update_edge_time - update_node_time
 
-        self.cache_edge_ratio = cache_edge_ratio_sum / i
         self.fetch_time = fetch_time / 1000
         self.update_edge_time = update_edge_time / 1000
         self.fetch_cache = fetch_cache / 1000
