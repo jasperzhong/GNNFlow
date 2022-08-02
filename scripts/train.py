@@ -154,7 +154,7 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
 node_feats, edge_feats = load_feat(
-    args.data, args.rand_edge_features, args.rand_node_features)
+    args.data, rand_de=args.rand_edge_features, rand_dn=args.rand_node_features)
 train_df, val_df, test_df, df = load_dataset(args.data)
 
 train_ds = DynamicGraphDataset(train_df)
