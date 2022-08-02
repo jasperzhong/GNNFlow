@@ -48,7 +48,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataF
     return train_df, val_df, test_df, df
 
 
-def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
+def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0, edge_count=0, node_count=0) -> Tuple[torch.Tensor, torch.Tensor]:
 
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
@@ -70,16 +70,18 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
         if edge_feats.dtype == torch.bool:
             edge_feats = edge_feats.type(torch.float32)
 
-    if rand_de > 0:
-        if dataset == 'LASTFM':
-            edge_feats = torch.randn(1293103, rand_de)
-        elif dataset == 'MOOC':
-            edge_feats = torch.randn(411749, rand_de)
-    if rand_dn > 0:
-        if dataset == 'LASTFM':
-            node_feats = torch.randn(1980, rand_dn)
-        elif dataset == 'MOOC':
-            node_feats = torch.randn(7144, rand_dn)
+    if rand_de > 0 and edge_feats is None:
+        edge_feats = torch.randn(edge_count, rand_de)
+        # if dataset == 'LASTFM':
+        #     edge_feats = torch.randn(1293103, rand_de)
+        # elif dataset == 'MOOC':
+        #     edge_feats = torch.randn(411749, rand_de)
+    if rand_dn > 0 and node_feats is None:
+        node_feats = torch.randn(node_count, rand_dn)
+        # if dataset == 'LASTFM':
+        #     node_feats = torch.randn(1980, rand_dn)
+        # elif dataset == 'MOOC':
+        #     node_feats = torch.randn(7144, rand_dn)
 
     if node_feats is not None:
         node_feats = node_feats.pin_memory()

@@ -39,7 +39,7 @@ parser.add_argument("--data", choices=datasets,
 parser.add_argument("--cache", choices=cache_names,
                     default='LFUCache', help="cache:" +
                     '|'.join(cache_names) + '(default: LFUCache)')
-parser.add_argument("--epoch", help="training epoch", type=int, default=100)
+parser.add_argument("--epoch", help="training epoch", type=int, default=5)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
 parser.add_argument("--num-workers", help="num workers", type=int, default=0)
@@ -72,7 +72,7 @@ parser.add_argument("--graph-reverse",
                     help="build undirected graph", type=bool, default=True)
 parser.add_argument('--rand_edge_features', type=int, default=0,
                     help='use random edge featrues')
-parser.add_argument('--rand_node_features', type=int, default=0,
+parser.add_argument('--rand_node_features', type=int, default=100,
                     help='use random node featrues')
 parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
@@ -153,8 +153,6 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
-node_feats, edge_feats = load_feat(
-    args.data, rand_de=args.rand_edge_features, rand_dn=args.rand_node_features)
 train_df, val_df, test_df, df = load_dataset(args.data)
 
 train_ds = DynamicGraphDataset(train_df)
@@ -192,6 +190,15 @@ test_loader = torch.utils.data.DataLoader(
 dgraph = build_dynamic_graph(
     df, max_gpu_pool_size=100 * (1 << 20),
     add_reverse=args.graph_reverse)
+
+edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
+node_count = dgraph.num_vertices()
+node_feats, edge_feats = load_feat(
+    args.data, rand_de=args.rand_edge_features,
+    rand_dn=args.rand_node_features,
+    edge_count=edge_count, node_count=node_count)
+# for test
+edge_feats = None
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
@@ -247,14 +254,18 @@ for e in range(args.epoch):
     feature_time = 0
     train_time = 0
     fetch_all_time = 0
-    update_all_time = 0
-    cache_ratio_avg = 0
+    update_node_time = 0
+    update_edge_time = 0
+    cache_edge_ratio_sum = 0
+    cache_node_ratio_sum = 0
     cuda_time = 0
     fetch_cache_all = 0
     fetch_uncache_all = 0
     apply_all = 0
     uncache_get_id_all = 0
     uncache_to_cuda_all = 0
+    fetch_node_cache_all = 0
+    fetch_node_uncache_all = 0
 
     if args.reorder > 0:
         train_sampler.reset()
@@ -323,13 +334,17 @@ for e in range(args.epoch):
         train_end.synchronize()
         train_time += feature_end.elapsed_time(train_end)
         fetch_all_time += cache.fetch_time
-        update_all_time += cache.update_edge_time
-        cache_ratio_avg += cache.cache_edge_ratio
+        update_node_time += cache.update_node_time
+        update_edge_time += cache.update_edge_time
+        cache_edge_ratio_sum += cache.cache_edge_ratio
+        cache_node_ratio_sum += cache.cache_node_ratio
         fetch_cache_all += cache.fetch_cache
         fetch_uncache_all += cache.fetch_uncache
         apply_all += cache.apply
         uncache_get_id_all += cache.uncache_get_id
         uncache_to_cuda_all += cache.uncache_to_cuda
+        fetch_node_cache_all += cache.fetch_node_cache_time
+        fetch_node_uncache_all += cache.fetch_node_uncache_time
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
@@ -337,11 +352,14 @@ for e in range(args.epoch):
     cuda_time /= 1000
     feature_time /= 1000
     train_time /= 1000
-    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update time:{:.2f}s; cache ratio: {:.2f}'.format(
-        epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_all_time, cache_ratio_avg / (i + 1)))
+    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}'.format(
+        epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
     print(
         'fetch_cache: {:.2f}s, fetch_uncache: {:.2f}s, apply: {:.2f}s, uncache_get_id: {:.2f}s, uncache_to_cuda: {:.2f}s'.format(
             fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all))
+    print('fetch_node_cache: {:.2f}s ; fetch_node_uncache:{:.2f}s'.format(
+        fetch_node_cache_all / 1000, fetch_node_uncache_all / 1000
+    ))
     epoch_time_sum += epoch_time
 
     # Validation

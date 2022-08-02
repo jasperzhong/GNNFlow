@@ -37,7 +37,7 @@ class LFUCache(Cache):
             # Init parameters related to feature fetching
             self.cache_node_buffer[cache_node_id] = self.node_features[:self.node_capacity].to(
                 self.device, non_blocking=True)
-            self.cache_node_scount[cache_node_id] += 1
+            self.cache_node_count[cache_node_id] += 1
             self.cache_node_flag[cache_node_id] = True
             self.cache_index_to_node_id = cache_node_id.clone().detach()
             self.cache_node_map[cache_node_id] = cache_node_id

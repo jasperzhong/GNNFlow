@@ -24,6 +24,9 @@ class Cache:
         self.pinned_nfeat_buffs = pinned_nfeat_buffs
         self.pinned_efeat_buffs = pinned_efeat_buffs
 
+        self.cache_node_ratio = 0
+        self.cache_edge_ratio = 0
+
         # stores node's features
         if self.node_feature_dim != 0:
             self.cache_node_buffer = torch.zeros(self.node_capacity, self.node_feature_dim, dtype=torch.float32, device=self.device,
@@ -71,15 +74,24 @@ class Cache:
         fetch_time = 0
         update_node_time = 0
         update_edge_time = 0
+        fetch_node_cache_time = 0
+        fetch_node_uncache_time = 0
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         update_node_start = torch.cuda.Event(enable_timing=True)
         update_node_end = torch.cuda.Event(enable_timing=True)
+        fetch_node_cache_start = torch.cuda.Event(enable_timing=True)
+        fetch_node_cache_end = torch.cuda.Event(enable_timing=True)
+        fetch_node_uncache_end = torch.cuda.Event(enable_timing=True)
+        apply_end = torch.cuda.Event(enable_timing=True)
+        update_start = torch.cuda.Event(enable_timing=True)
+        update_end = torch.cuda.Event(enable_timing=True)
         start.record()
         cache_node_ratio_sum = 0
         i = 0
         if self.node_features is not None:
             for b in mfgs[0]:  # not sure why
+                fetch_node_cache_start.record()
                 cache_mask = self.cache_node_flag[b.srcdata['ID']]
                 cache_node_ratio = torch.sum(
                     cache_mask) / len(b.srcdata['ID'])
@@ -91,7 +103,7 @@ class Cache:
                 # fetch the cached features
                 cached_node_index = self.cache_node_map[b.srcdata['ID'][cache_mask]]
                 node_feature[cache_mask] = self.cache_node_buffer[cached_node_index]
-
+                fetch_node_cache_end.record()
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
                 uncached_node_id = b.srcdata['ID'][uncached_mask]
@@ -102,7 +114,7 @@ class Cache:
                 i += 1
                 # save the node feature into the mfgs
                 b.srcdata['h'] = node_feature
-
+                fetch_node_uncache_end.record()
                 # update the cache buffer
                 # TODO: if have many snapshots
                 if update_cache:
@@ -110,14 +122,22 @@ class Cache:
                     self.update_node_cache(cached_node_index=cached_node_index, uncached_node_id=uncached_node_id,
                                            uncached_node_feature=node_feature[uncached_mask])
                     update_node_end.record()
-                    update_node_end.synchrnoize()
+                    update_node_end.synchronize()
                     cache_update_node_time = update_node_start.elapsed_time(
                         update_node_end)
                     update_node_time += cache_update_node_time
                 else:
                     cache_update_node_time = 0
 
+                fetch_node_cache_time += fetch_node_cache_start.elapsed_time(
+                    fetch_node_cache_end)
+                fetch_node_uncache_time += fetch_node_cache_end.elapsed_time(
+                    fetch_node_uncache_end)
+            self.update_node_time = update_node_time
             self.cache_node_ratio = cache_node_ratio_sum / i
+
+        self.fetch_node_cache_time = fetch_node_cache_time / 1000
+        self.fetch_node_uncache_time = fetch_node_uncache_time
 
         # Edge feature
         fetch_cache = 0
