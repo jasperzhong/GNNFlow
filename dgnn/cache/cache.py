@@ -69,15 +69,21 @@ class Cache:
             cache_update_time: time to update the cache
         """
         fetch_time = 0
-        update_time = 0
+        update_node_time = 0
+        update_edge_time = 0
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
+        update_node_start = torch.cuda.Event(enable_timing=True)
+        update_node_end = torch.cuda.Event(enable_timing=True)
         start.record()
+        cache_node_ratio_sum = 0
+        i = 0
         if self.node_features is not None:
             for b in mfgs[0]:  # not sure why
                 cache_mask = self.cache_node_flag[b.srcdata['ID']]
                 cache_node_ratio = torch.sum(
                     cache_mask) / len(b.srcdata['ID'])
+                cache_node_ratio_sum += cache_node_ratio
 
                 node_feature = torch.zeros(len(b.srcdata['ID']), self.node_feature_dim, dtype=torch.float32, device=self.device,
                                            requires_grad=False)
@@ -89,21 +95,31 @@ class Cache:
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
                 uncached_node_id = b.srcdata['ID'][uncached_mask]
-                node_feature[uncached_mask] = self.node_features[uncached_node_id].to(
+                torch.index_select(self.node_features, 0, uncached_node_id.to('cpu'),
+                                   out=self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]])
+                node_feature[uncached_mask] = self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]].to(
                     self.device, non_blocking=True)
-
+                i += 1
                 # save the node feature into the mfgs
                 b.srcdata['h'] = node_feature
 
                 # update the cache buffer
                 # TODO: if have many snapshots
                 if update_cache:
-                    start_time = time.time()
+                    update_node_start.record()
                     self.update_node_cache(cached_node_index=cached_node_index, uncached_node_id=uncached_node_id,
                                            uncached_node_feature=node_feature[uncached_mask])
-                    cache_update_time = time.time() - start_time
+                    update_node_end.record()
+                    update_node_end.synchrnoize()
+                    cache_update_node_time = update_node_start.elapsed_time(
+                        update_node_end)
+                    update_node_time += cache_update_node_time
                 else:
-                    cache_update_time = 0
+                    cache_update_node_time = 0
+
+        self.cache_node_ratio = cache_node_ratio_sum / i
+
+        # Edge feature
         fetch_cache = 0
         fetch_uncache = 0
         uncache_get_id = 0
@@ -142,8 +158,8 @@ class Cache:
                         torch.index_select(self.edge_features, 0, uncached_edge_id.to('cpu'),
                                            out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
 
-                        edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].cuda(
-                            non_blocking=True)
+                        edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].to(
+                            self.device, non_blocking=True)
                         i += 1
                         fetch_uncache_end.record()
 
@@ -169,17 +185,18 @@ class Cache:
                             update_end.synchronize()
                             cache_update_time = update_start.elapsed_time(
                                 update_end)
-                            update_time += cache_update_time
+                            update_edge_time += cache_update_time
                         else:
                             cache_update_time = 0
 
         end.record()
         end.synchronize()
-        fetch_time = start.elapsed_time(end) - update_time
+        fetch_time = start.elapsed_time(
+            end) - update_edge_time - update_node_time
 
-        self.cache_ratio = cache_edge_ratio_sum / i
+        self.cache_edge_ratio = cache_edge_ratio_sum / i
         self.fetch_time = fetch_time / 1000
-        self.update_time = update_time / 1000
+        self.update_edge_time = update_edge_time / 1000
         self.fetch_cache = fetch_cache / 1000
         self.fetch_uncache = fetch_uncache / 1000
         self.apply = apply / 1000

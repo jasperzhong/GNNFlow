@@ -317,8 +317,8 @@ for e in range(args.epoch):
         train_end.synchronize()
         train_time += feature_end.elapsed_time(train_end)
         fetch_all_time += cache.fetch_time
-        update_all_time += cache.update_time
-        cache_ratio_avg += cache.cache_ratio
+        update_all_time += cache.update_edge_time
+        cache_ratio_avg += cache.cache_edge_ratio
         fetch_cache_all += cache.fetch_cache
         fetch_uncache_all += cache.fetch_uncache
         apply_all += cache.apply
