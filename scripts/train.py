@@ -70,8 +70,11 @@ parser.add_argument("--sample-duration",
 parser.add_argument("--reorder", help="", type=int, default=0)
 parser.add_argument("--graph-reverse",
                     help="build undirected graph", type=bool, default=True)
+parser.add_argument('--rand_edge_features', type=int, default=0,
+                    help='use random edge featrues')
+parser.add_argument('--rand_node_features', type=int, default=0,
+                    help='use random node featrues')
 parser.add_argument("--seed", type=int, default=42)
-# TODO: rand node & edge features
 args = parser.parse_args()
 
 
@@ -150,9 +153,8 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
-node_feats, edge_feats = load_feat(args.data)
-# for test
-node_feats = None
+node_feats, edge_feats = load_feat(
+    args.data, args.rand_edge_features, args.rand_node_features)
 train_df, val_df, test_df, df = load_dataset(args.data)
 
 train_ds = DynamicGraphDataset(train_df)
