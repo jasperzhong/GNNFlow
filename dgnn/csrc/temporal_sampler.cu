@@ -373,7 +373,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         reinterpret_cast<uint32_t*>(gpu_output_buffer_[snapshot] + offset5);
 
     auto new_end = thrust::remove_if(
-        rmm::exec_policy(streams_[snapshot]),
+        thrust::cuda::par.on(streams_[snapshot]),
         thrust::make_zip_iterator(thrust::make_tuple(
             d_src_nodes, d_eids, d_timestamps, d_delta_timestamps)),
         thrust::make_zip_iterator(thrust::make_tuple(
