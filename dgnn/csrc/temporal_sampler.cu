@@ -629,6 +629,10 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
 
       if(gpu_num_sampled + cpu_num_sampled < max_num_sampled) {
         // concatenate
+        LOG(INFO) << "Use Concatenate Policy. "
+                  << " GPU NUM SAMPLED: " << gpu_num_sampled
+                  << " CPU NUM SAMPLED: " << cpu_num_sampled
+                  << " MAX NUM SAMPLED: " << max_num_sampled;
         // TODO: change with memcpy ?
         uint32_t cpu_sampler_offset = 0;
         uint32_t gpu_sampler_offset = gpu_num_sampled;
@@ -645,6 +649,10 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
           cpu_sampler_offset = cpu_sampler_offset + 1;
         }
       } else {
+        LOG(INFO) << "Use PURLY RANDOMIZED policy. "
+                  << " GPU NUM SAMPLED: " << gpu_num_sampled
+                  << " CPU NUM SAMPLED: " << cpu_num_sampled
+                  << " MAX NUM SAMPLED: " << max_num_sampled;
         // purly randomized
         std::vector<uint32_t> randomized_array = randomized_shuffle(cpu_num_sampled + gpu_num_sampled, max_num_sampled);
         for(uint32_t current_offset = 0; current_offset < max_num_sampled; ++current_offset) {
@@ -680,6 +688,10 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       }
 
     } else {
+      LOG(INFO) << "Use RANDOMIZED RATIO policy. "
+                << " GPU NUM SAMPLED: " << gpu_num_sampled
+                << " CPU NUM SAMPLED: " << cpu_num_sampled
+                << " MAX NUM SAMPLED: " << max_num_sampled;
       // randomized with ratio (gpu_sampler * alpha + cpu_sampler * (1 - alpha))
       // alpha = gpu_num_candidates / (gpu_num_candidates + cpu_num_candidates)
       double alpha = (double) gpu_num_candidates / (double) (gpu_num_candidates + cpu_num_candidates);
