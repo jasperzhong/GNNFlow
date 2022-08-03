@@ -62,9 +62,51 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer uniform passed")
 
+    def test_sample_layer_uniform_v2(self):
+        # build the dynamic graph
+        dgraph = DynamicGraph()
+
+        # num of source and target vertices
+        # timestamps
+        n = 20
+        source_list = []
+        target_list = []
+        ts_list  = []
+
+        for i in range(n):
+            source_list.append(i // n)
+            target_list.append(i % n  + 1)
+            ts_list.append(i % n)
+
+
+        source_vertices = np.array(source_list)
+        target_vertices = np.array(target_list)
+        timestamps = np.array(ts_list)
+
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
+
+        # sample 1-hop neighbors
+        sampler = TemporalSampler(dgraph, [2], strategy='uniform')
+        target_vertices = np.arange(0, n , 1)
+
+        target_timestamp = np.full(n , n - 1, dtype = int)
+        blocks = sampler.sample(target_vertices,
+                                target_timestamp)
+        blocks = blocks[0]
+
+        block = blocks[0]
+
+        print(block.num_dst_nodes())
+        print(block.num_dst_nodes())
+        # self.assertEqual(block.num_src_nodes(), 9)
+        # self.assertEqual(block.num_dst_nodes(), 3)
+
+        print("Test sample_layer uniform v2 passed")
+
     def test_cpu_sample_layer_uniform(self):
-        # build the dynamic graph (limit the max_gpu_pool_size to 32 bytes in order to switch the block to cpu)
-        dgraph = DynamicGraph(max_gpu_pool_size = (1<<6))
+        # build the dynamic graph (limit the max_gpu_pool_size to 256 bytes in order to switch the block to cpu)
+        dgraph = DynamicGraph(max_gpu_pool_size = (1<<8))
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
