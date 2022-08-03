@@ -73,7 +73,7 @@ class TestTemporalSampler(unittest.TestCase):
         target_list = []
         ts_list  = []
 
-        for i in range(n):
+        for i in range(n*n):
             source_list.append(i // n)
             target_list.append(i % n  + 1)
             ts_list.append(i % n)
