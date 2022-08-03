@@ -697,8 +697,8 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       double alpha = (double) gpu_num_candidates / (double) (gpu_num_candidates + cpu_num_candidates);
 
       // TODO: round
-      uint32_t gpu_actual_size = (uint32_t) ( ( (double) gpu_num_sampled ) * alpha );
-      uint32_t cpu_actual_size = (uint32_t) ( ( (double) gpu_num_sampled ) * (1.00 - alpha) );
+      uint32_t gpu_actual_size = (uint32_t) ( ( (double) max_num_sampled ) * alpha );
+      uint32_t cpu_actual_size = (uint32_t) ( ( (double) max_num_sampled ) * (1.00 - alpha) );
 
       // TODO: precision control (ceiling or flooring)?
       uint32_t actual_size = std::min(max_num_sampled, (std::size_t) (gpu_actual_size + cpu_actual_size));
