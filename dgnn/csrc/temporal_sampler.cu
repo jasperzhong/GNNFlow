@@ -252,14 +252,13 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     TimestampType* hs_root_timestamps = reinterpret_cast<TimestampType*>(
         cpu_buffer_[snapshot] + num_root_nodes * sizeof(NIDType));
 
-    // cpu sampler output offeset
-    std::size_t offset6 = offset5 + max_sampled_nodes * sizeof(uint32_t);
-    std::size_t offset7 = offset6 + max_sampled_nodes * sizeof(NIDType);
-    std::size_t offset8 = offset7 + max_sampled_nodes * sizeof(EIDType);
-
-    // cpu sampler's num_sampled[] and num_candidates[]
-    std::size_t offset9 = offset8 + max_sampled_nodes * sizeof(TimestampType);
-    std::size_t offset10 = offset9 + max_sampled_nodes * sizeof(TimestampType);
+    // cpu sampler output offset
+    std::size_t offset6 = offset5 + max_sampled_nodes * sizeof(uint32_t); // NID
+    std::size_t offset7 = offset6 + max_sampled_nodes * sizeof(NIDType);  // EID
+    std::size_t offset8 = offset7 + max_sampled_nodes * sizeof(EIDType);  // TS
+    std::size_t offset9 = offset8 + max_sampled_nodes * sizeof(TimestampType); // D_TS
+    std::size_t offset10 = offset9 + max_sampled_nodes * sizeof(TimestampType); // NUM_SAMPLED
+    std::size_t offset11 = offset10 + max_sampled_nodes * sizeof(uint32_t) // NUM_TIMESTAMP
 
 
     std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
@@ -315,17 +314,17 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
 
 
       NIDType* hs_src_nodes =
-          reinterpret_cast<NIDType*>(cpu_buffer_[snapshot] + offset5);
+          reinterpret_cast<NIDType*>(cpu_buffer_[snapshot] + offset6);
       EIDType* hs_eids =
-          reinterpret_cast<EIDType*>(cpu_buffer_[snapshot] + offset6);
+          reinterpret_cast<EIDType*>(cpu_buffer_[snapshot] + offset7);
       TimestampType* hs_timestamps = reinterpret_cast<TimestampType*>(
-          cpu_buffer_[snapshot] + offset7);
-      TimestampType* hs_delta_timestamps = reinterpret_cast<TimestampType*>(
           cpu_buffer_[snapshot] + offset8);
+      TimestampType* hs_delta_timestamps = reinterpret_cast<TimestampType*>(
+          cpu_buffer_[snapshot] + offset9);
       uint32_t* hs_num_sampled =
-          reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset9);
-      uint32_t* hs_num_candidates =
           reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset10);
+      uint32_t* hs_num_candidates =
+          reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset11);
 
       // CPU Uniformly Sampling
       SampleLayerUniform(graph_.get_host_node_table(), graph_.num_nodes(), prop_time_,
@@ -449,7 +448,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         cpu_buffer_[snapshot], cpu_sampler_buffer,
         gpu_num_sampled_nodes, cpu_num_sampled_nodes, max_sampled_nodes,
         cpu_num_candidates,
-        num_root_nodes_snapshot, sampling_policy_, (std::size_t)(max_sampled_nodes * per_node_size));
+        num_root_nodes_snapshot, sampling_policy_);
   }
 
 
@@ -553,8 +552,7 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
 void TemporalSampler:: MergeHostDeviceResultByPolicy(
     char* gpu_sampler_buffer_on_cpu, char* cpu_sampler_buffer,
     std::size_t gpu_num_sampled, std::size_t cpu_num_sampled, std::size_t max_num_sampled,
-    std::size_t cpu_num_candidates, std::size_t num_root_nodes, SamplingPolicy policy,
-    std::size_t cpu_buffer_offset) {
+    std::size_t cpu_num_candidates, std::size_t num_root_nodes, SamplingPolicy policy) {
 
   // Offset Configuration
   std::size_t offset1 = max_num_sampled * sizeof(NIDType);
@@ -576,18 +574,18 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu + offset5);
 
   // CPU sampler position pointer cast
-  NIDType* h_src_nodes = reinterpret_cast<NIDType*>(gpu_sampler_buffer_on_cpu + cpu_buffer_offset);
-  EIDType* h_eids = reinterpret_cast<EIDType*>(gpu_sampler_buffer_on_cpu + cpu_buffer_offset + offset1);
+  NIDType* h_src_nodes = reinterpret_cast<NIDType*>(cpu_sampler_buffer);
+  EIDType* h_eids = reinterpret_cast<EIDType*>(cpu_sampler_buffer + offset1);
   TimestampType* h_timestamps =
-      reinterpret_cast<TimestampType*>(gpu_sampler_buffer_on_cpu + cpu_buffer_offset + offset2);
+      reinterpret_cast<TimestampType*>(cpu_sampler_buffer + offset2);
   TimestampType* h_delta_timestamps =
-      reinterpret_cast<TimestampType*>(gpu_sampler_buffer_on_cpu + cpu_buffer_offset + offset3);
+      reinterpret_cast<TimestampType*>(cpu_sampler_buffer + offset3);
 
   // TODO: CPU num_sampled and num_candidates ?
   uint32_t* h_num_sampled =
-      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu + cpu_buffer_offset + offset4);
+      reinterpret_cast<uint32_t*>(cpu_sampler_buffer + offset4);
   uint32_t* h_num_candidates =
-      reinterpret_cast<uint32_t*>(gpu_sampler_buffer_on_cpu + cpu_buffer_offset + offset5);
+      reinterpret_cast<uint32_t*>(cpu_sampler_buffer + offset5);
 
 
   if (policy == SamplingPolicy::kSamplingPolicyRecent) {
