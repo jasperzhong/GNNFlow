@@ -249,6 +249,7 @@ best_e = 0
 
 epoch_time_sum = 0
 with open("profile.txt","a") as f:
+    f.write("\n")
     f.write("Data: {}\n".format(args.data))
     f.write("Cache: {}\n".format(args.cache))
     f.write("strategy: {}\n".format(args.sample_strategy))
