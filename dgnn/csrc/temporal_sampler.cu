@@ -717,12 +717,12 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         uint32_t gpu_idx = *gpu_iter;
 
         // overwritten
-//        d_src_nodes[current_offset] = d_src_nodes[gpu_idx];
-//        d_eids[current_offset] = d_eids[gpu_idx];
-//        d_timestamps[current_offset] = d_timestamps[gpu_idx];
-//        d_delta_timestamps[current_offset] = d_delta_timestamps[gpu_idx];
-//        d_num_sampled[current_offset] = d_num_sampled[gpu_idx];
-//        d_num_candidates[current_offset] = d_num_candidates[gpu_idx];
+        d_src_nodes[current_offset] = d_src_nodes[gpu_idx];
+        d_eids[current_offset] = d_eids[gpu_idx];
+        d_timestamps[current_offset] = d_timestamps[gpu_idx];
+        d_delta_timestamps[current_offset] = d_delta_timestamps[gpu_idx];
+        d_num_sampled[current_offset] = d_num_sampled[gpu_idx];
+        d_num_candidates[current_offset] = d_num_candidates[gpu_idx];
 
         current_offset = current_offset + 1;
       }
