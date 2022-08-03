@@ -113,7 +113,7 @@ class TestTemporalSampler(unittest.TestCase):
         dgraph = DynamicGraph(max_gpu_pool_size = (1<<15))
         # num of source and target vertices
         # timestamps
-        n = 22
+        n = 21
         source_list = []
         target_list = []
         ts_list  = []
