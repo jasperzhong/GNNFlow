@@ -736,12 +736,18 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         uint32_t cpu_idx = *cpu_iter;
 
         // overwritten
-        d_src_nodes[current_offset] = h_src_nodes[cpu_idx];
-        d_eids[current_offset] = h_eids[cpu_idx];
-        d_timestamps[current_offset] = h_timestamps[cpu_idx];
-        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
-        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
-        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
+        std::memcpy(d_src_nodes + current_offset, h_src_nodes + cpu_idx, sizeof(NIDType));
+        std::memcpy(d_eids + current_offset, h_eids + cpu_idx, sizeof(EIDType));
+        std::memcpy(d_timestamps + current_offset, h_timestamps + cpu_idx, sizeof(TimestampType));
+        std::memcpy(d_delta_timestamps + current_offset, h_delta_timestamps + cpu_idx, sizeof(TimestampType));
+        std::memcpy(d_num_sampled + current_offset, h_num_sampled + cpu_idx, sizeof(uint32_t));
+        std::memcpy(d_num_candidates + current_offset, h_num_candidates + cpu_idx, sizeof(uint32_t));
+//        d_src_nodes[current_offset] = h_src_nodes[cpu_idx];
+//        d_eids[current_offset] = h_eids[cpu_idx];
+//        d_timestamps[current_offset] = h_timestamps[cpu_idx];
+//        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
+//        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
+//        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
 
         current_offset = current_offset + 1;
       }
