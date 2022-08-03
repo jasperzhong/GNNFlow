@@ -738,9 +738,9 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
 //        std::memcpy(d_num_candidates + current_offset, h_num_candidates + cpu_idx, sizeof(uint32_t));
 
         d_src_nodes[current_offset] = h_src_nodes[cpu_idx];
-//        d_eids[current_offset] = h_eids[cpu_idx];
-//        d_timestamps[current_offset] = h_timestamps[cpu_idx];
-//        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
+        d_eids[current_offset] = h_eids[cpu_idx];
+        d_timestamps[current_offset] = h_timestamps[cpu_idx];
+        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
 //        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
 //        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
 
