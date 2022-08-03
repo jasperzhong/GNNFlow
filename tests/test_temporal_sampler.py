@@ -97,7 +97,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         block = blocks[0]
 
-        print(block.num_dst_nodes())
+        print(block.num_src_nodes())
         print(block.num_dst_nodes())
         # self.assertEqual(block.num_src_nodes(), 9)
         # self.assertEqual(block.num_dst_nodes(), 3)
