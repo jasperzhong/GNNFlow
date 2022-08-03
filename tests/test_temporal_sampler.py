@@ -63,8 +63,8 @@ class TestTemporalSampler(unittest.TestCase):
         print("Test sample_layer uniform passed")
 
     def test_cpu_sample_layer_uniform(self):
-        # build the dynamic graph (limit the max_gpu_pool_size to zero in order to switch the block to cpu)
-        dgraph = DynamicGraph(max_gpu_pool_size = 0)
+        # build the dynamic graph (limit the max_gpu_pool_size to 32 bytes in order to switch the block to cpu)
+        dgraph = DynamicGraph(max_gpu_pool_size = (1<<6))
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
