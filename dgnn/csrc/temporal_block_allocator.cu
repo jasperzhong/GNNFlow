@@ -74,7 +74,8 @@ TemporalBlock *TemporalBlockAllocator::Allocate(
 
     LOG(WARNING) << "Failed to allocate memory for temporal block of size "
                  << size;
-    throw;
+// TODO: recover when release
+//    throw;
   }
 
   {
