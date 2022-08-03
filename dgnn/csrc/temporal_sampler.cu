@@ -580,8 +580,6 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
       reinterpret_cast<TimestampType*>(cpu_sampler_buffer + offset2);
   TimestampType* h_delta_timestamps =
       reinterpret_cast<TimestampType*>(cpu_sampler_buffer + offset3);
-
-  // TODO: CPU num_sampled and num_candidates ?
   uint32_t* h_num_sampled =
       reinterpret_cast<uint32_t*>(cpu_sampler_buffer + offset4);
   uint32_t* h_num_candidates =
@@ -631,7 +629,6 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
                   << " GPU NUM SAMPLED: " << gpu_num_sampled
                   << " CPU NUM SAMPLED: " << cpu_num_sampled
                   << " MAX NUM SAMPLED: " << max_num_sampled;
-        // TODO: change with memcpy ?
         uint32_t cpu_sampler_offset = 0;
         uint32_t gpu_sampler_offset = gpu_num_sampled;
         while(cpu_sampler_offset < cpu_num_sampled
@@ -690,15 +687,14 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
                 << " GPU NUM SAMPLED: " << gpu_num_sampled
                 << " CPU NUM SAMPLED: " << cpu_num_sampled
                 << " MAX NUM SAMPLED: " << max_num_sampled;
+
       // randomized with ratio (gpu_sampler * alpha + cpu_sampler * (1 - alpha))
       // alpha = gpu_num_candidates / (gpu_num_candidates + cpu_num_candidates)
       double alpha = (double) gpu_num_candidates / (double) (gpu_num_candidates + cpu_num_candidates);
 
-      // TODO: round
       uint32_t gpu_actual_size = (uint32_t) std::round(( ( (double) max_num_sampled ) * alpha ));
       uint32_t cpu_actual_size = (uint32_t) std::round((( (double) max_num_sampled ) * (1.00 - alpha )));
 
-      // TODO: precision control (ceiling or flooring)?
       uint32_t actual_size = std::min(max_num_sampled, (std::size_t) (gpu_actual_size + cpu_actual_size));
 
       std::vector<uint32_t> gpu_randomized_array = randomized_shuffle(gpu_num_sampled, gpu_actual_size);
@@ -742,11 +738,11 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
 //        std::memcpy(d_num_candidates + current_offset, h_num_candidates + cpu_idx, sizeof(uint32_t));
 
         d_src_nodes[current_offset] = h_src_nodes[cpu_idx];
-        d_eids[current_offset] = h_eids[cpu_idx];
-        d_timestamps[current_offset] = h_timestamps[cpu_idx];
-        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
-        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
-        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
+//        d_eids[current_offset] = h_eids[cpu_idx];
+//        d_timestamps[current_offset] = h_timestamps[cpu_idx];
+//        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
+//        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
+//        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
 
         current_offset = current_offset + 1;
       }
