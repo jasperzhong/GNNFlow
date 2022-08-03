@@ -66,7 +66,7 @@ class TemporalSampler {
       std::size_t cpu_num_candidates,
       std::size_t num_root_nodes,
       SamplingPolicy policy,
-      uint32_t snapshot
+      std::size_t cpu_buffer_offset
       );
 
  private:
