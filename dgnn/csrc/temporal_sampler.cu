@@ -520,7 +520,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
       cumsum += num_sampled[i];
     }
 
-    CHECK_EQ(cumsum, num_sampled_nodes);
+//    CHECK_EQ(cumsum, num_sampled_nodes);
   }
 
   return sampling_results;
@@ -627,7 +627,7 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
     // 2. Case Judgement
     if(max_num_sampled > gpu_num_candidates && max_num_sampled > cpu_num_candidates) {
 
-      if(gpu_num_sampled + cpu_num_sampled < max_num_sampled) {
+      if(gpu_num_sampled + cpu_num_sampled <= max_num_sampled) {
         // concatenate
         LOG(INFO) << "Use Concatenate Policy. "
                   << " GPU NUM SAMPLED: " << gpu_num_sampled
