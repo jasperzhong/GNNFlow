@@ -653,38 +653,38 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
                   << " GPU NUM SAMPLED: " << gpu_num_sampled
                   << " CPU NUM SAMPLED: " << cpu_num_sampled
                   << " MAX NUM SAMPLED: " << max_num_sampled;
-//        // purly randomized
-//        std::vector<uint32_t> randomized_array = randomized_shuffle(cpu_num_sampled + gpu_num_sampled, max_num_sampled);
-//        for(uint32_t current_offset = 0; current_offset < max_num_sampled; ++current_offset) {
-//
-//          // get virtual index
-//          uint32_t theoretical_randomized_offset = randomized_array[current_offset];
-//
-//          if(theoretical_randomized_offset < gpu_num_sampled) {
-//            // on GPU buffer
-//            uint32_t real_randomized_offset = theoretical_randomized_offset;
-//
-//            // overwritten
-//            d_src_nodes[current_offset] = d_src_nodes[real_randomized_offset];
-//            d_eids[current_offset] = d_eids[real_randomized_offset];
-//            d_timestamps[current_offset] = d_timestamps[real_randomized_offset];
-//            d_delta_timestamps[current_offset] = d_delta_timestamps[real_randomized_offset];
-//            d_num_sampled[current_offset] = d_num_sampled[real_randomized_offset];
-//            d_num_candidates[current_offset] = d_num_candidates[real_randomized_offset];
-//
-//          } else {
-//            // on CPU buffer
-//            uint32_t real_randomized_offset = theoretical_randomized_offset - gpu_num_sampled;
-//
-//            // overwritten
-//            d_src_nodes[current_offset] = h_src_nodes[real_randomized_offset];
-//            d_eids[current_offset] = h_eids[real_randomized_offset];
-//            d_timestamps[current_offset] = h_timestamps[real_randomized_offset];
-//            d_delta_timestamps[current_offset] = h_delta_timestamps[real_randomized_offset];
-//            d_num_sampled[current_offset] = h_num_sampled[real_randomized_offset];
-//            d_num_candidates[current_offset] = h_num_candidates[real_randomized_offset];
-//          }
-//        }
+        // purly randomized
+        std::vector<uint32_t> randomized_array = randomized_shuffle(cpu_num_sampled + gpu_num_sampled, max_num_sampled);
+        for(uint32_t current_offset = 0; current_offset < max_num_sampled; ++current_offset) {
+
+          // get virtual index
+          uint32_t theoretical_randomized_offset = randomized_array[current_offset];
+
+          if(theoretical_randomized_offset < gpu_num_sampled) {
+            // on GPU buffer
+            uint32_t real_randomized_offset = theoretical_randomized_offset;
+
+            // overwritten
+            d_src_nodes[current_offset] = d_src_nodes[real_randomized_offset];
+            d_eids[current_offset] = d_eids[real_randomized_offset];
+            d_timestamps[current_offset] = d_timestamps[real_randomized_offset];
+            d_delta_timestamps[current_offset] = d_delta_timestamps[real_randomized_offset];
+            d_num_sampled[current_offset] = d_num_sampled[real_randomized_offset];
+            d_num_candidates[current_offset] = d_num_candidates[real_randomized_offset];
+
+          } else {
+            // on CPU buffer
+            uint32_t real_randomized_offset = theoretical_randomized_offset - gpu_num_sampled;
+
+            // overwritten
+            d_src_nodes[current_offset] = h_src_nodes[real_randomized_offset];
+            d_eids[current_offset] = h_eids[real_randomized_offset];
+            d_timestamps[current_offset] = h_timestamps[real_randomized_offset];
+            d_delta_timestamps[current_offset] = h_delta_timestamps[real_randomized_offset];
+            d_num_sampled[current_offset] = h_num_sampled[real_randomized_offset];
+            d_num_candidates[current_offset] = h_num_candidates[real_randomized_offset];
+          }
+        }
       }
 
     } else {
@@ -717,12 +717,12 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         uint32_t gpu_idx = *gpu_iter;
 
         // overwritten
-        d_src_nodes[current_offset] = d_src_nodes[gpu_idx];
-        d_eids[current_offset] = d_eids[gpu_idx];
-        d_timestamps[current_offset] = d_timestamps[gpu_idx];
-        d_delta_timestamps[current_offset] = d_delta_timestamps[gpu_idx];
-        d_num_sampled[current_offset] = d_num_sampled[gpu_idx];
-        d_num_candidates[current_offset] = d_num_candidates[gpu_idx];
+//        d_src_nodes[current_offset] = d_src_nodes[gpu_idx];
+//        d_eids[current_offset] = d_eids[gpu_idx];
+//        d_timestamps[current_offset] = d_timestamps[gpu_idx];
+//        d_delta_timestamps[current_offset] = d_delta_timestamps[gpu_idx];
+//        d_num_sampled[current_offset] = d_num_sampled[gpu_idx];
+//        d_num_candidates[current_offset] = d_num_candidates[gpu_idx];
 
         current_offset = current_offset + 1;
       }
@@ -736,12 +736,12 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
         uint32_t cpu_idx = *cpu_iter;
 
         // overwritten
-        d_src_nodes[current_offset] = h_src_nodes[cpu_idx];
-        d_eids[current_offset] = h_eids[cpu_idx];
-        d_timestamps[current_offset] = h_timestamps[cpu_idx];
-        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
-        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
-        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
+//        d_src_nodes[current_offset] = h_src_nodes[cpu_idx];
+//        d_eids[current_offset] = h_eids[cpu_idx];
+//        d_timestamps[current_offset] = h_timestamps[cpu_idx];
+//        d_delta_timestamps[current_offset] = h_delta_timestamps[cpu_idx];
+//        d_num_sampled[current_offset] = h_num_sampled[cpu_idx];
+//        d_num_candidates[current_offset] = h_num_candidates[cpu_idx];
 
         current_offset = current_offset + 1;
       }
