@@ -258,7 +258,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
     std::size_t offset8 = offset7 + max_sampled_nodes * sizeof(EIDType);  // TS
     std::size_t offset9 = offset8 + max_sampled_nodes * sizeof(TimestampType); // D_TS
     std::size_t offset10 = offset9 + max_sampled_nodes * sizeof(TimestampType); // NUM_SAMPLED
-    std::size_t offset11 = offset10 + max_sampled_nodes * sizeof(uint32_t) // NUM_TIMESTAMP
+    std::size_t offset11 = offset10 + max_sampled_nodes * sizeof(uint32_t); // NUM_TIMESTAMP
 
 
     std::size_t total_output_size = offset4 + num_root_nodes * sizeof(uint32_t);
