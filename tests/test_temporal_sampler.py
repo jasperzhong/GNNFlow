@@ -110,10 +110,10 @@ class TestTemporalSampler(unittest.TestCase):
 
     def test_cpu_sample_layer_uniform(self):
         # build the dynamic graph (limit the max_gpu_pool_size to 256 bytes in order to switch the block to cpu)
-        dgraph = DynamicGraph(max_gpu_pool_size = (1<<14), min_block_size= 5)
+        dgraph = DynamicGraph(max_gpu_pool_size = (1<<12), min_block_size= 5)
         # num of source and target vertices
         # timestamps
-        n = 21
+        n = 20
         source_list = []
         target_list = []
         ts_list  = []
