@@ -619,7 +619,7 @@ void TemporalSampler:: MergeHostDeviceResultByPolicy(
     // uniform (3 cases)
 
     // 1. Calculate gpu_num_candidates (this is why gpu_num_candidates is not in the parameter.)
-    std::size_tgpu_num_candidates = 0;
+    std::size_t gpu_num_candidates = 0;
     for(uint32_t i = 0; i < num_root_nodes; ++i) {
       gpu_num_candidates = gpu_num_candidates + d_num_candidates[i];
     }
