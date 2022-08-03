@@ -218,7 +218,7 @@ pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
 
 # Cache
 print(args.cache)
-cache = caches.__dict__[args.cache](0.5, dgraph.num_vertices(),
+cache = caches.__dict__[args.cache](0.9, dgraph.num_vertices(),
                                     int(dgraph.num_edges() / 2) + 1,
                                     node_feats, edge_feats, 'cuda:0',
                                     pinned_nfeat_buffs, pinned_efeat_buffs)

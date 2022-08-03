@@ -24,15 +24,15 @@
 ./run.sh tgat recent LASTFM LRUCache
 ./run.sh tgat recent LASTFM LFUCache
 ./run.sh tgat recent LASTFM FIFOCache
-./run.sh tgat uniform MAG LRUCache
-./run.sh tgat uniform MAG LFUCache
-./run.sh tgat uniform MAG FIFOCache
-./run.sh tgat recent MAG LRUCache
-./run.sh tgat recent MAG LFUCache
-./run.sh tgat recent MAG FIFOCache
-./run.sh tgat uniform GDELT LRUCache
-./run.sh tgat uniform GDELT LFUCache
-./run.sh tgat uniform GDELT FIFOCache
-./run.sh tgat recent GDELT LRUCache
-./run.sh tgat recent GDELT LFUCache
-./run.sh tgat recent GDELT FIFOCache
+# ./run.sh tgat uniform MAG LRUCache
+# ./run.sh tgat uniform MAG LFUCache
+# ./run.sh tgat uniform MAG FIFOCache
+# ./run.sh tgat recent MAG LRUCache
+# ./run.sh tgat recent MAG LFUCache
+# ./run.sh tgat recent MAG FIFOCache
+# ./run.sh tgat uniform GDELT LRUCache
+# ./run.sh tgat uniform GDELT LFUCache
+# ./run.sh tgat uniform GDELT FIFOCache
+# ./run.sh tgat recent GDELT LRUCache
+# ./run.sh tgat recent GDELT LFUCache
+# ./run.sh tgat recent GDELT FIFOCache
