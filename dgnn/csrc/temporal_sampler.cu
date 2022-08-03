@@ -519,6 +519,7 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
       cumsum += num_sampled[i];
     }
 
+    LOG(INFO) << "cumsum: " << cumsum << "; num_sampled_nodes: " << num_sampled_nodes <<".";
 //    CHECK_EQ(cumsum, num_sampled_nodes);
   }
 
