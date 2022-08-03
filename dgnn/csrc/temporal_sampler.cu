@@ -343,8 +343,8 @@ std::vector<SamplingResult> TemporalSampler::SampleLayer(
         cpu_snapshot_num_candidates = cpu_snapshot_num_candidates + hs_num_candidates[i];
       }
 
-      cpu_num_sampled_nodes_list.push_back(cpu_snapshot_num_sampled_nodes);
-      cpu_num_candidates_list.push_back(cpu_snapshot_num_candidates);
+      cpu_num_sampled_nodes_list[snapshot] = cpu_snapshot_num_sampled_nodes;
+      cpu_num_candidates_list[snapshot] = cpu_snapshot_num_candidates;
     }
   }
 
