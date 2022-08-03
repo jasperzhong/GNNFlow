@@ -248,6 +248,10 @@ best_ap = 0
 best_e = 0
 
 epoch_time_sum = 0
+with open("profile.txt","a") as f:
+    f.write("Data: {}".format(args.data))
+    f.write("Cache: {}".format(args.cache))
+    f.write("strategy: {}".format(args.sample_strategy))
 for e in range(args.epoch):
     print("Epoch {}".format(e))
     epoch_time_start = time.time()
@@ -354,14 +358,18 @@ for e in range(args.epoch):
     cuda_time /= 1000
     feature_time /= 1000
     train_time /= 1000
-    print('Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}'.format(
-        epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
-    print(
-        'fetch_cache: {:.2f}s, fetch_uncache: {:.2f}s, apply: {:.2f}s, uncache_get_id: {:.2f}s, uncache_to_cuda: {:.2f}s'.format(
-            fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all))
-    print('fetch_node_cache: {:.2f}s ; fetch_node_uncache:{:.2f}s'.format(
-        fetch_node_cache_all / 1000, fetch_node_uncache_all / 1000
-    ))
+    with open("profile.txt","a") as f:
+        f.write("Epoch: {}".format(e))
+        Epoch_time = 'Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}\n'.format(
+            epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1))
+        Fetch_cache = 'fetch_cache: {:.2f}s, fetch_uncache: {:.2f}s, apply: {:.2f}s, uncache_get_id: {:.2f}s, uncache_to_cuda: {:.2f}s\n'.format(
+                fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all)
+        Fetch_node = 'fetch_node_cache: {:.2f}s ; fetch_node_uncache:{:.2f}s\n'.format(
+            fetch_node_cache_all / 1000, fetch_node_uncache_all / 1000
+        )
+        f.write(Epoch_time)
+        f.write(Fetch_cache)
+        f.write(Fetch_node)
     epoch_time_sum += epoch_time
 
 #     # Validation
