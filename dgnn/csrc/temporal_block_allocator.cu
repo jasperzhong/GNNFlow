@@ -1,4 +1,6 @@
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/pinned_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
@@ -12,10 +14,10 @@ TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t max_gpu_mem_pool_size, std::size_t min_block_size)
     : min_block_size_(min_block_size), block_sequence_number_(0) {
   // create a memory pool
-  auto mem_res = new rmm::mr::cuda_memory_resource();
+  auto mem_res = new rmm::mr::managed_memory_resource();
   gpu_resources_.push(mem_res);
   auto pool_res =
-      new rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>(
+      new rmm::mr::pool_memory_resource<rmm::mr::managed_memory_resource>(
           mem_res, max_gpu_mem_pool_size, max_gpu_mem_pool_size);
   gpu_resources_.push(pool_res);
   rmm::mr::set_current_device_resource(pool_res);
