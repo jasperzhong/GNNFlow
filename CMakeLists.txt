@@ -23,7 +23,6 @@ add_subdirectory(third_party/pybind11)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/dgnn/csrc)
-include_directories($ENV{CONDA_PREFIX}/include)
 include_directories(/usr/local/cuda/include)
 include_directories(third_party/pybind11/include)
 include_directories(third_party/spdlog/include)
