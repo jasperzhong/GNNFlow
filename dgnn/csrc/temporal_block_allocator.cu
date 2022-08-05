@@ -1,7 +1,7 @@
 #include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/pinned_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device/pinned_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include "logging.h"
@@ -12,48 +12,30 @@ namespace dgnn {
 
 TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t max_gpu_mem_pool_size, std::size_t min_block_size)
-    : min_block_size_(min_block_size), block_sequence_number_(0) {
+    : min_block_size_(min_block_size) {
   // create a memory pool
   auto mem_res = new rmm::mr::managed_memory_resource();
-  gpu_resources_.push(mem_res);
+  mem_resources_.push(mem_res);
   auto pool_res =
       new rmm::mr::pool_memory_resource<rmm::mr::managed_memory_resource>(
           mem_res, max_gpu_mem_pool_size, max_gpu_mem_pool_size);
-  gpu_resources_.push(pool_res);
+  mem_resources_.push(pool_res);
   rmm::mr::set_current_device_resource(pool_res);
 }
 
 TemporalBlockAllocator::~TemporalBlockAllocator() {
-  for (auto &block : blocks_on_device_) {
-    DeallocateInternal(block.second);
-    delete block.second;
+  for (auto &block : blocks_) {
+    DeallocateInternal(block);
+    delete block;
   }
 
   // release the memory pool
-  while (!gpu_resources_.empty()) {
-    delete gpu_resources_.top();
-    gpu_resources_.pop();
+  while (!mem_resources_.empty()) {
+    delete mem_resources_.top();
+    mem_resources_.pop();
   }
 
-  for (auto &block : blocks_on_host_) {
-    if (block.second->dst_nodes != nullptr) {
-      delete[] block.second->dst_nodes;
-    }
-
-    if (block.second->timestamps != nullptr) {
-      delete[] block.second->timestamps;
-    }
-
-    if (block.second->eids != nullptr) {
-      delete[] block.second->eids;
-    }
-
-    delete block.second;
-  }
-
-  blocks_on_device_.clear();
-  blocks_on_host_.clear();
-  block_to_seq_.clear();
+  blocks_.clear();
 }
 
 std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
@@ -81,9 +63,7 @@ TemporalBlock *TemporalBlockAllocator::Allocate(
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_on_device_[block_sequence_number_] = block;
-    block_to_seq_[block] = block_sequence_number_;
-    block_sequence_number_++;
+    blocks_.push_back(block);
   }
   return block;
 }
@@ -95,8 +75,8 @@ void TemporalBlockAllocator::Deallocate(TemporalBlock *block,
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_on_device_.erase(block_to_seq_[block]);
-    block_to_seq_.erase(block);
+    blocks_.erase(std::remove(blocks_.begin(), blocks_.end(), block),
+                  blocks_.end());
   }
 }
 
@@ -140,69 +120,4 @@ void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block,
     block->eids = nullptr;
   }
 }
-
-TemporalBlock *TemporalBlockAllocator::GetTheOldestBlockOnDevice() const {
-  auto the_oldest_block_on_device = blocks_on_device_.begin()->second;
-  LOG(DEBUG) << "The oldest block on device is "
-             << blocks_on_device_.begin()->first
-             << " sequence number : " << block_sequence_number_;
-  return the_oldest_block_on_device;
-}
-
-TemporalBlock *TemporalBlockAllocator::SwapBlockToHost(TemporalBlock *block,
-                                                       cudaStream_t stream) {
-  CHECK_NOTNULL(block);
-  CHECK_NE(block_to_seq_.find(block), block_to_seq_.end());
-  CHECK_GT(block->size, 0);
-
-  auto block_id = block_to_seq_[block];
-
-  CHECK(blocks_on_device_.find(block_id) != blocks_on_device_.end() &&
-        blocks_on_host_.find(block_id) == blocks_on_host_.end());
-
-  // allocate CPU memory for the block
-  auto block_on_host = new TemporalBlock();
-  block_on_host->capacity = block->capacity;
-  block_on_host->dst_nodes = new NIDType[block_on_host->capacity];
-  block_on_host->timestamps = new TimestampType[block_on_host->capacity];
-  block_on_host->eids = new EIDType[block_on_host->capacity];
-
-  CopyTemporalBlock(block, block_on_host, stream);
-
-  // release GPU memory
-  Deallocate(block, stream);
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    blocks_on_host_[block_id] = block_on_host;
-    block_to_seq_[block_on_host] = block_id;
-  }
-
-  return block_on_host;
-}
-
-std::size_t TemporalBlockAllocator::num_blocks_on_device() const {
-  return blocks_on_device_.size();
-}
-
-std::size_t TemporalBlockAllocator::num_blocks_on_host() const {
-  return blocks_on_host_.size();
-}
-
-std::size_t TemporalBlockAllocator::used_space_on_device() const {
-  std::size_t used_space = 0;
-  for (auto &block : blocks_on_device_) {
-    used_space += block.second->capacity * kBlockSpaceSize;
-  }
-  return used_space;
-}
-
-std::size_t TemporalBlockAllocator::used_space_on_host() const {
-  std::size_t used_space = 0;
-  for (auto &block : blocks_on_host_) {
-    used_space += block.second->capacity * kBlockSpaceSize;
-  }
-  return used_space;
-}
-
 }  // namespace dgnn

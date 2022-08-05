@@ -76,9 +76,6 @@ class DynamicGraph {
                           const std::vector<EIDType>& eids,
                           cudaStream_t stream = nullptr);
 
-  std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size,
-                                 cudaStream_t stream = nullptr);
-
   TemporalBlock* AllocateBlock(std::size_t num_edges,
                                cudaStream_t stream = nullptr);
 

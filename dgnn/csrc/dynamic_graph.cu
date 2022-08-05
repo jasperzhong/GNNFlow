@@ -121,13 +121,7 @@ TemporalBlock* DynamicGraph::AllocateBlock(std::size_t num_edges,
   try {
     block = allocator_.Allocate(num_edges, stream);
   } catch (rmm::bad_alloc) {
-    // if we can't allocate the block, we need to free some memory
-    std::size_t min_swap_size = allocator_.AlignUp(num_edges);
-    auto swapped_size = SwapOldBlocksToCPU(min_swap_size, stream);
-    LOG(INFO) << "Swapped " << swapped_size << " bytes to CPU";
-
-    // try again
-    block = allocator_.Allocate(num_edges, stream);
+    LOG(FATAL) << "Allocator failed to allocate block";
   }
 
   return block;
@@ -270,28 +264,6 @@ void DynamicGraph::AddEdgesForOneNode(
   CopyEdgesToBlock(head, dst_nodes, timestamps, eids, start_idx, num_edges,
                    stream);
   SyncBlock(head, stream);
-}
-
-std::size_t DynamicGraph::SwapOldBlocksToCPU(std::size_t min_swap_size,
-                                             cudaStream_t stream) {
-  std::size_t swapped_size = 0;
-
-  // iterate over the list of blocks
-  while (swapped_size < min_swap_size) {
-    auto block = allocator_.GetTheOldestBlockOnDevice();
-    NIDType src_node = block_to_node_id_[block];
-    auto block_on_host = allocator_.SwapBlockToHost(block, stream);
-    InsertBlockToDoublyLinkedList(h_node_table_.data(), src_node,
-                                  block_on_host);
-    DeleteTailBlock(src_node, stream);
-    swapped_size += block->capacity;
-
-    if (swapped_size >= min_swap_size) {
-      break;
-    }
-  }
-
-  return swapped_size;
 }
 
 std::size_t DynamicGraph::out_degree(NIDType node) const {
