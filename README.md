@@ -7,17 +7,8 @@ Our environment:
 - g++ 9.4
 - CUDA 11.3
 
-Requriments:
-- `rmm` ([how to install](https://github.com/yuchenzhong/cs-notes/blob/main/CUDA/rmm/README.md))
-
-
 Compile and install: 
 ```sh
 pip install -v -e .
 ```
 
-
-## TODO:
-
-- [ ] raise an exception when adding edges with timestmaps that are smaller than the current timestamps.
-- [ ] addedges: set the max_size of a block so that when the size of the incoming edges is larger than the max_size of the block, it can be automatically split to many blocks rather than only using one block to contain all the edges.
