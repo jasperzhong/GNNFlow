@@ -20,7 +20,6 @@ message(STATUS "CUDA_ARCH_LIST: ${CUDA_ARCH_LIST}")
 # 3rd party
 find_package(PythonLibs REQUIRED)
 add_subdirectory(third_party/pybind11)
-add_subdirectory(third_party/rmm)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/dgnn/csrc)
