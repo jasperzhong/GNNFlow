@@ -149,8 +149,12 @@ class Cache:
                 # TODO: if have many snapshots
                 if update_cache:
                     update_node_start.record()
-                    self.update_node_cache(cached_node_index=cached_node_index, uncached_node_id=uncached_node_id,
-                                           uncached_node_feature=node_feature[uncached_mask])
+                    cached_node_index_unique = cached_node_index.unique()
+                    uncached_node_id_unique = uncached_node_id.unique()
+                    uncached_node_feature = self.node_features[uncached_node_id_unique].to(
+                        self.device)
+                    self.update_node_cache(cached_node_index=cached_node_index_unique, uncached_node_id=uncached_node_id_unique,
+                                           uncached_node_feature=uncached_node_feature)
                     update_node_end.record()
                     update_node_end.synchronize()
                     cache_update_node_time = update_node_start.elapsed_time(

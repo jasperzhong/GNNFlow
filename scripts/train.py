@@ -218,7 +218,7 @@ pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
 
 # Cache
 print(args.cache)
-cache = caches.__dict__[args.cache](0.9, dgraph.num_vertices(),
+cache = caches.__dict__[args.cache](0.5, dgraph.num_vertices(),
                                     int(dgraph.num_edges() / 2) + 1,
                                     node_feats, edge_feats, 'cuda:0',
                                     pinned_nfeat_buffs, pinned_efeat_buffs)
@@ -248,7 +248,7 @@ best_ap = 0
 best_e = 0
 
 epoch_time_sum = 0
-with open("profile.txt","a") as f:
+with open("profile.txt", "a") as f:
     f.write("\n")
     f.write("Data: {}\n".format(args.data))
     f.write("Cache: {}\n".format(args.cache))
@@ -360,12 +360,12 @@ for e in range(args.epoch):
     cuda_time /= 1000
     feature_time /= 1000
     train_time /= 1000
-    with open("profile.txt","a") as f:
+    with open("profile.txt", "a") as f:
         f.write("Epoch: {}\n".format(e))
         Epoch_time = 'Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}\n'.format(
             epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1))
         Fetch_cache = 'fetch_cache: {:.2f}s, fetch_uncache: {:.2f}s, apply: {:.2f}s, uncache_get_id: {:.2f}s, uncache_to_cuda: {:.2f}s\n'.format(
-                fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all)
+            fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all)
         Fetch_node = 'fetch_node_cache: {:.2f}s ; fetch_node_uncache:{:.2f}s\n'.format(
             fetch_node_cache_all / 1000, fetch_node_uncache_all / 1000
         )
