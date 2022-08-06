@@ -56,7 +56,7 @@ parser.add_argument("--no-sample", help='do not need sampling',
 parser.add_argument("--prop-time", help='use prop time',
                     action='store_true', default=False)
 parser.add_argument("--no-neg", help='not using neg samples in sampling',
-                    action='store_true', default=False)
+                    action='store_true', default=True)
 parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
 parser.add_argument("--sample-strategy",
                     help="sample strategy", type=str, default='recent')
@@ -279,7 +279,7 @@ for e in range(args.epoch):
 
     # init cache every epoch
     # TODO: maybe a better way to init cache in every epoch
-    cache.init_cache()
+    # cache.init_cache()
 
     # TODO: we can overwrite train():
     # a new class inherit torch.nn.Module which has self.mailbox = None.
@@ -319,7 +319,8 @@ for e in range(args.epoch):
         optimizer.zero_grad()
 
         # move pre_input_mail to forward()
-        pred_pos, pred_neg = model(mfgs)
+        neg_sample = 0 if args.no_neg else 1
+        pred_pos, pred_neg = model(mfgs, neg_samples=neg_sample)
 
         loss = creterion(pred_pos, torch.ones_like(pred_pos))
         loss += creterion(pred_neg, torch.zeros_like(pred_neg))
