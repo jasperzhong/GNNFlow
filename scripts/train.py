@@ -1,4 +1,5 @@
 import argparse
+from cgi import test
 import os
 import time
 import random
@@ -15,7 +16,7 @@ from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
                         load_dataset, load_feat, mfgs_to_cuda,
-                        node_to_dgl_blocks, prepare_input, get_pinned_buffers)
+                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers)
 import dgnn.cache as caches
 
 model_names = sorted(name for name in models.__dict__
@@ -154,12 +155,13 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
 train_df, val_df, test_df, df = load_dataset(args.data)
-src_start = int(df['src'][0])
-dst_start = int(df['dst'][0])
+train_rand_sampler = RandEdgeSampler(train_df['src'].to_numpy(), train_df['dst'].to_numpy())
+val_rand_sampler = RandEdgeSampler(val_df['src'].to_numpy(), val_df['dst'].to_numpy())
+test_rand_sampler = RandEdgeSampler(test_df['src'].to_numpy(), test_df['dst'].to_numpy())
 
-train_ds = DynamicGraphDataset(train_df)
-val_ds = DynamicGraphDataset(val_df)
-test_ds = DynamicGraphDataset(test_df)
+train_ds = DynamicGraphDataset(train_df, train_rand_sampler)
+val_ds = DynamicGraphDataset(val_df, val_rand_sampler)
+test_ds = DynamicGraphDataset(test_df, test_rand_sampler)
 
 if args.reorder > 0:
     train_sampler = BatchSamplerReorder(

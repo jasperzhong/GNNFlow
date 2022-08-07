@@ -10,16 +10,17 @@ np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
 
 class DynamicGraphDataset(Dataset):
-    def __init__(self, df):
+    def __init__(self, df, neg_sampler=None):
         super(DynamicGraphDataset).__init__()
         self.df = df
         self.length = np.max(np.array(df['dst'], dtype=int))
+        self.neg_sampler = neg_sampler
 
     def __getitem__(self, index):
         row = self.df.iloc[index]
+        _, neg_batch = self.neg_sampler.sample(len(row.src.values))
         target_nodes = np.concatenate(
-            [row.src.values, row.dst.values, np.random.randint(
-                self.length, size=len(row.src.values))]).astype(
+            [row.src.values, row.dst.values, neg_batch]).astype(
             np.int64)
         ts = np.concatenate(
             [row.time.values, row.time.values, row.time.values]).astype(
