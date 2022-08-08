@@ -57,7 +57,7 @@ parser.add_argument("--no-sample", help='do not need sampling',
 parser.add_argument("--prop-time", help='use prop time',
                     action='store_true', default=False)
 parser.add_argument("--no-neg", help='not using neg samples in sampling',
-                    action='store_true', default=True)
+                    action='store_true', default=False)
 parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
 parser.add_argument("--sample-strategy",
                     help="sample strategy", type=str, default='recent')
