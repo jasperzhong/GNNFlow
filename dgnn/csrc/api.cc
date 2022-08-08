@@ -31,12 +31,19 @@ PYBIND11_MODULE(libdgnn, m) {
       .value("RECENT", SamplingPolicy::kSamplingPolicyRecent)
       .value("UNIFORM", SamplingPolicy::kSamplingPolicyUniform);
 
+  py::enum_<MemoryResourceType>(m, "MemoryResourceType")
+      .value("CUDA", MemoryResourceType::kMemoryResourceTypeCUDA)
+      .value("UNIFIED", MemoryResourceType::kMemoryResourceTypeUnified)
+      .value("PINNED", MemoryResourceType::kMemoryResourceTypePinned);
+
   py::class_<DynamicGraph>(m, "_DynamicGraph")
-      .def(
-          py::init<std::size_t, std::size_t, InsertionPolicy>(),
-          py::arg("max_gpu_pool_size") = kDefaultMaxGpuMemPoolSize,
-          py::arg("min_block_size") = kDefaultMinBlockSize,
-          py::arg("insertion_policy") = InsertionPolicy::kInsertionPolicyInsert)
+      .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
+                    std::size_t, std::size_t, InsertionPolicy>(),
+           py::arg("initial_pool_size"), py::arg("maximum_pool_size"),
+           py::arg("mem_resource_type"),
+           py::arg("initial_pool_size_for_metadata"),
+           py::arg("maximum_pool_size_for_metadata"),
+           py::arg("minium_block_size"), py::arg("insertion_policy"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"),
            py::arg("add_reverse") = true)

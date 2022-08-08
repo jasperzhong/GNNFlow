@@ -2,54 +2,78 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from libdgnn import InsertionPolicy, _DynamicGraph
+from libdgnn import MemoryResourceType, InsertionPolicy, _DynamicGraph
 
 
 class DynamicGraph:
     """
-    A dynamic graph is a graph that can be modified at runtime.
+    A dynamic graph is a graph that can be updated at runtime.
 
     The dynamic graph is implemented as block adjacency list. It has a vertex
     table where each entry is a linked list of blocks. Each block contains
     a list of edges. Each edge is a tuple of (target_vertex, timestamp).
-    The dynamicg graph is located on the GPU and would offload old edges 
-    to the CPU when the GPU consumption exceeds the threshold.
     """
 
     def __init__(
-            self, source_vertices: Optional[np.ndarray] = None,
+            self, initial_pool_size: int,
+            maximum_pool_size: int,
+            mem_resource_type: str,
+            initial_pool_size_for_metadata: int,
+            maximum_pool_size_for_metadata: int,
+            minimum_block_size: int,
+            insertion_policy: str,
+            source_vertices: Optional[np.ndarray] = None,
             target_vertices: Optional[np.ndarray] = None,
             timestamps: Optional[np.ndarray] = None,
             add_reverse: bool = False,
-            max_gpu_pool_size: int = 1 << 30, min_block_size: int = 64,
-            insertion_policy: str = "insert"):
+    ):
         """
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
 
         Args:
+            initial_pool_size: optional, int, the initial pool size of the graph.
+            maximum_pool_size: optional, int, the maximum pool size of the graph.
+            mem_resource_type: optional, str, the memory resource type. 
+                valid options: ("cuda", "unified", or "pinned") (case insensitive).
+            initial_pool_size_for_metadata: optional, int, the initial pool size of the metadata.
+            maximum_pool_size_for_metadata: optional, int, the maximum pool size of the metadata.
+            minimum_block_size: optional, int, the minimum block size of the graph.
+            insertion_policy: the insertion policy to use 
+                valid options: ("insert" or "replace") (case insensitive).
             source_vertices: optional, 1D tensor, the source vertices of the edges.
             target_vertices: optional, 1D tensor, the target vertices of the edges.
             timestamps: optional, 1D tensor, the timestamps of the edges.
             add_reverse: optional, bool, whether to add reverse edges.
-            max_gpu_pool_size: threshold for GPU memory in bytes (default: 1GB).
-            min_block_size: size of the blocks.
-            insertion_policy: the insertion policy to use ("insert" or "replace")
-                              (case insensitive).
         """
-        insertion_policy = insertion_policy.lower()
-        if insertion_policy not in ['insert', 'replace']:
-            raise ValueError(
-                'Insertion policy must be either insert or replace')
+        mem_resource_type = mem_resource_type.lower()
+        if mem_resource_type == "cuda":
+            mem_resource_type = MemoryResourceType.CUDA
+        elif mem_resource_type == "unified":
+            mem_resource_type = MemoryResourceType.UNIFIED
+        elif mem_resource_type == "pinned":
+            mem_resource_type = MemoryResourceType.PINNED
+        else:
+            raise ValueError("Invalid memory resource type: {}".format(
+                mem_resource_type))
 
-        insertion_policy = InsertionPolicy.INSERT if insertion_policy == 'insert' \
-            else InsertionPolicy.REPLACE
+        insertion_policy = insertion_policy.lower()
+        if insertion_policy == "insert":
+            insertion_policy = InsertionPolicy.INSERT
+        elif insertion_policy == "replace":
+            insertion_policy = InsertionPolicy.REPLACE
+        else:
+            raise ValueError("Invalid insertion policy: {}".format(
+                insertion_policy))
 
         self._dgraph = _DynamicGraph(
-            max_gpu_pool_size, min_block_size, insertion_policy)
+            initial_pool_size, maximum_pool_size, mem_resource_type,
+            initial_pool_size_for_metadata, maximum_pool_size_for_metadata,
+            minimum_block_size, insertion_policy)
 
         # initialize the graph with edges
-        if source_vertices is not None and target_vertices is not None and timestamps is not None:
+        if source_vertices is not None and target_vertices is not None \
+                and timestamps is not None:
             self.add_edges(source_vertices, target_vertices,
                            timestamps, add_reverse)
 
@@ -57,8 +81,8 @@ class DynamicGraph:
             self, source_vertices: np.ndarray, target_vertices: np.ndarray,
             timestamps: np.ndarray, add_reverse: bool = False):
         """
-        Add edges to the graph. Note that we do not assume that the incoming 
-        edges are sorted by timestamps. The function will sort the incoming 
+        Add edges to the graph. Note that we do not assume that the incoming
+        edges are sorted by timestamps. The function will sort the incoming
         edges by timestamps.
 
         Args:
@@ -92,7 +116,7 @@ class DynamicGraph:
     def get_temporal_neighbors(self, vertex: int) \
             -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Return the neighbors of the specified vertex. The neighbors are sorted 
+        Return the neighbors of the specified vertex. The neighbors are sorted
         by timestamps in decending order.
 
         Note that this function is inefficient and should be used sparingly.

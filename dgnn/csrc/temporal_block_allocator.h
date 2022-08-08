@@ -3,8 +3,8 @@
 
 #include <mutex>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <vector>
 #include <stack>
+#include <vector>
 
 #include "common.h"
 
@@ -13,7 +13,9 @@ namespace dgnn {
  * @brief This class implements a thread-safe memory resource that allocates
  * temporal blocks.
  *
- * The allocator allocates temporal blocks using UVA.
+ * The allocated blocks are in the host memory. But the edges are stored in the
+ * device memory or managed memory or pinned memory, depending on the memory
+ * resource type.
  */
 class TemporalBlockAllocator {
  public:
@@ -22,11 +24,15 @@ class TemporalBlockAllocator {
    *
    * It creates a memory pool.
    *
-   * @param max_mem_pool_size The maximum size of the memory pool.
-   * @param min_block_size The minimum size of the temporal block.
+   * @param initial_pool_size The initial size of the memory pool.
+   * @param maxmium_pool_size The maximum size of the memory pool
+   * @param minimum_block_size The minimum size of the temporal block.
+   * @param MemoryResourceType The type of memory resource.
    */
-  TemporalBlockAllocator(std::size_t max_gpu_mem_pool_size,
-                         std::size_t min_block_size);
+  TemporalBlockAllocator(std::size_t initial_pool_size,
+                         std::size_t maximum_pool_size,
+                         std::size_t minimum_block_size,
+                         MemoryResourceType mem_resource_type);
 
   /**
    * @brief Destructor.
@@ -36,47 +42,48 @@ class TemporalBlockAllocator {
   ~TemporalBlockAllocator();
 
   /**
-   * @brief Allocates a temporal block.
+   * @brief Allocate a temporal block.
    *
-   * It may fail if the memory pool is full.
+   * NB: the block itself is in the host memory.
    *
    * @param size The size of the temporal block.
    *
-   * @return A pointer to the temporal block.
-   *
-   * @throw rmm::bad_alloc If the allocation fails.
+   * @return A host pointer to the temporal block.
    */
-  TemporalBlock* Allocate(std::size_t size,
-                          cudaStream_t stream = nullptr) noexcept(false);
+  TemporalBlock* Allocate(std::size_t size);
 
   /**
-   * @brief Deallocates a temporal block.
+   * @brief Deallocate a temporal block.
    *
-   * @param block The temporal block to deallocate.
+   * @param block The temporal block to deallocate. It must be in the host
+   * memory.
    */
-  void Deallocate(TemporalBlock* block, cudaStream_t stream = nullptr);
+  void Deallocate(TemporalBlock* block);
 
-    /**
-   * @brief Align up a size to the min_block_size.
+  /**
+   * @brief Reallocate a temporal block.
    *
-   * If the size is less than the min_block_size, it returns the min_block_size.
-   * If not, it rounds up the size to the next power of two.
+   * NB: We only change the content of the temporal block. The host pointer to
+   * the temporal block is not changed.
    *
-   * @param size The size to align up.
-   *
-   * @return The aligned size.
+   * @param block The temporal block to reallocate. It must be in the host
+   * memory.
+   * @param size The new size of the temporal block.
+   * @param stream The stream to use. If nullptr, the default stream is used.
    */
-  std::size_t AlignUp(std::size_t size);
+  void Reallocate(TemporalBlock* block, std::size_t size,
+                  cudaStream_t stream = nullptr);
 
  private:
-  void AllocateInternal(TemporalBlock* block, std::size_t size,
-                        cudaStream_t stream = nullptr) noexcept(false);
+  std::size_t AlignUp(std::size_t size);
 
-  void DeallocateInternal(TemporalBlock* block, cudaStream_t stream = nullptr);
+  void AllocateInternal(TemporalBlock* block, std::size_t size) noexcept(false);
+
+  void DeallocateInternal(TemporalBlock* block);
 
   std::vector<TemporalBlock*> blocks_;
 
-  std::size_t min_block_size_;
+  std::size_t minium_block_size_;
   std::stack<rmm::mr::device_memory_resource*> mem_resources_;
 
   std::mutex mutex_;

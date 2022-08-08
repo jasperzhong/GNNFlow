@@ -26,7 +26,7 @@ static constexpr std::size_t kBlockSpaceSize =
 /**
  * @brief This POD is used to store the temporal blocks in the graph.
  *
- * The blocks are stored in a doubly linked list. The first block is the newest
+ * The blocks are stored in a linked list. The first block is the newest
  * block. Each block stores the neighbor nodes, timestamps of the edges and IDs
  * of edges. The neighbor nodes and corresponding edge ids are sorted by
  * timestamps. The block has a maximum capacity and can only store a certain
@@ -40,7 +40,9 @@ struct TemporalBlock {
   std::size_t size;
   std::size_t capacity;
 
-  TemporalBlock* prev;
+  TimestampType start_timestamp;
+  TimestampType end_timestamp;
+
   TemporalBlock* next;
 };
 
@@ -78,13 +80,11 @@ enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
  */
 enum class SamplingPolicy { kSamplingPolicyRecent, kSamplingPolicyUniform };
 
-static constexpr std::size_t kDefaultMaxGpuMemPoolSize = 1 << 30;  // 1 GiB
-static constexpr InsertionPolicy kDefaultInsertionPolicy =
-    InsertionPolicy::kInsertionPolicyInsert;
-
-// 256 is the alignent size of rmm.
-// 64 * sizeof(float) = 256 Bytes
-static constexpr std::size_t kDefaultMinBlockSize = 64;
+enum class MemoryResourceType {
+  kMemoryResourceTypeCUDA,
+  kMemoryResourceTypeUnified,
+  kMemoryResourceTypePinned
+};
 
 };  // namespace dgnn
 
