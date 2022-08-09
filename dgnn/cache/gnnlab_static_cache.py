@@ -21,7 +21,7 @@ class GNNLabStaticCache(Cache):
             local_nid: local node ids
             cost_ratio: remote/local cost ratio
         """
-        super(GNNLabStaticCache, self).__init(capacity, num_nodes,
+        super(GNNLabStaticCache, self).__init__(capacity, num_nodes,
                                         num_edges, node_features,
                                         edge_features, device,
                                         pinned_nfeat_buffs,
