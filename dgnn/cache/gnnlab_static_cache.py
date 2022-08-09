@@ -32,7 +32,7 @@ class GNNLabStaticCache(Cache):
         self.cache_index_to_edge_id = None
         self.cache_index_to_node_id = None
 
-    def init_cache(self, sampler, train_df, fanouts, pre_sampling_rounds=5):
+    def init_cache(self, sampler, train_df, pre_sampling_rounds=5):
         """Init the caching with node features
         """
         node_sampled_count = torch.zeros(self.num_nodes, dtype=torch.int32, device=self.device,
