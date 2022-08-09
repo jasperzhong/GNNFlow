@@ -28,4 +28,4 @@ __global__ void InsertBlockToLinkedListKernel(LinkedList* node_table,
                                               NIDType node_id,
                                               TemporalBlock* block);
 }  // namespace dgnn
-#endif  // DGNN_DOUBLY_LINKED_LIST_H_
+#endif  // DGNN_LINKED_LIST_H_
