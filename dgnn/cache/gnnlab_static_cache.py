@@ -3,6 +3,7 @@ import numpy as np
 import torch
 
 from dgnn.cache.cache import Cache
+from dgnn.utils import get_batch
 
 
 class GNNLabStaticCache(Cache):
@@ -39,22 +40,18 @@ class GNNLabStaticCache(Cache):
                                             requires_grad=False)
         edge_sampled_count = torch.zeros(self.num_edges, dtype=torch.int32, device=self.device,
                                             requires_grad=False)
-        src = train_df['src'].to_numpy()
-        dst = train_df['dst'].to_numpy()
-        ts = train_df['time'].to_numpy()
-        target_nodes = np.concatenate([src, dst]).astype(np.int64)
-        ts  = np.concatenate([ts, ts]).astype(np.float32)
         # Do sampling for multiple rounds
         for epoch in range(pre_sampling_rounds):
-            mfgs = sampler.sample(target_nodes, ts)
-            if self.node_features != None:
-                for b in mfgs[0]:
-                    node_sampled_count[b.srcdata['ID']] += 1
-            if self.edge_features != None:
-                for mfg in mfgs:
-                    for b in mfg:
-                        if b.num_src_nodes() > b.num_dst_nodes():
-                            edge_sampled_count[b.edata['ID']] += 1
+            for target_nodes, ts, eid in get_batch(train_df):
+                mfgs = sampler.sample(target_nodes, ts)
+                if self.node_features != None:
+                    for b in mfgs[0]:
+                        node_sampled_count[b.srcdata['ID']] += 1
+                if self.edge_features != None:
+                    for mfg in mfgs:
+                        for b in mfg:
+                            if b.num_src_nodes() > b.num_dst_nodes():
+                                edge_sampled_count[b.edata['ID']] += 1
 
         if self.node_features != None:
             # Get the top-k nodes with the highest sampling count
