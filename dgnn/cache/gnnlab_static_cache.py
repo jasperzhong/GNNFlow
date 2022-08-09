@@ -136,7 +136,7 @@ class GNNLabStaticCache(Cache):
                 # update the cache buffer
                 # TODO: if have many snapshots
                 cache_update_node_time = 0
-
+                fetch_node_uncache_end.synchronize()
                 fetch_node_cache_time += fetch_node_cache_start.elapsed_time(
                     fetch_node_cache_end)
                 fetch_node_uncache_time += fetch_node_cache_end.elapsed_time(
