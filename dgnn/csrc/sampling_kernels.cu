@@ -31,35 +31,36 @@ __global__ void SampleLayerRecentKernel(
     start_timestamp = end_timestamp - snapshot_time_window;
   }
 
-  auto curr = node_table[nid].head;
+  // NB: the tail block is the newest block
+  auto curr = node_table[nid].tail;
   uint32_t offset = tid * fanout;
   int start_idx, end_idx;
   uint32_t sampled = 0;
   while (curr != nullptr && sampled < fanout) {
-    if (end_timestamp < curr->timestamps[0]) {
-      // search in the next block
-      curr = curr->next;
+    if (end_timestamp < curr->start_timestamp) {
+      // search in the previous block
+      curr = curr->prev;
       continue;
     }
 
-    if (start_timestamp > curr->timestamps[curr->size - 1]) {
-      // no need to search in the next block
+    if (start_timestamp > curr->end_timestamp) {
+      // no need to search in the previous block
       break;
     }
 
     // search in the current block
-    if (start_timestamp >= curr->timestamps[0] &&
-        end_timestamp <= curr->timestamps[curr->size - 1]) {
+    if (start_timestamp >= curr->start_timestamp &&
+        end_timestamp <= curr->end_timestamp) {
       // all edges in the current block
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp < curr->timestamps[0] &&
-               end_timestamp <= curr->timestamps[curr->size - 1]) {
+    } else if (start_timestamp < curr->start_timestamp &&
+               end_timestamp <= curr->end_timestamp) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp > curr->timestamps[0] &&
-               end_timestamp > curr->timestamps[curr->size - 1]) {
+    } else if (start_timestamp > curr->start_timestamp &&
+               end_timestamp > curr->end_timestamp) {
       // only the edges after start_timestamp are in the current block
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
       end_idx = curr->size;
@@ -79,7 +80,7 @@ __global__ void SampleLayerRecentKernel(
       ++sampled;
     }
 
-    curr = curr->next;
+    curr = curr->prev;
   }
 
   num_sampled[tid] = sampled;
@@ -121,36 +122,37 @@ __global__ void SampleLayerUniformKernel(
   auto& list = node_table[nid];
   uint32_t num_candidates = 0;
 
-  auto curr = list.head;
+  // NB: the tail block is the newest block
+  auto curr = list.tail;
   int start_idx, end_idx;
   int curr_idx = 0;
   int offset_by_thread = offset_per_thread * threadIdx.x;
   while (curr != nullptr) {
-    if (end_timestamp < curr->timestamps[0]) {
-      // search in the next block
-      curr = curr->next;
+    if (end_timestamp < curr->start_timestamp) {
+      // search in the prev block
+      curr = curr->prev;
       curr_idx += 1;
       continue;
     }
 
-    if (start_timestamp > curr->timestamps[curr->size - 1]) {
-      // no need to search in the next block
+    if (start_timestamp > curr->end_timestamp) {
+      // no need to search in the prev block
       break;
     }
 
     // search in the current block
-    if (start_timestamp >= curr->timestamps[0] &&
-        end_timestamp <= curr->timestamps[curr->size - 1]) {
+    if (start_timestamp >= curr->start_timestamp &&
+        end_timestamp <= curr->end_timestamp) {
       // all edges in the current block
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp < curr->timestamps[0] &&
-               end_timestamp <= curr->timestamps[curr->size - 1]) {
+    } else if (start_timestamp < curr->start_timestamp &&
+               end_timestamp <= curr->end_timestamp) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
       LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp > curr->timestamps[0] &&
-               end_timestamp > curr->timestamps[curr->size - 1]) {
+    } else if (start_timestamp > curr->start_timestamp &&
+               end_timestamp > curr->end_timestamp) {
       // only the edges after start_timestamp are in the current block
       LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
       end_idx = curr->size;
@@ -166,7 +168,7 @@ __global__ void SampleLayerUniformKernel(
     }
 
     num_candidates += end_idx - start_idx;
-    curr = curr->next;
+    curr = curr->prev;
     curr_idx += 1;
   }
 
@@ -180,19 +182,19 @@ __global__ void SampleLayerUniformKernel(
   uint32_t sampled = 0;
   uint32_t offset = tid * fanout;
 
-  curr = list.head;
+  curr = list.tail;
   curr_idx = 0;
   uint32_t cumsum = 0;
   while (curr != nullptr) {
-    if (end_timestamp < curr->timestamps[0]) {
-      // search in the next block
-      curr = curr->next;
+    if (end_timestamp < curr->start_timestamp) {
+      // search in the prev block
+      curr = curr->prev;
       curr_idx += 1;
       continue;
     }
 
-    if (start_timestamp > curr->timestamps[curr->size - 1]) {
-      // no need to search in the next block
+    if (start_timestamp > curr->end_timestamp) {
+      // no need to search in the prev block
       break;
     }
 
@@ -201,18 +203,18 @@ __global__ void SampleLayerUniformKernel(
       end_idx = ranges[offset_by_thread + curr_idx].end_idx;
     } else {
       // search in the current block
-      if (start_timestamp >= curr->timestamps[0] &&
-          end_timestamp <= curr->timestamps[curr->size - 1]) {
+      if (start_timestamp >= curr->start_timestamp &&
+          end_timestamp <= curr->end_timestamp) {
         // all edges in the current block
         LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
         LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-      } else if (start_timestamp < curr->timestamps[0] &&
-                 end_timestamp <= curr->timestamps[curr->size - 1]) {
+      } else if (start_timestamp < curr->start_timestamp &&
+                 end_timestamp <= curr->end_timestamp) {
         // only the edges before end_timestamp are in the current block
         start_idx = 0;
         LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-      } else if (start_timestamp > curr->timestamps[0] &&
-                 end_timestamp > curr->timestamps[curr->size - 1]) {
+      } else if (start_timestamp > curr->start_timestamp &&
+                 end_timestamp > curr->end_timestamp) {
         // only the edges after start_timestamp are in the current block
         LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
         end_idx = curr->size;
@@ -240,7 +242,7 @@ __global__ void SampleLayerUniformKernel(
     }
 
     cumsum += end_idx - start_idx;
-    curr = curr->next;
+    curr = curr->prev;
     curr_idx += 1;
   }
 

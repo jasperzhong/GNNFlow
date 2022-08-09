@@ -1,3 +1,4 @@
+#include <limits>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -118,7 +119,7 @@ void TemporalBlockAllocator::AllocateInternal(
 
   block->size = 0;  // empty block
   block->capacity = capacity;
-  block->start_timestamp = 0;
+  block->start_timestamp = std::numeric_limits<TimestampType>::max();
   block->end_timestamp = 0;
   block->prev = nullptr;
   block->next = nullptr;

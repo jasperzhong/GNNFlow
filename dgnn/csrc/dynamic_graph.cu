@@ -168,10 +168,6 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
     LOG(FATAL) << "Failed to allocate memory for temporal block";
   }
 
-  // copy the metadata of the block to the device
-  CUDA_CALL(cudaMemcpyAsync(d_block, block, sizeof(*block),
-                            cudaMemcpyHostToDevice, stream));
-
   // insert the block into the linked list
   InsertBlockToDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block);
@@ -181,7 +177,8 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
 }
 
 void DynamicGraph::SyncBlock(TemporalBlock* block, cudaStream_t stream) {
-  CUDA_CALL(cudaMemcpyAsync(h2d_mapping_[block], block, sizeof(TemporalBlock),
+  // copy the metadata from the host to the device
+  CUDA_CALL(cudaMemcpyAsync(h2d_mapping_[block], block, 48,
                             cudaMemcpyHostToDevice, stream));
 }
 

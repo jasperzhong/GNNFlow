@@ -1,11 +1,20 @@
 import unittest
 
-import numpy as np
-import torch
-
 from dgnn.models import TGN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import load_dataset, load_feat, build_dynamic_graph, mfgs_to_cuda, prepare_input, get_batch
+
+MB = 1 << 20
+GB = 1 << 30
+
+default_config = {
+    "initial_pool_size": 1 * GB,
+    "maximum_pool_size": 1 * GB,
+    "mem_resource_type": "cuda",
+    "minimum_block_size": 64,
+    "blocks_to_preallocate": 128,
+    "insertion_policy": "insert",
+}
 
 
 class TestModel(unittest.TestCase):
@@ -20,7 +29,7 @@ class TestModel(unittest.TestCase):
     def test_tgn_forward(self):
         node_feats, edge_feats = load_feat('REDDIT')
         train_df, val_df, test_df, df = load_dataset('REDDIT')
-        dgraph = build_dynamic_graph(df)
+        dgraph = build_dynamic_graph(df, **default_config)
         gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
         gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
         model = TGN(gnn_dim_node, gnn_dim_edge, dgraph.num_vertices())

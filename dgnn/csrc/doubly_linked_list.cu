@@ -1,5 +1,3 @@
-#include <thrust/device_delete.h>
-
 #include "doubly_linked_list.h"
 
 namespace dgnn {
