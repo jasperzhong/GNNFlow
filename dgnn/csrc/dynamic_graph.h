@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "linked_list.h"
+#include "doubly_linked_list.h"
 #include "temporal_block_allocator.h"
 
 namespace dgnn {
-typedef thrust::device_vector<LinkedList> DeviceNodeTable;
-typedef std::vector<LinkedList> HostNodeTable;
+typedef thrust::device_vector<DoublyLinkedList> DeviceNodeTable;
+typedef std::vector<DoublyLinkedList> HostNodeTable;
 /**
  * @brief A dynamic graph is a graph that can be modified at runtime.
  *
@@ -82,7 +82,7 @@ class DynamicGraph {
       NodeNeighborTuple;
   NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
 
-  const LinkedList* get_device_node_table() const;
+  const DoublyLinkedList* get_device_node_table() const;
 
  private:
   void AddEdgesForOneNode(NIDType src_node,

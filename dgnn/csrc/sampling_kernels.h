@@ -3,12 +3,12 @@
 
 #include <curand_kernel.h>
 
-#include "linked_list.h"
+#include "doubly_linked_list.h"
 
 namespace dgnn {
 
 __global__ void SampleLayerRecentKernel(
-    const LinkedList* node_table, std::size_t num_nodes, bool prop_time,
+    const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
     const NIDType* root_nodes, const TimestampType* root_timestamps,
     uint32_t snapshot_idx, uint32_t num_snapshots,
     TimestampType snapshot_time_window, uint32_t num_root_nodes,
@@ -17,7 +17,7 @@ __global__ void SampleLayerRecentKernel(
     uint32_t* num_sampled);
 
 __global__ void SampleLayerUniformKernel(
-    const LinkedList* node_table, std::size_t num_nodes, bool prop_time,
+    const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
     curandState_t* rand_states, uint64_t seed, uint32_t offset_per_thread,
     const NIDType* root_nodes, const TimestampType* root_timestamps,
     uint32_t snapshot_idx, uint32_t num_snapshots,

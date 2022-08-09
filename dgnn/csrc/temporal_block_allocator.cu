@@ -120,6 +120,7 @@ void TemporalBlockAllocator::AllocateInternal(
   block->capacity = capacity;
   block->start_timestamp = 0;
   block->end_timestamp = 0;
+  block->prev = nullptr;
   block->next = nullptr;
 
   // allocate memory for the block

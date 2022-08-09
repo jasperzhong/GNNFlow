@@ -157,7 +157,7 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
                                cudaStream_t stream) {
   CHECK_NOTNULL(block);
   // host
-  InsertBlockToLinkedList(h_copy_of_d_node_table_.data(), node_id, block);
+  InsertBlockToDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id, block);
 
   // allocate a block on the device
   TemporalBlock* d_block = nullptr;
@@ -173,7 +173,7 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
                             cudaMemcpyHostToDevice, stream));
 
   // insert the block into the linked list
-  InsertBlockToLinkedListKernel<<<1, 1, 0, stream>>>(
+  InsertBlockToDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
       thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block);
 
   // update the mapping
@@ -291,7 +291,7 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
   return result;
 }
 
-const LinkedList* DynamicGraph::get_device_node_table() const {
+const DoublyLinkedList* DynamicGraph::get_device_node_table() const {
   return thrust::raw_pointer_cast(d_node_table_.data());
 }
 
