@@ -41,7 +41,7 @@ class GNNLabStaticCache(Cache):
                                             requires_grad=False)
         src = train_df['src'].to_numpy()
         dst = train_df['dst'].to_numpy()
-        ts = train_df['ts'].to_numpy()
+        ts = train_df['time'].to_numpy()
         target_nodes = np.concatenate([src, dst]).astype(np.int64)
         ts  = np.concatenate([ts, ts]).astype(np.float32)
         # Do sampling for multiple rounds
