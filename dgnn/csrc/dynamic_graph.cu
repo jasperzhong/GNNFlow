@@ -8,8 +8,10 @@
 #include <cstdint>
 #include <rmm/detail/error.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/fixed_size_memory_resource.hpp>
+#include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <type_traits>
 
 #include "common.h"
 #include "dynamic_graph.h"
@@ -21,9 +23,8 @@ namespace dgnn {
 DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
                            std::size_t maximum_pool_size,
                            MemoryResourceType mem_resource_type,
-                           std::size_t initial_pool_size_for_metadata,
-                           std::size_t maximum_pool_size_for_metadata,
                            std::size_t minium_block_size,
+                           std::size_t blocks_to_preallocate,
                            InsertionPolicy insertion_policy)
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
                  mem_resource_type),
@@ -39,18 +40,35 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
   auto mem_res = new rmm::mr::cuda_memory_resource();
   mem_resources_for_metadata_.push(mem_res);
   auto pool_res =
-      new rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>(
-          mem_res, initial_pool_size_for_metadata,
-          maximum_pool_size_for_metadata);
+      new rmm::mr::fixed_size_memory_resource<rmm::mr::cuda_memory_resource>(
+          mem_res, sizeof(TemporalBlock), blocks_to_preallocate);
   mem_resources_for_metadata_.push(pool_res);
-  // NB: the memory pool for metadata is used internally in
-  // `rmm::device_vector`.
-  rmm::mr::set_current_device_resource(pool_res);
+
+#ifdef DGNN_DEBUG
+  auto logging_res = new rmm::mr::logging_resource_adaptor<
+      std::remove_reference_t<decltype(*pool_res)>>(pool_res, "rmm_log.txt",
+                                                    true);
+  mem_resources_for_metadata_.push(logging_res);
+#endif
+
+  rmm::mr::set_current_device_resource(mem_resources_for_metadata_.top());
 }
 
 DynamicGraph::~DynamicGraph() {
   for (auto& stream : streams_) {
     cudaStreamDestroy(stream);
+  }
+
+  // release the memory of node table
+  d_node_table_.clear();
+  d_node_table_.shrink_to_fit();
+
+  // release the memory of blocks
+  auto mr = rmm::mr::get_current_device_resource();
+  for (auto iter = std::begin(h2d_mapping_); iter != std::end(h2d_mapping_);
+       ++iter) {
+    auto& block = iter->second;
+    mr->deallocate(block, sizeof(TemporalBlock));
   }
 
   // release the memory pool
@@ -142,9 +160,13 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
   InsertBlockToLinkedList(h_copy_of_d_node_table_.data(), node_id, block);
 
   // allocate a block on the device
-  auto mr = rmm::mr::get_current_device_resource();
-  auto d_block =
-      static_cast<TemporalBlock*>(mr->allocate(sizeof(TemporalBlock)));
+  TemporalBlock* d_block = nullptr;
+  try {
+    auto mr = rmm::mr::get_current_device_resource();
+    d_block = static_cast<TemporalBlock*>(mr->allocate(sizeof(TemporalBlock)));
+  } catch (rmm::bad_alloc&) {
+    LOG(FATAL) << "Failed to allocate memory for temporal block";
+  }
 
   // copy the metadata of the block to the device
   CUDA_CALL(cudaMemcpyAsync(d_block, block, sizeof(*block),

@@ -38,12 +38,10 @@ PYBIND11_MODULE(libdgnn, m) {
 
   py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
-                    std::size_t, std::size_t, InsertionPolicy>(),
+                    std::size_t, InsertionPolicy>(),
            py::arg("initial_pool_size"), py::arg("maximum_pool_size"),
-           py::arg("mem_resource_type"),
-           py::arg("initial_pool_size_for_metadata"),
-           py::arg("maximum_pool_size_for_metadata"),
-           py::arg("minium_block_size"), py::arg("insertion_policy"))
+           py::arg("mem_resource_type"), py::arg("minium_block_size"),
+           py::arg("blocks_to_preallocate"), py::arg("insertion_policy"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"),
            py::arg("add_reverse") = true)

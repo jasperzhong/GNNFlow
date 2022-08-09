@@ -2,9 +2,9 @@
 #define DGNN_DYNAMIC_GRAPH_H_
 
 #include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
 
 #include <memory>
-#include <rmm/device_vector.hpp>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -14,7 +14,7 @@
 #include "temporal_block_allocator.h"
 
 namespace dgnn {
-typedef rmm::device_vector<LinkedList> DeviceNodeTable;
+typedef thrust::device_vector<LinkedList> DeviceNodeTable;
 typedef std::vector<LinkedList> HostNodeTable;
 /**
  * @brief A dynamic graph is a graph that can be modified at runtime.
@@ -30,24 +30,20 @@ class DynamicGraph {
    * It initialize a temporal block allocator with a memory pool for storing
    * edges. The type of the memory resource is determined by the
    * `mem_resource_type` parameter. It also creates a device memory pool for
-   * metadata (i.e., the node table and blocks).
+   * metadata (i.e., blocks).
    *
    * @param initial_pool_size The initial size of the memory pool.
    * @param maxmium_pool_size The maximum size of the memory pool.
    * @param mem_resource_type The type of memory resource for the memory pool.
-   * @param initial_pool_size_for_metadata The initial size of the memory pool
-   * for metadata.
-   * @param maxmium_pool_size_for_metadata The maximum size of the memory pool
-   * for metadata.
    * @param minimum_block_size The minimum size of the temporal block.
+   * @param blocks_to_preallocate The number of blocks to preallocate.
    * @param insertion_policy The insertion policy for the linked list.
    */
 
   DynamicGraph(std::size_t initial_pool_size, std::size_t maximum_pool_size,
                MemoryResourceType mem_resource_type,
-               std::size_t initial_pool_size_for_metadata,
-               std::size_t maximum_pool_size_for_metadata,
-               std::size_t minium_block_size, InsertionPolicy insertion_policy);
+               std::size_t minium_block_size, std::size_t blocks_to_preallocate,
+               InsertionPolicy insertion_policy);
   ~DynamicGraph();
 
   /**

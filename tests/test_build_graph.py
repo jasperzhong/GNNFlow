@@ -2,18 +2,35 @@ import unittest
 
 import numpy as np
 
+from parameterized import parameterized
+import itertools
 from dgnn.utils import build_dynamic_graph, load_dataset
+
+MB = 1 << 20
+GB = 1 << 30
+
+default_config = {
+    "initial_pool_size": 20 * MB,
+    "maximum_pool_size": 50 * MB,
+    "mem_resource_type": "cuda",
+    "minimum_block_size": 64,
+    "blocks_to_preallocate": 1024,
+    "insertion_policy": "insert",
+}
 
 
 class TestBuildGraph(unittest.TestCase):
 
-    def test_build_graph(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_build_graph(self, mem_resource_type):
         """
         Test building a dynamic graph from edges.csv(REDDIT)
         Only use training data to build a graph
         """
         train_df, _, _, df = load_dataset(dataset="REDDIT")
-        dgraph = build_dynamic_graph(train_df)
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = build_dynamic_graph(train_df, **config)
 
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)
@@ -37,13 +54,17 @@ class TestBuildGraph(unittest.TestCase):
             self.assertEqual(len(graph_out_edges), dgraph.out_degree(src))
             self.assertTrue(np.allclose(ts, graph_ts))
 
-    def test_build_graph_add_reverse(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_build_graph_add_reverse(self, mem_resource_type):
         """
         Test building a dynamic graph from edges.csv(REDDIT)
         Only use training data to build a graph
         """
         train_df, _, _, df = load_dataset(dataset="REDDIT")
-        dgraph = build_dynamic_graph(train_df, add_reverse=True)
+        config = default_config.copy()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = build_dynamic_graph(train_df, **config, add_reverse=True)
 
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)

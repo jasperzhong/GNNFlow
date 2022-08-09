@@ -18,15 +18,13 @@ class DynamicGraph:
             self, initial_pool_size: int,
             maximum_pool_size: int,
             mem_resource_type: str,
-            initial_pool_size_for_metadata: int,
-            maximum_pool_size_for_metadata: int,
             minimum_block_size: int,
+            blocks_to_preallocate: int,
             insertion_policy: str,
             source_vertices: Optional[np.ndarray] = None,
             target_vertices: Optional[np.ndarray] = None,
             timestamps: Optional[np.ndarray] = None,
-            add_reverse: bool = False,
-    ):
+            add_reverse: bool = False):
         """
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
@@ -34,12 +32,11 @@ class DynamicGraph:
         Args:
             initial_pool_size: optional, int, the initial pool size of the graph.
             maximum_pool_size: optional, int, the maximum pool size of the graph.
-            mem_resource_type: optional, str, the memory resource type. 
+            mem_resource_type: optional, str, the memory resource type.
                 valid options: ("cuda", "unified", or "pinned") (case insensitive).
-            initial_pool_size_for_metadata: optional, int, the initial pool size of the metadata.
-            maximum_pool_size_for_metadata: optional, int, the maximum pool size of the metadata.
             minimum_block_size: optional, int, the minimum block size of the graph.
-            insertion_policy: the insertion policy to use 
+            blocks_to_preallocate: optional, int, the number of blocks to preallocate.
+            insertion_policy: the insertion policy to use
                 valid options: ("insert" or "replace") (case insensitive).
             source_vertices: optional, 1D tensor, the source vertices of the edges.
             target_vertices: optional, 1D tensor, the target vertices of the edges.
@@ -68,8 +65,7 @@ class DynamicGraph:
 
         self._dgraph = _DynamicGraph(
             initial_pool_size, maximum_pool_size, mem_resource_type,
-            initial_pool_size_for_metadata, maximum_pool_size_for_metadata,
-            minimum_block_size, insertion_policy)
+            minimum_block_size, blocks_to_preallocate, insertion_policy)
 
         # initialize the graph with edges
         if source_vertices is not None and target_vertices is not None \
@@ -113,8 +109,7 @@ class DynamicGraph:
     def out_degree(self, vertex: int) -> int:
         return self._dgraph.out_degree(vertex)
 
-    def get_temporal_neighbors(self, vertex: int) \
-            -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_temporal_neighbors(self, vertex: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Return the neighbors of the specified vertex. The neighbors are sorted
         by timestamps in decending order.

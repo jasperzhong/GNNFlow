@@ -13,9 +13,8 @@ default_config = {
     "initial_pool_size": 1 * MB,
     "maximum_pool_size": 2 * MB,
     "mem_resource_type": "cuda",
-    "initial_pool_size_for_metadata": 1 * MB,
-    "maximum_pool_size_for_metadata": 2 * MB,
     "minimum_block_size": 64,
+    "blocks_to_preallocate": 128,
     "insertion_policy": "insert",
 }
 
@@ -68,10 +67,12 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
-        print("Test add edges sorted by timestamps passed.")
+        print("Test add edges sorted by timestamps passed. (mem_resource_type: {})".format(
+            mem_resource_type))
 
     @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
-    def test_add_edges_sorted_by_timestamps_add_reverse(self, mem_resource_type):
+    def test_add_edges_sorted_by_timestamps_add_reverse(
+            self, mem_resource_type):
         """
         Test that adding edges sorted by timestamps works.
         """
@@ -115,7 +116,8 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(target_vertices.tolist(), [2, 1, 0])
         self.assertEqual(timestamps.tolist(), [2, 2, 2])
         self.assertEqual(edge_ids.tolist(), [8, 5, 2])
-        print("Test add edges sorted by timestamps passed (add reverse).")
+        print("Test add edges sorted by timestamps passed (add reverse) (mem_resource_type: {})".format(
+            mem_resource_type))
 
     @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
     def test_add_edges_unsorted(self, mem_resource_type):
@@ -159,7 +161,8 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
-        print("Test add edges unsorted passed.")
+        print("Test add edges unsorted passed (mem_resource_type: {})".format(
+            mem_resource_type))
 
     @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
     def test_add_edges_multiple_times_insert(self, mem_resource_type):
@@ -240,7 +243,8 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
-        print("Test add edges multiple times passed. (insert policy)")
+        print("Test add edges multiple times passed. (insert policy) (mem_resource_type: {})".format(
+            mem_resource_type))
 
     @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
     def test_add_edges_multiple_times_replace(self, mem_resource_type):
@@ -322,7 +326,8 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(target_vertices.tolist(), [])
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
-        print("Test add edges multiple times passed. (replace policy)")
+        print("Test add edges multiple times passed. (replace policy) (mem_resource_type: {})".format(
+            mem_resource_type))
 
     @unittest.skip("Not implemented yet")
     def test_add_old_edges(self):
@@ -353,7 +358,7 @@ class TestDynamicGraph(unittest.TestCase):
         config = default_config.copy()
         config["minimum_block_size"] = 4
         config["insertion_policy"] = "replace"
-        config["memory_resource_type"] = mem_resource_type
+        config["mem_resource_type"] = mem_resource_type
         dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
@@ -396,4 +401,5 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(timestamps.tolist(), [])
         self.assertEqual(edge_ids.tolist(), [])
 
-        print("Test replace insertion policy passed.")
+        print("Test replace insertion policy passed. (mem_resource_type: {})".format(
+            mem_resource_type))
