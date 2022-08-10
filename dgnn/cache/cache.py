@@ -151,6 +151,7 @@ class Cache:
                     update_node_start.record()
                     cached_node_index_unique = cached_node_index.unique()
                     uncached_node_id_unique = uncached_node_id.unique()
+                    # TODO: need optimize
                     uncached_node_feature = self.node_features[uncached_node_id_unique].to(
                         self.device)
                     self.update_node_cache(cached_node_index=cached_node_index_unique, uncached_node_id=uncached_node_id_unique,
@@ -233,8 +234,13 @@ class Cache:
                         # TODO
                         if update_cache:
                             update_start.record()
-                            self.update_edge_cache(cached_edge_index=cached_edge_index, uncached_edge_id=uncached_edge_id,
-                                                   uncached_edge_feature=edge_feature[uncached_mask])
+                            cached_edge_index_unique = cached_edge_index.unique()
+                            uncached_edge_id_unique = uncached_edge_id.unique()
+                            # TODO: need optimize
+                            uncached_edge_feature = self.edge_features[uncached_edge_id_unique].to(
+                                self.device)
+                            self.update_edge_cache(cached_edge_index=cached_edge_index_unique, uncached_edge_id=uncached_edge_id_unique,
+                                                   uncached_edge_feature=uncached_edge_feature)
                             update_end.record()
                             update_end.synchronize()
                             cache_update_time = update_start.elapsed_time(
