@@ -202,7 +202,7 @@ node_feats, edge_feats = load_feat(
     rand_dn=args.rand_node_features,
     edge_count=edge_count, node_count=node_count)
 # for test
-edge_feats = None
+node_feats = None
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
