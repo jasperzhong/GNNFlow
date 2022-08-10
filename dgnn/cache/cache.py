@@ -119,6 +119,7 @@ class Cache:
         start.record()
         cache_node_ratio_sum = 0
         i = 0
+        self.update_node_time = 0
         if self.node_features is not None:
             for b in mfgs[0]:  # not sure why
                 fetch_node_cache_start.record()
