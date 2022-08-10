@@ -181,6 +181,7 @@ _deps
 .idea
 .vscode
 data/
+data
 .clangd/
 
 rmm_log.txt
