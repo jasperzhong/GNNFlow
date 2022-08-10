@@ -183,6 +183,7 @@ _deps
 data/
 data
 .clangd/
+compile_commands.json
 
 rmm_log.txt
 *.qdrep
