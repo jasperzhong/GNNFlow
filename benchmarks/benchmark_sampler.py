@@ -14,7 +14,23 @@ parser.add_argument("--model", type=str)
 parser.add_argument("--batch_size", type=int, default=600)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--stat", action="store_true", help="print statistics")
+parser.add_argument("--mem-resource-type", type=str,
+                    choices=["cuda", "unified", "pinned"],
+                    default="cuda", help="memory resource type")
+
 args = parser.parse_args()
+
+MB = 1 << 20
+GB = 1 << 30
+
+default_config = {
+    "initial_pool_size": 20 * MB,
+    "maximum_pool_size": 50 * MB,
+    "mem_resource_type": "cuda",
+    "minimum_block_size": 64,
+    "blocks_to_preallocate": 1024,
+    "insertion_policy": "insert",
+}
 
 
 def set_seed(seed):
@@ -28,6 +44,7 @@ set_seed(args.seed)
 
 args.model = args.model.lower()
 
+
 class NegLinkSampler:
 
     def __init__(self, num_nodes):
@@ -40,7 +57,9 @@ class NegLinkSampler:
 def main():
     # Create a dynamic graph
     _, _, _, df = load_dataset(args.dataset)
-    dgraph = build_dynamic_graph(df, add_reverse=True)
+    config = default_config.copy()
+    config["mem_resource_type"] = args.mem_resource_type
+    dgraph = build_dynamic_graph(df, **config, add_reverse=True)
 
     # Create a temporal sampler
     if args.model == "tgn":
