@@ -72,7 +72,7 @@ class GNNLabStaticCache(Cache):
             # Init parameters related to feature fetching
             cache_edge_index = torch.arange(self.edge_capacity, dtype=torch.int64).to(self.device)
             torch.index_select(self.edge_features, 0, cache_edge_id.to('cpu'),
-                               out=self.pinned_nfeat_buffs[0][:cache_edge_id.shape[0]])
+                               out=self.pinned_efeat_buffs[0][:cache_edge_id.shape[0]])
             self.cache_edge_buffer[cache_edge_index] = self.pinned_efeat_buffs[0][:cache_edge_id.shape[0]].to(self.device, non_blocking=True)
             self.cache_edge_flag[cache_edge_id] = True
             self.cache_edge_map[cache_edge_id] = cache_edge_index
