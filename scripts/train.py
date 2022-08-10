@@ -242,7 +242,8 @@ if not args.no_sample:
                               reverse=args.deliver_to_neighbors,
                               seed=args.seed)
 
-cache.init_cache(sampler, train_df, 2)
+cache.init_cache()
+# cache.init_cache(sampler, train_df, 2)
 
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -282,7 +283,7 @@ for e in range(args.epoch):
 
     # init cache every epoch
     # TODO: maybe a better way to init cache in every epoch
-    # cache.init_cache()
+    cache.init_cache()
 
     # TODO: we can overwrite train():
     # a new class inherit torch.nn.Module which has self.mailbox = None.
