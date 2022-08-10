@@ -101,11 +101,10 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
         length = np.max(np.array(df['dst'], dtype=int))
 
         target_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values, np.random.randint(
-                length, size=len(rows.src.values))]).astype(
+            [rows.src.values, rows.dst.values]).astype(
             np.int64)
         ts = np.concatenate(
-            [rows.time.values, rows.time.values, rows.time.values]).astype(
+            [rows.time.values, rows.time.values]).astype(
             np.float32)
         # TODO: align with our edge id
         eid = rows['Unnamed: 0'].values
