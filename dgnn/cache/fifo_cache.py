@@ -32,10 +32,11 @@ class FIFOCache(Cache):
         self.cache_node_count = None
         self.cache_edge_count = None
 
-    def init_cache(self):
+    def init_cache(self, sampler=None, train_df=None, pre_sampling_rounds=2):
         """Init the caching with node features
         """
-        _, _ = super(FIFOCache, self).init_cache()
+        _, _ = super(FIFOCache, self).init_cache(
+            sampler, train_df, pre_sampling_rounds=2)
         if self.node_features != None:
             self.cache_node_pointer = self.node_capacity - 1
 

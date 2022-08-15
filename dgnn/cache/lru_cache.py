@@ -25,11 +25,12 @@ class LRUCache(Cache):
         # name
         self.name = 'lru'
 
-    def init_cache(self):
+    def init_cache(self, sampler=None, train_df=None, pre_sampling_rounds=2):
         """
         Init the caching with node features
         """
-        _, _ = super(LRUCache, self).init_cache()
+        _, _ = super(LRUCache, self).init_cache(
+            sampler, train_df, pre_sampling_rounds=2)
 
     def update_edge_cache(self, cached_edge_index, uncached_edge_id, uncached_edge_feature):
         # If the number of edges to cache is larger than the cache capacity, we only cache the first

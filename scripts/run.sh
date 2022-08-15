@@ -14,10 +14,7 @@ fi
 # TGAT
 if [ $MODEL == "tgat" ] || [ $MODEL == "TGAT" ];then
     cmd="python train.py --model TGAT --dropout 0.1 --attn-dropout 0.1 \
-                    --sample-layer 2 --sample-neighbor 10 10 \
-                    --sample-strategy"
-    cmd="$cmd $STRATEGY"
-    cmd="$cmd --data $DATA"
+                    --sample-layer 2 --sample-neighbor 10 10"
     cmd="$cmd --cache $CACHE"
 fi
 
@@ -39,6 +36,18 @@ if [ $MODEL == "dysat" ] || [ $MODEL == "DySAT" ] || [ $MODEL == "DYSAT" ];then
                     --sample-strategy uniform --sample-history 3 \
                     --sample-duration 10000 \
                     --prop-time"
+fi
+
+if [ -n "$DATA" ]; then
+    cmd="$cmd --data $DATA"
+fi
+
+if [ -n "$STRATEGY" ]; then
+    cmd="$cmd --sample-strategy $STRATEGY"
+fi
+
+if [ -n "$CACHE" ]; then
+    cmd="$cmd --cache $CACHE"
 fi
 
 echo $cmd

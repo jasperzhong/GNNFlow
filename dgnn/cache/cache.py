@@ -60,7 +60,7 @@ class Cache:
             self.cache_index_to_edge_id = torch.zeros(self.edge_capacity, dtype=torch.int64, device=self.device,
                                                       requires_grad=False) - 1
 
-    def init_cache(self):
+    def init_cache(self, sampler, train_df, pre_sampling_rounds=2):
         """
         Init the caching with node features
         """
@@ -104,25 +104,18 @@ class Cache:
         fetch_time = 0
         update_node_time = 0
         update_edge_time = 0
-        fetch_node_cache_time = 0
-        fetch_node_uncache_time = 0
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         update_node_start = torch.cuda.Event(enable_timing=True)
         update_node_end = torch.cuda.Event(enable_timing=True)
-        fetch_node_cache_start = torch.cuda.Event(enable_timing=True)
-        fetch_node_cache_end = torch.cuda.Event(enable_timing=True)
-        fetch_node_uncache_end = torch.cuda.Event(enable_timing=True)
-        apply_end = torch.cuda.Event(enable_timing=True)
-        update_start = torch.cuda.Event(enable_timing=True)
-        update_end = torch.cuda.Event(enable_timing=True)
+        update_edge_start = torch.cuda.Event(enable_timing=True)
+        update_edge_end = torch.cuda.Event(enable_timing=True)
         start.record()
         cache_node_ratio_sum = 0
         i = 0
         self.update_node_time = 0
         if self.node_features is not None:
             for b in mfgs[0]:  # not sure why
-                fetch_node_cache_start.record()
                 cache_mask = self.cache_node_flag[b.srcdata['ID']]
                 cache_node_ratio = torch.sum(
                     cache_mask) / len(b.srcdata['ID'])
@@ -134,7 +127,6 @@ class Cache:
                 # fetch the cached features
                 cached_node_index = self.cache_node_map[b.srcdata['ID'][cache_mask]]
                 node_feature[cache_mask] = self.cache_node_buffer[cached_node_index]
-                fetch_node_cache_end.record()
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
                 uncached_node_id = b.srcdata['ID'][uncached_mask]
@@ -145,7 +137,6 @@ class Cache:
                 i += 1
                 # save the node feature into the mfgs
                 b.srcdata['h'] = node_feature
-                fetch_node_uncache_end.record()
                 # update the cache buffer
                 # TODO: if have many snapshots
                 if update_cache:
@@ -165,36 +156,16 @@ class Cache:
                 else:
                     cache_update_node_time = 0
 
-                fetch_node_cache_time += fetch_node_cache_start.elapsed_time(
-                    fetch_node_cache_end)
-                fetch_node_uncache_time += fetch_node_cache_end.elapsed_time(
-                    fetch_node_uncache_end)
             self.update_node_time = update_node_time / 1000
             self.cache_node_ratio = cache_node_ratio_sum / i
 
-        self.fetch_node_cache_time = fetch_node_cache_time
-        self.fetch_node_uncache_time = fetch_node_uncache_time
-
         # Edge feature
-        fetch_cache = 0
-        fetch_uncache = 0
-        uncache_get_id = 0
-        uncache_to_cuda = 0
-        apply = 0
-        fetch_cache_start = torch.cuda.Event(enable_timing=True)
-        fetch_cache_end = torch.cuda.Event(enable_timing=True)
-        uncached_get_id_end = torch.cuda.Event(enable_timing=True)
-        fetch_uncache_end = torch.cuda.Event(enable_timing=True)
-        apply_end = torch.cuda.Event(enable_timing=True)
-        update_start = torch.cuda.Event(enable_timing=True)
-        update_end = torch.cuda.Event(enable_timing=True)
         i = 0
         cache_edge_ratio_sum = 0
         if self.edge_features is not None:
             for mfg in mfgs:
                 for b in mfg:
                     if b.num_src_nodes() > b.num_dst_nodes():  # edges > 0
-                        fetch_cache_start.record()
                         cache_mask = self.cache_edge_flag[b.edata['ID']]
                         cache_edge_ratio = torch.sum(
                             cache_mask) / len(b.edata['ID'])
@@ -206,35 +177,21 @@ class Cache:
                         # fetch the cached features
                         cached_edge_index = self.cache_edge_map[b.edata['ID'][cache_mask]]
                         edge_feature[cache_mask] = self.cache_edge_buffer[cached_edge_index]
-                        fetch_cache_end.record()
                         # fetch the uncached features
                         uncached_mask = ~cache_mask
                         uncached_edge_id = b.edata['ID'][uncached_mask]
-                        uncached_get_id_end.record()
                         torch.index_select(self.edge_features, 0, uncached_edge_id.to('cpu'),
                                            out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
 
                         edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].to(
                             self.device, non_blocking=True)
                         i += 1
-                        fetch_uncache_end.record()
 
                         b.edata['f'] = edge_feature
-                        apply_end.record()
-                        apply_end.synchronize()
-                        fetch_cache += fetch_cache_start.elapsed_time(
-                            fetch_cache_end)
-                        fetch_uncache += fetch_cache_end.elapsed_time(
-                            fetch_uncache_end)
-                        uncache_get_id += fetch_cache_end.elapsed_time(
-                            uncached_get_id_end)
-                        uncache_to_cuda += uncached_get_id_end.elapsed_time(
-                            fetch_uncache_end)
-                        apply += fetch_uncache_end.elapsed_time(apply_end)
 
                         # TODO
                         if update_cache:
-                            update_start.record()
+                            update_edge_start.record()
                             cached_edge_index_unique = cached_edge_index.unique()
                             uncached_edge_id_unique = uncached_edge_id.unique()
                             # TODO: need optimize
@@ -242,10 +199,10 @@ class Cache:
                                 self.device)
                             self.update_edge_cache(cached_edge_index=cached_edge_index_unique, uncached_edge_id=uncached_edge_id_unique,
                                                    uncached_edge_feature=uncached_edge_feature)
-                            update_end.record()
-                            update_end.synchronize()
-                            cache_update_time = update_start.elapsed_time(
-                                update_end)
+                            update_edge_end.record()
+                            update_edge_end.synchronize()
+                            cache_update_time = update_edge_start.elapsed_time(
+                                update_edge_end)
                             update_edge_time += cache_update_time
                         else:
                             cache_update_time = 0
@@ -258,10 +215,5 @@ class Cache:
 
         self.fetch_time = fetch_time / 1000
         self.update_edge_time = update_edge_time / 1000
-        self.fetch_cache = fetch_cache / 1000
-        self.fetch_uncache = fetch_uncache / 1000
-        self.apply = apply / 1000
-        self.uncache_get_id = uncache_get_id / 1000
-        self.uncache_to_cuda = uncache_to_cuda / 1000
 
         return mfgs

@@ -26,11 +26,12 @@ class LFUCache(Cache):
         # name
         self.name = 'lfu'
 
-    def init_cache(self):
+    def init_cache(self, sampler=None, train_df=None, pre_sampling_rounds=2):
         """
         Init the caching with node features
         """
-        cache_node_id, cache_edge_id = super(LFUCache, self).init_cache()
+        cache_node_id, cache_edge_id = super(LFUCache, self).init_cache(
+            sampler, train_df, pre_sampling_rounds=2)
         if self.node_features != None:
             self.cache_node_count[cache_node_id] += 1
 

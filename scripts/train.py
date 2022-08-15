@@ -16,7 +16,7 @@ from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
                         load_dataset, load_feat, mfgs_to_cuda,
-                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers)
+                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input)
 import dgnn.cache as caches
 
 model_names = sorted(name for name in models.__dict__
@@ -40,7 +40,7 @@ parser.add_argument("--data", choices=datasets,
 parser.add_argument("--cache", choices=cache_names,
                     default='LFUCache', help="cache:" +
                     '|'.join(cache_names) + '(default: LFUCache)')
-parser.add_argument("--epoch", help="training epoch", type=int, default=5)
+parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
 parser.add_argument("--num-workers", help="num workers", type=int, default=0)
@@ -73,7 +73,7 @@ parser.add_argument("--graph-reverse",
                     help="build undirected graph", type=bool, default=True)
 parser.add_argument('--rand_edge_features', type=int, default=0,
                     help='use random edge featrues')
-parser.add_argument('--rand_node_features', type=int, default=100,
+parser.add_argument('--rand_node_features', type=int, default=0,
                     help='use random node featrues')
 parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
@@ -155,9 +155,12 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
 train_df, val_df, test_df, df = load_dataset(args.data)
-train_rand_sampler = RandEdgeSampler(train_df['src'].to_numpy(), train_df['dst'].to_numpy())
-val_rand_sampler = RandEdgeSampler(val_df['src'].to_numpy(), val_df['dst'].to_numpy())
-test_rand_sampler = RandEdgeSampler(test_df['src'].to_numpy(), test_df['dst'].to_numpy())
+train_rand_sampler = RandEdgeSampler(
+    train_df['src'].to_numpy(), train_df['dst'].to_numpy())
+val_rand_sampler = RandEdgeSampler(
+    val_df['src'].to_numpy(), val_df['dst'].to_numpy())
+test_rand_sampler = RandEdgeSampler(
+    test_df['src'].to_numpy(), test_df['dst'].to_numpy())
 
 train_ds = DynamicGraphDataset(train_df, train_rand_sampler)
 val_ds = DynamicGraphDataset(val_df, val_rand_sampler)
@@ -219,8 +222,8 @@ pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
     args.sample_neighbor, args.sample_history, args.batch_size, node_feats, edge_feats)
 
 # Cache
-print(args.cache)
-cache = caches.__dict__[args.cache](0.5, dgraph.num_vertices(),
+# TODO: cache device: Default cuda:0
+cache = caches.__dict__[args.cache](0.2, dgraph.num_vertices(),
                                     int(dgraph.num_edges() / 2) + 1,
                                     node_feats, edge_feats, 'cuda:0',
                                     pinned_nfeat_buffs, pinned_efeat_buffs)
@@ -242,6 +245,7 @@ if not args.no_sample:
                               reverse=args.deliver_to_neighbors,
                               seed=args.seed)
 
+# only gnnlab static need to pass param
 cache.init_cache()
 # cache.init_cache(sampler, train_df, 2)
 
@@ -270,20 +274,14 @@ for e in range(args.epoch):
     cache_edge_ratio_sum = 0
     cache_node_ratio_sum = 0
     cuda_time = 0
-    fetch_cache_all = 0
-    fetch_uncache_all = 0
-    apply_all = 0
-    uncache_get_id_all = 0
-    uncache_to_cuda_all = 0
-    fetch_node_cache_all = 0
-    fetch_node_uncache_all = 0
 
     if args.reorder > 0:
         train_sampler.reset()
 
     # init cache every epoch
     # TODO: maybe a better way to init cache in every epoch
-    cache.init_cache()
+    # only edge feature need to re-init between different epochs
+    # cache.init_cache(sampler, train_df, 2)
 
     # TODO: we can overwrite train():
     # a new class inherit torch.nn.Module which has self.mailbox = None.
@@ -314,6 +312,7 @@ for e in range(args.epoch):
             mfgs = node_to_dgl_blocks(target_nodes, ts)
         sample_end.record()
 
+        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mfgs_to_cuda(mfgs)
         cuda_end.record()
 
@@ -350,13 +349,6 @@ for e in range(args.epoch):
         update_edge_time += cache.update_edge_time
         cache_edge_ratio_sum += cache.cache_edge_ratio
         cache_node_ratio_sum += cache.cache_node_ratio
-        fetch_cache_all += cache.fetch_cache
-        fetch_uncache_all += cache.fetch_uncache
-        apply_all += cache.apply
-        uncache_get_id_all += cache.uncache_get_id
-        uncache_to_cuda_all += cache.uncache_to_cuda
-        fetch_node_cache_all += cache.fetch_node_cache_time
-        fetch_node_uncache_all += cache.fetch_node_uncache_time
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
@@ -368,53 +360,46 @@ for e in range(args.epoch):
         f.write("Epoch: {}\n".format(e))
         Epoch_time = 'Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}\n'.format(
             epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1))
-        Fetch_cache = 'fetch_cache: {:.2f}s, fetch_uncache: {:.2f}s, apply: {:.2f}s, uncache_get_id: {:.2f}s, uncache_to_cuda: {:.2f}s\n'.format(
-            fetch_cache_all, fetch_uncache_all, apply_all, uncache_get_id_all, uncache_to_cuda_all)
-        Fetch_node = 'fetch_node_cache: {:.2f}s ; fetch_node_uncache:{:.2f}s\n'.format(
-            fetch_node_cache_all / 1000, fetch_node_uncache_all / 1000
-        )
         f.write(Epoch_time)
-        f.write(Fetch_cache)
-        f.write(Fetch_node)
     epoch_time_sum += epoch_time
 
-#     # Validation
-#     print("***Start validation at epoch {}***".format(e))
-#     val_start = time.time()
-#     ap, auc = val(val_loader, sampler, model, cache, node_feats,
-#                   edge_feats, creterion, no_neg=args.no_neg,
-#                   identity=args.arch_identity,
-#                   deliver_to_neighbors=args.deliver_to_neighbors)
-#     val_end = time.time()
-#     val_time = val_end - val_start
-#     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
-#           .format(epoch_time, val_time, ap, auc))
-#     if e > 1 and ap > best_ap:
-#         best_e = e
-#         best_ap = ap
-#         torch.save(model.state_dict(), path_saver)
-#         print("Best val AP: {:.4f} & val AUC: {:.4f}".format(ap, auc))
+    # Validation
+    print("***Start validation at epoch {}***".format(e))
+    val_start = time.time()
+    ap, auc = val(val_loader, sampler, model, cache, node_feats,
+                  edge_feats, creterion, no_neg=args.no_neg,
+                  identity=args.arch_identity,
+                  deliver_to_neighbors=args.deliver_to_neighbors)
+    val_end = time.time()
+    val_time = val_end - val_start
+    print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
+          .format(epoch_time, val_time, ap, auc))
+    if e > 1 and ap > best_ap:
+        best_e = e
+        best_ap = ap
+        torch.save(model.state_dict(), path_saver)
+        print("Best val AP: {:.4f} & val AUC: {:.4f}".format(ap, auc))
 
-# print('Loading model at epoch {}...'.format(best_e))
-# model.load_state_dict(torch.load(path_saver))
+print('Loading model at epoch {}...'.format(best_e))
+model.load_state_dict(torch.load(path_saver))
 
-# # To update the memory
-# if model.use_mailbox():
-#     model.mailbox_reset()
-#     val(train_loader, sampler, model, cache, node_feats,
-#         edge_feats, creterion, no_neg=args.no_neg,
-#         identity=args.arch_identity,
-#         deliver_to_neighbors=args.deliver_to_neighbors)
-#     val(val_loader, sampler, model, cache, node_feats,
-#         edge_feats, creterion, no_neg=args.no_neg,
-#         identity=args.arch_identity,
-#         deliver_to_neighbors=args.deliver_to_neighbors)
+# To update the memory
+if model.use_mailbox():
+    model.mailbox_reset()
+    val(train_loader, sampler, model, cache, node_feats,
+        edge_feats, creterion, no_neg=args.no_neg,
+        identity=args.arch_identity,
+        deliver_to_neighbors=args.deliver_to_neighbors)
+    val(val_loader, sampler, model, cache, node_feats,
+        edge_feats, creterion, no_neg=args.no_neg,
+        identity=args.arch_identity,
+        deliver_to_neighbors=args.deliver_to_neighbors)
 
-# ap, auc = val(test_loader, sampler, model, cache, node_feats,
-#               edge_feats, creterion, no_neg=args.no_neg,
-#               identity=args.arch_identity,
-#               deliver_to_neighbors=args.deliver_to_neighbors)
-# print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+ap, auc = val(test_loader, sampler, model, cache, node_feats,
+              edge_feats, creterion, no_neg=args.no_neg,
+              identity=args.arch_identity,
+              deliver_to_neighbors=args.deliver_to_neighbors)
+print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 print('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
 print("*********************")
 print("*********************")
