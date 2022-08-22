@@ -224,7 +224,7 @@ pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
 # Cache
 # TODO: cache device: Default cuda:0
 cache = caches.__dict__[args.cache](0.2, dgraph.num_vertices(),
-                                    int(dgraph.num_edges() / 2) + 1,
+                                    edge_count,
                                     node_feats, edge_feats, 'cuda:0',
                                     pinned_nfeat_buffs, pinned_efeat_buffs)
 
