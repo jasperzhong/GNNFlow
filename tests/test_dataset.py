@@ -1,14 +1,14 @@
-import unittest
-import pandas as pd
-import numpy as np
-import torch
 import time
-from torch.utils.data import DataLoader, SequentialSampler, BatchSampler
-from dgnn.sampler import BatchSamplerReorder
-from dgnn.utils import load_dataset, get_batch
-from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
+import unittest
+
+import numpy as np
+import pandas as pd
 from parameterized import parameterized
-import itertools
+from torch.utils.data import BatchSampler, DataLoader, SequentialSampler
+
+from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
+from dgnn.sampler import BatchSamplerReorder
+from dgnn.utils import get_batch, load_dataset
 
 
 class TestDataset(unittest.TestCase):
@@ -88,6 +88,7 @@ class TestDataset(unittest.TestCase):
         print("avg loader time: {}".format(
             avg_loader / 10))
         print("avg batch time: {}".format(avg_batch / 10))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,6 +40,9 @@ struct TemporalBlock {
   std::size_t size;
   std::size_t capacity;
 
+  TimestampType start_timestamp;
+  TimestampType end_timestamp;
+
   TemporalBlock* prev;
   TemporalBlock* next;
 };
@@ -78,13 +81,11 @@ enum class InsertionPolicy { kInsertionPolicyInsert, kInsertionPolicyReplace };
  */
 enum class SamplingPolicy { kSamplingPolicyRecent, kSamplingPolicyUniform };
 
-static constexpr std::size_t kDefaultMaxGpuMemPoolSize = 1 << 30;  // 1 GiB
-static constexpr InsertionPolicy kDefaultInsertionPolicy =
-    InsertionPolicy::kInsertionPolicyInsert;
-
-// 256 is the alignent size of rmm.
-// 64 * sizeof(float) = 256 Bytes
-static constexpr std::size_t kDefaultMinBlockSize = 64;
+enum class MemoryResourceType {
+  kMemoryResourceTypeCUDA,
+  kMemoryResourceTypeUnified,
+  kMemoryResourceTypePinned
+};
 
 };  // namespace dgnn
 

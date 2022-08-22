@@ -1,14 +1,15 @@
 import argparse
 import os
+import random
 import time
-import random 
-import numpy as np
 
+import numpy as np
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 
 import dgnn.models as models
+from dgnn.config import get_default_config
 from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
@@ -21,6 +22,8 @@ model_names = sorted(name for name in models.__dict__
                      and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', type=str,
+                    default="REDDIT", help="dataset name")
 parser.add_argument("--model", choices=model_names, default='TGN',
                     help="model architecture" +
                     '|'.join(model_names) +
@@ -60,13 +63,16 @@ parser.add_argument("--seed", type=int, default=42)
 
 args = parser.parse_args()
 
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+
 set_seed(args.seed)
+
 
 def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
         model: torch.nn.Module, node_feats: torch.Tensor,
@@ -133,8 +139,8 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
-node_feats, edge_feats = load_feat('REDDIT')
-train_df, val_df, test_df, df = load_dataset('REDDIT')
+node_feats, edge_feats = load_feat(args.dataset)
+train_df, val_df, test_df, df = load_dataset(args.dataset)
 
 train_ds = DynamicGraphDataset(train_df)
 val_ds = DynamicGraphDataset(val_df)
@@ -168,8 +174,9 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
+config = get_default_config(args.dataset)
 dgraph = build_dynamic_graph(
-    df, max_gpu_pool_size=100 * (1 << 20),
+    df, **config,
     add_reverse=args.graph_reverse)
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]

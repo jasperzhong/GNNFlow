@@ -1,35 +1,38 @@
 #ifndef DGNN_TEMPORAL_BLOCK_ALLOCATOR_H_
 #define DGNN_TEMPORAL_BLOCK_ALLOCATOR_H_
 
-#include <map>
 #include <mutex>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <stack>
-#include <unordered_map>
+#include <vector>
 
 #include "common.h"
 
 namespace dgnn {
 /**
  * @brief This class implements a thread-safe memory resource that allocates
- * temporal blocks for a GPU.
+ * temporal blocks.
  *
- * The allocator allocates temporal blocks on the GPU. Each block is attached
- * to a specified identifier. The allocator keeps track of the blocks on the
- * GPU and the blocks on the CPU.
+ * The allocated blocks are in the host memory. But the edges are stored in the
+ * device memory or managed memory or pinned memory, depending on the memory
+ * resource type.
  */
 class TemporalBlockAllocator {
  public:
   /**
    * @brief Constructor.
    *
-   * It creates a memory pool on the GPU.
+   * It creates a memory pool.
    *
-   * @param max_gpu_mem_pool_size The maximum size of the GPU memory pool.
-   * @param min_block_size The minimum size of the temporal block.
+   * @param initial_pool_size The initial size of the memory pool.
+   * @param maxmium_pool_size The maximum size of the memory pool
+   * @param minimum_block_size The minimum size of the temporal block.
+   * @param MemoryResourceType The type of memory resource.
    */
-  TemporalBlockAllocator(std::size_t max_gpu_mem_pool_size,
-                         std::size_t min_block_size);
+  TemporalBlockAllocator(std::size_t initial_pool_size,
+                         std::size_t maximum_pool_size,
+                         std::size_t minimum_block_size,
+                         MemoryResourceType mem_resource_type);
 
   /**
    * @brief Destructor.
@@ -39,73 +42,49 @@ class TemporalBlockAllocator {
   ~TemporalBlockAllocator();
 
   /**
-   * @brief Allocates a temporal block on the GPU.
+   * @brief Allocate a temporal block.
    *
-   * It may fail if the GPU memory pool is full.
+   * NB: the block itself is in the host memory.
    *
    * @param size The size of the temporal block.
    *
-   * @return A pointer to the temporal block.
-   *
-   * @throw rmm::bad_alloc If the allocation fails.
+   * @return A host pointer to the temporal block.
    */
-  TemporalBlock* Allocate(std::size_t size,
-                          cudaStream_t stream = nullptr) noexcept(false);
+  TemporalBlock* Allocate(std::size_t size);
 
   /**
-   * @brief Deallocates a temporal block on the GPU.
+   * @brief Deallocate a temporal block.
    *
-   * @param block The temporal block to deallocate.
+   * @param block The temporal block to deallocate. It must be in the host
+   * memory.
    */
-  void Deallocate(TemporalBlock* block, cudaStream_t stream = nullptr);
+  void Deallocate(TemporalBlock* block);
 
   /**
-   * @brief Copy a temporal block from GPU to CPU.
+   * @brief Reallocate a temporal block.
    *
-   * @param block The temporal block to copy.
+   * NB: We only change the content of the temporal block. The host pointer to
+   * the temporal block is not changed.
    *
-   * @return A pointer to the temporal block on the CPU.
+   * @param block The temporal block to reallocate. It must be in the host
+   * memory.
+   * @param size The new size of the temporal block.
+   * @param stream The stream to use. If nullptr, the default stream is used.
    */
-  TemporalBlock* SwapBlockToHost(TemporalBlock* block,
-                                 cudaStream_t stream = nullptr);
-
-  /**
-   * @brief Align up a size to the min_block_size.
-   *
-   * If the size is less than the min_block_size, it returns the min_block_size.
-   * If not, it rounds up the size to the next power of two.
-   *
-   * @param size The size to align up.
-   *
-   * @return The aligned size.
-   */
-  std::size_t AlignUp(std::size_t size);
-
-  TemporalBlock* GetTheOldestBlockOnDevice() const;
-
-  std::size_t num_blocks_on_device() const;
-  std::size_t num_blocks_on_host() const;
-
-  std::size_t used_space_on_device() const;
-  std::size_t used_space_on_host() const;
+  void Reallocate(TemporalBlock* block, std::size_t size,
+                  cudaStream_t stream = nullptr);
 
  private:
-  void AllocateInternal(TemporalBlock* block, std::size_t size,
-                        cudaStream_t stream = nullptr) noexcept(false);
+  std::size_t AlignUp(std::size_t size);
 
-  void DeallocateInternal(TemporalBlock* block, cudaStream_t stream = nullptr);
+  void AllocateInternal(TemporalBlock* block, std::size_t size) noexcept(false);
 
-  std::size_t min_block_size_;
-  std::stack<rmm::mr::device_memory_resource*> gpu_resources_;
+  void DeallocateInternal(TemporalBlock* block);
 
-  // sequence number -> block raw pointer
-  std::map<uint64_t, TemporalBlock*> blocks_on_device_;
-  std::map<uint64_t, TemporalBlock*> blocks_on_host_;
+  std::vector<TemporalBlock*> blocks_;
 
-  std::unordered_map<TemporalBlock*, uint64_t> block_to_seq_;
-
-  // a monotonically increasing sequence number
-  uint64_t block_sequence_number_;
+  std::size_t minium_block_size_;
+  std::stack<rmm::mr::device_memory_resource*> mem_resources_;
 
   std::mutex mutex_;
 };
