@@ -48,7 +48,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataF
     return train_df, val_df, test_df, df
 
 
-def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0) -> Tuple[torch.Tensor, torch.Tensor]:
+def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0, edge_count=0, node_count=0) -> Tuple[torch.Tensor, torch.Tensor]:
 
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
@@ -59,7 +59,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
     node_feats = None
     if os.path.exists(node_feat_path):
         node_feats = torch.load(node_feat_path)
-        if node_feats.dtyep == torch.bool:
+        if node_feats.dtype == torch.bool:
             node_feats = node_feats.type(torch.float32)
 
     edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
@@ -70,17 +70,23 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
         if edge_feats.dtype == torch.bool:
             edge_feats = edge_feats.type(torch.float32)
 
-    if rand_de > 0:
-        if dataset == 'LASTFM':
-            edge_feats = torch.randn(1293103, rand_de)
-        elif dataset == 'MOOC':
-            edge_feats = torch.randn(411749, rand_de)
-    if rand_dn > 0:
-        if dataset == 'LASTFM':
-            node_feats = torch.randn(1980, rand_dn)
-        elif dataset == 'MOOC':
-            edge_feats = torch.randn(7144, rand_dn)
+    if rand_de > 0 and edge_feats is None:
+        edge_feats = torch.randn(edge_count, rand_de)
+        # if dataset == 'LASTFM':
+        #     edge_feats = torch.randn(1293103, rand_de)
+        # elif dataset == 'MOOC':
+        #     edge_feats = torch.randn(411749, rand_de)
+    if rand_dn > 0 and node_feats is None:
+        node_feats = torch.randn(node_count, rand_dn)
+        # if dataset == 'LASTFM':
+        #     node_feats = torch.randn(1980, rand_dn)
+        # elif dataset == 'MOOC':
+        #     node_feats = torch.randn(7144, rand_dn)
 
+    if node_feats is not None:
+        node_feats = node_feats.pin_memory()
+    if edge_feats is not None:
+        edge_feats = edge_feats.pin_memory()
     return node_feats, edge_feats
 
 
@@ -95,11 +101,10 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
         length = np.max(np.array(df['dst'], dtype=int))
 
         target_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values, np.random.randint(
-                length, size=len(rows.src.values))]).astype(
+            [rows.src.values, rows.dst.values]).astype(
             np.int64)
         ts = np.concatenate(
-            [rows.time.values, rows.time.values, rows.time.values]).astype(
+            [rows.time.values, rows.time.values]).astype(
             np.float32)
         # TODO: align with our edge id
         eid = rows['Unnamed: 0'].values
@@ -246,3 +251,45 @@ class NegLinkSampler:
 
     def sample(self, n):
         return np.random.randint(self.num_nodes, size=n)
+
+
+def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_feats):
+    pinned_nfeat_buffs = list()
+    pinned_efeat_buffs = list()
+    limit = int(batch_size * 3.3)
+    for i in fanouts:
+        limit *= i
+        if edge_feats is not None:
+            for _ in range(sample_history):
+                pinned_efeat_buffs.insert(0, torch.zeros(
+                    (limit, edge_feats.shape[1]), pin_memory=True))
+
+    if node_feats is not None:
+        for _ in range(sample_history):
+            pinned_nfeat_buffs.insert(0, torch.zeros(
+                (limit, node_feats.shape[1]), pin_memory=True))
+
+    return pinned_nfeat_buffs, pinned_efeat_buffs
+
+class RandEdgeSampler(object):
+  def __init__(self, src_list, dst_list, seed=None):
+    self.seed = None
+    self.src_list = np.unique(src_list)
+    self.dst_list = np.unique(dst_list)
+
+    if seed is not None:
+      self.seed = seed
+      self.random_state = np.random.RandomState(self.seed)
+
+  def sample(self, size):
+    if self.seed is None:
+      src_index = np.random.randint(0, len(self.src_list), size)
+      dst_index = np.random.randint(0, len(self.dst_list), size)
+    else:
+
+      src_index = self.random_state.randint(0, len(self.src_list), size)
+      dst_index = self.random_state.randint(0, len(self.dst_list), size)
+    return self.src_list[src_index], self.dst_list[dst_index]
+
+  def reset_random_state(self):
+    self.random_state = np.random.RandomState(self.seed)

@@ -10,6 +10,7 @@ class Model(torch.nn.Module):
     def forward(self, mfgs, neg_samples=1):
         if self.mailbox is not None:
             self.mailbox.prep_input_mails(mfgs[0])
+            # TODO: mfgs[0] has problem!!
             self.memory_updater(mfgs[0])
 
     def use_mailbox(self):
