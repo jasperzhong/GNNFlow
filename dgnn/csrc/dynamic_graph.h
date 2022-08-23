@@ -19,14 +19,31 @@ typedef std::vector<DoublyLinkedList> HostNodeTable;
 /**
  * @brief A dynamic graph is a graph that can be modified at runtime.
  *
- * The dynamic graph is implemented as block adjacency list. It has a vertex
- * table where each entry is a doubly linked list of temporal blocks.
+ * The dynamic graph is implemented as block adjacency list. It has a node
+ * table where each entry is a linked list of temporal blocks.
  */
 class DynamicGraph {
  public:
-  DynamicGraph(std::size_t max_gpu_mem_pool_size = kDefaultMaxGpuMemPoolSize,
-               std::size_t min_block_size = kDefaultMinBlockSize,
-               InsertionPolicy insertion_policy = kDefaultInsertionPolicy);
+  /**
+   * @brief Constructor.
+   *
+   * It initialize a temporal block allocator with a memory pool for storing
+   * edges. The type of the memory resource is determined by the
+   * `mem_resource_type` parameter. It also creates a device memory pool for
+   * metadata (i.e., blocks).
+   *
+   * @param initial_pool_size The initial size of the memory pool.
+   * @param maxmium_pool_size The maximum size of the memory pool.
+   * @param mem_resource_type The type of memory resource for the memory pool.
+   * @param minimum_block_size The minimum size of the temporal block.
+   * @param blocks_to_preallocate The number of blocks to preallocate.
+   * @param insertion_policy The insertion policy for the linked list.
+   */
+
+  DynamicGraph(std::size_t initial_pool_size, std::size_t maximum_pool_size,
+               MemoryResourceType mem_resource_type,
+               std::size_t minium_block_size, std::size_t blocks_to_preallocate,
+               InsertionPolicy insertion_policy);
   ~DynamicGraph();
 
   /**
@@ -43,8 +60,7 @@ class DynamicGraph {
    */
   void AddEdges(std::vector<NIDType>& src_nodes,
                 std::vector<NIDType>& dst_nodes,
-                std::vector<TimestampType>& timestamps,
-                bool add_reverse_edges = true);
+                std::vector<TimestampType>& timestamps, bool add_reverse_edges);
 
   /**
    * @brief Add nodes to the graph.
@@ -59,7 +75,7 @@ class DynamicGraph {
 
   std::size_t out_degree(NIDType node) const;
 
-  // it is inefficient to call this function every time for each node. Debug
+  // NB: it is inefficient to call this function every time for each node. Debug
   // only.
   typedef std::tuple<std::vector<NIDType>, std::vector<TimestampType>,
                      std::vector<EIDType>>
@@ -67,7 +83,6 @@ class DynamicGraph {
   NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
 
   const DoublyLinkedList* get_device_node_table() const;
-  const DoublyLinkedList* get_host_node_table() const;
 
  private:
   void AddEdgesForOneNode(NIDType src_node,
@@ -76,40 +91,19 @@ class DynamicGraph {
                           const std::vector<EIDType>& eids,
                           cudaStream_t stream = nullptr);
 
-  std::size_t SwapOldBlocksToCPU(std::size_t min_swap_size,
-                                 cudaStream_t stream = nullptr);
-
-  TemporalBlock* AllocateBlock(std::size_t num_edges,
-                               cudaStream_t stream = nullptr);
-
-  TemporalBlock* ReallocateBlock(TemporalBlock* block, std::size_t num_edges,
-                                 cudaStream_t stream = nullptr);
-
   void InsertBlock(NIDType node_id, TemporalBlock* block,
                    cudaStream_t stream = nullptr);
-
-  void DeleteTailBlock(NIDType node_id, cudaStream_t stream = nullptr);
-
-  void ReplaceBlock(NIDType node_id, TemporalBlock* block,
-                    cudaStream_t stream = nullptr);
 
   void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
  private:
-  // The device node table. Blocks are allocated in the GPU memory pool.
-  // Pointers in each block also point to GPU buffers.
+  // The device node table. Blocks are allocated in the device memory pool.
   DeviceNodeTable d_node_table_;
 
-  // The host node table. Blocks are allocated in the CPU.
-  // Pointers in each block also point to CPU buffers.
-  HostNodeTable h_node_table_;
-
-  // Copy of the d_node_table_. Blocks are allocated in the CPU memory.
-  // But the pointers in the table are pointing to the same memory as the
-  // d_node_table_.
+  // The copy of the device node table in the host.
   HostNodeTable h_copy_of_d_node_table_;
 
-  // mapping from the copied block on the CPU to the original block on the GPU
+  // the host pointer to the block -> the device pointer to the block
   std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
 
   TemporalBlockAllocator allocator_;
@@ -120,8 +114,7 @@ class DynamicGraph {
   std::size_t num_nodes_;  // the maximum node id + 1
   std::size_t num_edges_;
 
-  // block in the CPU memory but points to the GPU buffers -> src node
-  std::unordered_map<TemporalBlock*, NIDType> block_to_node_id_;
+  std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 };
 
 }  // namespace dgnn

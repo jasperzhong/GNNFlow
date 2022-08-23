@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # set cuda arch
+set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
 include(FindCUDA/select_compute_arch)
 CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)
 string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
@@ -16,18 +17,16 @@ string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
 SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
 message(STATUS "CUDA_ARCH_LIST: ${CUDA_ARCH_LIST}")
 
-
-# rmm
-find_package(rmm REQUIRED)
-
+# 3rd party
 find_package(PythonLibs REQUIRED)
 add_subdirectory(third_party/pybind11)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/dgnn/csrc)
-include_directories($ENV{CONDA_PREFIX}/include)
 include_directories(/usr/local/cuda/include)
 include_directories(third_party/pybind11/include)
+include_directories(third_party/spdlog/include)
+include_directories(third_party/rmm/include)
 
 file(GLOB_RECURSE DGNN_SRC_FILES ${PROJECT_SOURCE_DIR}/dgnn/csrc/*.cc)
 set_source_files_properties(${PROJECT_SOURCE_DIR}/dgnn/csrc/api.cc PROPERTIES LANGUAGE CUDA)
@@ -39,11 +38,16 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fPIC -Wall -ftree-vectorize")
 set(ARCH_FLAGS "-march=native -mtune=native")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")
 
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDGNN_DEBUG")
+set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -DDGNN_DEBUG")
+
 pybind11_add_module(${TARGET_LIB} ${DGNN_SRC_FILES})
 
 target_compile_options(${TARGET_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
     --generate-line-info
     --use_fast_math
+    -rdc=true
     >)
 
+set_property(TARGET ${TARGET_LIB} PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 

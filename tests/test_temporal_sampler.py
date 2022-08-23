@@ -1,15 +1,33 @@
+import itertools
 import unittest
 
 import numpy as np
+from parameterized import parameterized
 
 from dgnn import DynamicGraph, TemporalSampler
 from dgnn.utils import build_dynamic_graph, load_dataset
 
+MB = 1 << 20
+GB = 1 << 30
+
+default_config = {
+    "initial_pool_size": 1 * GB,
+    "maximum_pool_size": 1 * GB,
+    "mem_resource_type": "cuda",
+    "minimum_block_size": 64,
+    "blocks_to_preallocate": 128,
+    "insertion_policy": "insert",
+}
+
 
 class TestTemporalSampler(unittest.TestCase):
-    def test_sample_layer(self):
+
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_layer(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
@@ -40,9 +58,12 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer passed")
 
-    def test_sample_layer_uniform(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_layer_uniform(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
@@ -62,9 +83,13 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer uniform passed")
 
-    def test_sample_layer_with_multiple_blocks(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_layer_with_multiple_blocks(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph(min_block_size=4)
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        config["minimum_block_size"] = 4
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
@@ -102,9 +127,12 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer passed")
 
-    def test_sampler_layer_with_duplicate_vertices(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sampler_layer_with_duplicate_vertices(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
@@ -135,9 +163,12 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sampler_layer_with_duplicate_vertices passed")
 
-    def test_sample_multi_layers(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_multi_layers(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
@@ -185,9 +216,12 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_layers passed")
 
-    def test_sample_multi_snapshots(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_multi_snapshots(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array(
             [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
         target_vertices = np.array(
@@ -243,9 +277,12 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_snapshots passed")
 
-    def test_sample_multi_layers_multi_snapshots(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_multi_layers_multi_snapshots(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array(
             [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
         target_vertices = np.array(
@@ -332,9 +369,12 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_layers_multi_snapshots passed")
 
-    def test_sample_layer_with_different_batch_size(self):
+    @parameterized.expand(itertools.product(["cuda", "unified", "pinned"]))
+    def test_sample_layer_with_different_batch_size(self, mem_resource_type):
         # build the dynamic graph
-        dgraph = DynamicGraph()
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
@@ -357,7 +397,8 @@ class TestTemporalSampler(unittest.TestCase):
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         df = df[:train_edge_end]
         df = df.astype({'time': np.float32})
-        dgraph = build_dynamic_graph(train_df, add_reverse=True)
+        config = default_config.copy()
+        dgraph = build_dynamic_graph(train_df, **config, add_reverse=True)
         sampler = TemporalSampler(
             dgraph, fanouts=[10], strategy="recent")
 

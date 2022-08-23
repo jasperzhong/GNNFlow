@@ -1,16 +1,16 @@
 import argparse
 from cgi import test
 import os
-import time
 import random
+import time
 import numpy as np
-
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 from dgnn.cache.cache import Cache
 
 import dgnn.models as models
+from dgnn.config import get_default_config
 from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
@@ -30,6 +30,8 @@ print(cache_names)
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', type=str,
+                    default="REDDIT", help="dataset name")
 parser.add_argument("--model", choices=model_names, default='TGN',
                     help="model architecture" +
                     '|'.join(model_names) +
@@ -154,6 +156,7 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 
 # Build Graph, block_size = 1024
 path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
+
 train_df, val_df, test_df, df = load_dataset(args.data)
 train_rand_sampler = RandEdgeSampler(
     train_df['src'].to_numpy(), train_df['dst'].to_numpy())
@@ -165,6 +168,7 @@ test_rand_sampler = RandEdgeSampler(
 train_ds = DynamicGraphDataset(train_df, train_rand_sampler)
 val_ds = DynamicGraphDataset(val_df, val_rand_sampler)
 test_ds = DynamicGraphDataset(test_df, test_rand_sampler)
+
 
 if args.reorder > 0:
     train_sampler = BatchSamplerReorder(
@@ -194,8 +198,9 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
+config = get_default_config(args.dataset)
 dgraph = build_dynamic_graph(
-    df, max_gpu_pool_size=100 * (1 << 20),
+    df, **config,
     add_reverse=args.graph_reverse)
 
 edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()

@@ -113,21 +113,42 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
 
 
 def build_dynamic_graph(
-        dataset_df: pd.DataFrame, max_gpu_pool_size: int = 1 << 30,
-        min_block_size: int = 64, add_reverse: bool = False,
-        insertion_policy: str = "insert") -> DynamicGraph:
+        dataset_df: pd.DataFrame,
+        initial_pool_size: int,
+        maximum_pool_size: int,
+        mem_resource_type: str,
+        minimum_block_size: int,
+        blocks_to_preallocate: int,
+        insertion_policy: str,
+        add_reverse: bool = False) -> DynamicGraph:
+    """
+    Builds a dynamic graph from the given dataframe.
+
+    Args:
+        dataset_df: the dataframe for the whole dataset.
+        initial_pool_size: optional, int, the initial pool size of the graph.
+        maximum_pool_size: optional, int, the maximum pool size of the graph.
+        mem_resource_type: optional, str, the memory resource type. 
+            valid options: ("cuda", "unified", or "pinned") (case insensitive).
+        minimum_block_size: optional, int, the minimum block size of the graph.
+        blocks_to_preallocate: optional, int, the number of blocks to preallocate.
+        insertion_policy: the insertion policy to use 
+            valid options: ("insert" or "replace") (case insensitive).
+        add_reverse: optional, bool, whether to add reverse edges.
+    """
     src = dataset_df['src'].to_numpy(dtype=np.int64)
     dst = dataset_df['dst'].to_numpy(dtype=np.int64)
     ts = dataset_df['time'].to_numpy(dtype=np.float32)
 
     dgraph = DynamicGraph(
-        source_vertices=src,
-        target_vertices=dst,
-        timestamps=ts,
-        add_reverse=add_reverse,
-        max_gpu_pool_size=max_gpu_pool_size,
-        min_block_size=min_block_size,
-        insertion_policy=insertion_policy)
+        initial_pool_size,
+        maximum_pool_size,
+        mem_resource_type,
+        minimum_block_size,
+        blocks_to_preallocate,
+        insertion_policy,
+        src, dst, ts,
+        add_reverse)
 
     return dgraph
 
