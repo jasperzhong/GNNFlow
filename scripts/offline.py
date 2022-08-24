@@ -1,21 +1,17 @@
 import argparse
-from cgi import test
 import os
 import random
 import time
 import numpy as np
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
-from torch.utils.data import BatchSampler, SequentialSampler
 from dgnn.cache.cache import Cache
 
 import dgnn.models as models
 from dgnn.config import get_default_config
-from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
-from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
-                        load_dataset, load_feat, mfgs_to_cuda,
+                        load_dataset, load_feat, mfgs_to_cuda, get_batch,
                         node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input)
 import dgnn.cache as caches
 
@@ -91,7 +87,7 @@ def set_seed(seed):
 set_seed(args.seed)
 
 
-def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
+def val(df, rand_sampler, sampler: TemporalSampler,
         model: torch.nn.Module, cache: Cache, node_feats: torch.Tensor,
         edge_feats: torch.Tensor, creterion: torch.nn.Module, neg_samples=1,
         no_neg=False, identity=False, deliver_to_neighbors=False):
@@ -104,8 +100,7 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
         total_loss = 0
 
         mfgs = None
-        for i, (target_nodes, ts, eid) in enumerate(dataloader):
-
+        for i, (target_nodes, ts, eid) in enumerate(get_batch(df, rand_sampler)):
             if sampler is not None:
                 if no_neg:
                     pos_root_end = target_nodes.shape[0] * 2 // 3
@@ -157,53 +152,23 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
     return ap, auc_mrr
 
 
-# Build Graph, block_size = 1024
-path_saver = os.path.join(get_project_root_dir(), '{}.pt'.format(args.model))
+path_saver = os.path.join(get_project_root_dir(),
+                          '{}_offline.pt'.format(args.model))
 
-train_df, val_df, test_df, df = load_dataset(args.data)
-train_rand_sampler = RandEdgeSampler(
-    train_df['src'].to_numpy(), train_df['dst'].to_numpy())
+_, _, _, df = load_dataset(args.data)
+phase1 = int(len(df) * 0.6)
+phase1_val = int(len(df) * 0.1)
+phase1_df = df[:phase1]
+phase1_val_df = df[phase1:phase1_val]
+rand_sampler = RandEdgeSampler(
+    phase1_df['src'].to_numpy(), phase1_df['dst'].to_numpy())
 val_rand_sampler = RandEdgeSampler(
-    val_df['src'].to_numpy(), val_df['dst'].to_numpy())
-test_rand_sampler = RandEdgeSampler(
-    test_df['src'].to_numpy(), test_df['dst'].to_numpy())
-
-train_ds = DynamicGraphDataset(train_df, train_rand_sampler)
-val_ds = DynamicGraphDataset(val_df, val_rand_sampler)
-test_ds = DynamicGraphDataset(test_df, test_rand_sampler)
-
-
-if args.reorder > 0:
-    train_sampler = BatchSamplerReorder(
-        SequentialSampler(train_ds),
-        batch_size=args.batch_size, drop_last=False, num_chunks=args.reorder)
-else:
-    train_sampler = BatchSampler(
-        SequentialSampler(train_ds),
-        batch_size=args.batch_size, drop_last=False)
-
-val_sampler = BatchSampler(
-    SequentialSampler(val_ds),
-    batch_size=args.batch_size, drop_last=False)
-test_sampler = BatchSampler(
-    SequentialSampler(test_ds),
-    batch_size=args.batch_size, drop_last=False)
-
-train_loader = torch.utils.data.DataLoader(
-    train_ds, sampler=train_sampler, collate_fn=default_collate_ndarray,
-    num_workers=args.num_workers)
-val_loader = torch.utils.data.DataLoader(
-    val_ds, sampler=val_sampler, collate_fn=default_collate_ndarray,
-    num_workers=args.num_workers)
-test_loader = torch.utils.data.DataLoader(
-    test_ds, sampler=test_sampler, collate_fn=default_collate_ndarray,
-    num_workers=args.num_workers)
-
+    phase1_val_df['src'].to_numpy(), phase1_val_df['dst'].to_numpy())
 
 # use the full data to build graph
 config = get_default_config(args.dataset)
 dgraph = build_dynamic_graph(
-    df, **config,
+    phase1_df, **config,
     add_reverse=args.graph_reverse)
 
 edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
@@ -224,24 +189,8 @@ model.cuda()
 
 args.arch_identity = args.model in ['JODIE', 'APAN']
 
-# TODO: maybe use dgl's index_select
-# so that these pin_buffers is unnecessary
 pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
     args.sample_neighbor, args.sample_history, args.batch_size, node_feats, edge_feats)
-
-# Cache
-# TODO: cache device: Default cuda:0
-cache = caches.__dict__[args.cache](0.2, dgraph.num_vertices(),
-                                    edge_count,
-                                    node_feats, edge_feats, 'cuda:0',
-                                    pinned_nfeat_buffs, pinned_efeat_buffs)
-
-# assert
-assert args.sample_layer == model.gnn_layer, "sample layers must match the gnn layers"
-assert args.sample_layer == len(
-    args.sample_neighbor), "sample layer must match the length of sample_neighbors"
-
-sampler = None
 
 if not args.no_sample:
     sampler = TemporalSampler(dgraph,
@@ -253,22 +202,20 @@ if not args.no_sample:
                               reverse=args.deliver_to_neighbors,
                               seed=args.seed)
 
-# only gnnlab static need to pass param
-cache.init_cache()
-# cache.init_cache(sampler, train_df, 2)
-
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 best_ap = 0
 best_e = 0
+best_auc = 0
 
 epoch_time_sum = 0
-with open("profile.txt", "a") as f:
+
+with open("profile_offline_{}.txt".format(args.model), "a") as f:
     f.write("\n")
     f.write("Data: {}\n".format(args.data))
-    f.write("Cache: {}\n".format(args.cache))
     f.write("strategy: {}\n".format(args.sample_strategy))
+
 for e in range(args.epoch):
     print("Epoch {}".format(e))
     epoch_time_start = time.time()
@@ -283,17 +230,6 @@ for e in range(args.epoch):
     cache_node_ratio_sum = 0
     cuda_time = 0
 
-    if args.reorder > 0:
-        train_sampler.reset()
-
-    # init cache every epoch
-    # TODO: maybe a better way to init cache in every epoch
-    # only edge feature need to re-init between different epochs
-    # cache.init_cache(sampler, train_df, 2)
-
-    # TODO: we can overwrite train():
-    # a new class inherit torch.nn.Module which has self.mailbox = None.
-    # if mailbox is not None. reset!
     model.train()
 
     model.mailbox_reset()
@@ -302,7 +238,7 @@ for e in range(args.epoch):
     feature_end = torch.cuda.Event(enable_timing=True)
     cuda_end = torch.cuda.Event(enable_timing=True)
     train_end = torch.cuda.Event(enable_timing=True)
-    for i, (target_nodes, ts, eid) in enumerate(train_loader):
+    for i, (target_nodes, ts, eid) in enumerate(get_batch(phase1_df, rand_sampler)):
         time_start.record()
         mfgs = None
         if sampler is not None:
@@ -320,11 +256,10 @@ for e in range(args.epoch):
             mfgs = node_to_dgl_blocks(target_nodes, ts)
         sample_end.record()
 
-        # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         mfgs_to_cuda(mfgs)
         cuda_end.record()
 
-        mfgs = cache.fetch_feature(mfgs)
+        mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
         feature_end.record()
         # Train
         optimizer.zero_grad()
@@ -352,11 +287,6 @@ for e in range(args.epoch):
         feature_time += cuda_end.elapsed_time(feature_end)
         train_end.synchronize()
         train_time += feature_end.elapsed_time(train_end)
-        fetch_all_time += cache.fetch_time
-        update_node_time += cache.update_node_time
-        update_edge_time += cache.update_edge_time
-        cache_edge_ratio_sum += cache.cache_edge_ratio
-        cache_node_ratio_sum += cache.cache_node_ratio
 
     epoch_time_end = time.time()
     epoch_time = epoch_time_end - epoch_time_start
@@ -364,17 +294,17 @@ for e in range(args.epoch):
     cuda_time /= 1000
     feature_time /= 1000
     train_time /= 1000
-    with open("profile.txt", "a") as f:
-        f.write("Epoch: {}\n".format(e))
-        Epoch_time = 'Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}\n'.format(
-            epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1))
-        f.write(Epoch_time)
+    # with open("profile.txt", "a") as f:
+    #     f.write("Epoch: {}\n".format(e))
+    #     Epoch_time = 'Epoch time:{:.2f}s; dataloader time:{:.2f}s sample time:{:.2f}s; cuda time:{:.2f}s; feature time: {:.2f}s train time:{:.2f}s.; fetch time:{:.2f}s ; update node time:{:.2f}s; cache node ratio: {:.2f}; cache edge ratio: {:.2f}\n'.format(
+    #         epoch_time, epoch_time - sample_time - feature_time - train_time - cuda_time, sample_time, cuda_time, feature_time, train_time, fetch_all_time, update_node_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1))
+    #     f.write(Epoch_time)
     epoch_time_sum += epoch_time
 
     # Validation
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
-    ap, auc = val(val_loader, sampler, model, cache, node_feats,
+    ap, auc = val(phase1_val_df, val_rand_sampler, sampler, model, None, node_feats,
                   edge_feats, creterion, no_neg=args.no_neg,
                   identity=args.arch_identity,
                   deliver_to_neighbors=args.deliver_to_neighbors)
@@ -385,29 +315,26 @@ for e in range(args.epoch):
     if e > 1 and ap > best_ap:
         best_e = e
         best_ap = ap
+        best_auc = auc
         torch.save(model.state_dict(), path_saver)
         print("Best val AP: {:.4f} & val AUC: {:.4f}".format(ap, auc))
 
 print('Loading model at epoch {}...'.format(best_e))
+with open("profile_offline_{}.txt".format(args.model), "a") as f:
+    f.write("phase1 training done")
+    f.write("Best val ap: {}\n".format(best_ap))
+    f.write("Best val auc: {}\n".format(best_auc))
 model.load_state_dict(torch.load(path_saver))
 
-# To update the memory
-if model.use_mailbox():
-    model.mailbox_reset()
-    val(train_loader, sampler, model, cache, node_feats,
-        edge_feats, creterion, no_neg=args.no_neg,
-        identity=args.arch_identity,
-        deliver_to_neighbors=args.deliver_to_neighbors)
-    val(val_loader, sampler, model, cache, node_feats,
-        edge_feats, creterion, no_neg=args.no_neg,
-        identity=args.arch_identity,
-        deliver_to_neighbors=args.deliver_to_neighbors)
-
-ap, auc = val(test_loader, sampler, model, cache, node_feats,
-              edge_feats, creterion, no_neg=args.no_neg,
-              identity=args.arch_identity,
-              deliver_to_neighbors=args.deliver_to_neighbors)
-print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
-print('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
-print("*********************")
-print("*********************")
+# # Phase2: incremental offline training
+# phase2_df = df[phase1:]
+# incremental_step = 1000
+# for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, incremental_step)):
+#     # add 1k
+#     src = target_nodes[:incremental_step]
+#     dst = target_nodes[incremental_step:incremental_step * 2]
+#     time = ts[:incremental_step]
+#     dgraph.add_edges(src, dst, time, args.graph_reverse)
+#     rand_sampler.add_src_dst_list(src, dst)
+#     ap, auc = val(phase2_df[i * incremental_step, (i + 1) * incremental_step],
+#                   rand_sampler, sampler, model, None, node_feats, edge_feats, creterion)
