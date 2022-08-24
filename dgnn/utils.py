@@ -90,7 +90,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, batch_size: int = 600):
+def get_batch(df: pd.DataFrame, rand_sampler = None, batch_size: int = 600):
     group_indexes = list()
 
     group_indexes.append(np.array(df.index // batch_size))
@@ -99,13 +99,21 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
         # np.random.randint(self.num_nodes, size=n)
         # TODO: wrap a neglink sampler
         length = np.max(np.array(df['dst'], dtype=int))
-
-        target_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values]).astype(
-            np.int64)
-        ts = np.concatenate(
-            [rows.time.values, rows.time.values]).astype(
-            np.float32)
+        if rand_sampler is not None:
+            _, neg_batch = rand_sampler.sample(len(rows.src.values))
+            target_nodes = np.concatenate(
+                [rows.src.values, rows.dst.values, neg_batch]).astype(
+                np.int64)
+            ts = np.concatenate(
+                [rows.time.values, rows.time.values, rows.time.values]).astype(
+                np.float32)
+        else:
+            target_nodes = np.concatenate(
+                [rows.src.values, rows.dst.values]).astype(
+                np.int64)
+            ts = np.concatenate(
+                [rows.time.values, rows.time.values]).astype(
+                np.float32)
         # TODO: align with our edge id
         eid = rows['Unnamed: 0'].values
 
@@ -128,11 +136,11 @@ def build_dynamic_graph(
         dataset_df: the dataframe for the whole dataset.
         initial_pool_size: optional, int, the initial pool size of the graph.
         maximum_pool_size: optional, int, the maximum pool size of the graph.
-        mem_resource_type: optional, str, the memory resource type. 
+        mem_resource_type: optional, str, the memory resource type.
             valid options: ("cuda", "unified", or "pinned") (case insensitive).
         minimum_block_size: optional, int, the minimum block size of the graph.
         blocks_to_preallocate: optional, int, the number of blocks to preallocate.
-        insertion_policy: the insertion policy to use 
+        insertion_policy: the insertion policy to use
             valid options: ("insert" or "replace") (case insensitive).
         add_reverse: optional, bool, whether to add reverse edges.
     """
@@ -215,7 +223,8 @@ def prepare_input(
                             non_blocking=True)
                         i += 1
                     else:
-                        b.edata['f'] = edge_feats[b.edata['ID'].long()].float()
+                        b.edata['f'] = edge_feats[b.edata['ID'].long()
+                                                  ].float().cuda()
     return mfgs
 
 
@@ -271,25 +280,30 @@ def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_fea
 
     return pinned_nfeat_buffs, pinned_efeat_buffs
 
+
 class RandEdgeSampler(object):
-  def __init__(self, src_list, dst_list, seed=None):
-    self.seed = None
-    self.src_list = np.unique(src_list)
-    self.dst_list = np.unique(dst_list)
+    def __init__(self, src_list, dst_list, seed=None):
+        self.seed = None
+        self.src_list = np.unique(src_list)
+        self.dst_list = np.unique(dst_list)
 
-    if seed is not None:
-      self.seed = seed
-      self.random_state = np.random.RandomState(self.seed)
+        if seed is not None:
+            self.seed = seed
+            self.random_state = np.random.RandomState(self.seed)
 
-  def sample(self, size):
-    if self.seed is None:
-      src_index = np.random.randint(0, len(self.src_list), size)
-      dst_index = np.random.randint(0, len(self.dst_list), size)
-    else:
+    def sample(self, size):
+        if self.seed is None:
+            src_index = np.random.randint(0, len(self.src_list), size)
+            dst_index = np.random.randint(0, len(self.dst_list), size)
+        else:
 
-      src_index = self.random_state.randint(0, len(self.src_list), size)
-      dst_index = self.random_state.randint(0, len(self.dst_list), size)
-    return self.src_list[src_index], self.dst_list[dst_index]
+            src_index = self.random_state.randint(0, len(self.src_list), size)
+            dst_index = self.random_state.randint(0, len(self.dst_list), size)
+        return self.src_list[src_index], self.dst_list[dst_index]
 
-  def reset_random_state(self):
-    self.random_state = np.random.RandomState(self.seed)
+    def reset_random_state(self):
+        self.random_state = np.random.RandomState(self.seed)
+
+    def add_src_dst_list(self, src, dst):
+        self.src_list = np.unique(np.concatenate((self.src_list, src)))
+        self.dst_list = np.unique(np.concatenate((self.dst_list, dst)))
