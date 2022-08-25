@@ -86,7 +86,7 @@ class TestDynamicGraph(unittest.TestCase):
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
         dgraph.add_edges(source_vertices, target_vertices,
                          timestamps, add_reverse=True)
-        self.assertEqual(dgraph.num_edges(), 18)
+        self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(0), 3)
         self.assertEqual(dgraph.out_degree(1), 6)
