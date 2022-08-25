@@ -38,7 +38,7 @@ parser.add_argument("--data", choices=datasets,
 parser.add_argument("--cache", choices=cache_names,
                     default='LFUCache', help="cache:" +
                     '|'.join(cache_names) + '(default: LFUCache)')
-parser.add_argument("--epoch", help="training epoch", type=int, default=100)
+parser.add_argument("--epoch", help="training epoch", type=int, default=50)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
 parser.add_argument("--num-workers", help="num workers", type=int, default=0)
@@ -100,7 +100,7 @@ def val(df, rand_sampler, sampler: TemporalSampler,
         total_loss = 0
 
         mfgs = None
-        for i, (target_nodes, ts, eid) in enumerate(get_batch(df, rand_sampler)):
+        for i, (target_nodes, ts, eid) in enumerate(get_batch(df, rand_sampler, 1000)):
             if sampler is not None:
                 if no_neg:
                     pos_root_end = target_nodes.shape[0] * 2 // 3
@@ -312,18 +312,10 @@ for e in range(args.epoch):
     val_time = val_end - val_start
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
           .format(epoch_time, val_time, ap, auc))
-    if e > 1 and ap > best_ap:
-        best_e = e
-        best_ap = ap
-        best_auc = auc
-        torch.save(model.state_dict(), path_saver)
-        print("Best val AP: {:.4f} & val AUC: {:.4f}".format(ap, auc))
+    torch.save(model.state_dict(), path_saver)
 
-print('Loading model at epoch {}...'.format(best_e))
 with open("profile_offline_{}.txt".format(args.model), "a") as f:
     f.write("phase1 training done")
-    f.write("Best val ap: {}\n".format(best_ap))
-    f.write("Best val auc: {}\n".format(best_auc))
 model.load_state_dict(torch.load(path_saver))
 
 # Phase2: incremental offline training
@@ -336,21 +328,21 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     time = ts[:incremental_step]
     dgraph.add_edges(src, dst, time, args.graph_reverse)
     rand_sampler.add_src_dst_list(src, dst)
-    ap, auc = val(phase2_df[i * incremental_step, (i + 1) * incremental_step],
+    ap, auc = val(phase2_df[i * incremental_step: (i + 1) * incremental_step],
                   rand_sampler, sampler, model, None, node_feats, edge_feats, creterion)
 
     # print the record
     with open("profile_offline_phase2_{}.txt".format(args.model), "a") as f_phase2:
         f_phase2.write("phase2 validation with {}th batch", i)
-        f_phase2.write("Best val ap: {}\n".format(ap))
-        f_phase2.write("Best val auc: {}\n".format(auc))
+        f_phase2.write("val ap: {}\n".format(ap))
+        f_phase2.write("val auc: {}\n".format(auc))
 
     model.load_state_dict(torch.load(path_saver))
 
     # retrain by using previous data 50k
-    if i % 50 == 0:
+    if i % 51 == 0:
         # all of the data before
-        phase_retrain = phase1 + incremental_step * i
+        phase_retrain = phase1 + incremental_step * (i - 1)
         phase_retrain_val = incremental_step
         phase_retrain_df = df[:phase_retrain]
         phase_retrain_val_df = df[phase_retrain: phase_retrain_val + phase_retrain]
@@ -358,7 +350,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             phase_retrain_df['src'].to_numpy(), phase_retrain_df['dst'].to_numpy())
         val_rand_sampler = RandEdgeSampler(
             phase_retrain_val_df['src'].to_numpy(), phase_retrain_val_df['dst'].to_numpy())
-        
+
         # dgraph has been built, no need to build again
 
         edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
@@ -378,7 +370,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         model.cuda()
 
         args.arch_identity = args.model in ['JODIE', 'APAN']
-        
+
         pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
             args.sample_neighbor, args.sample_history, args.batch_size, node_feats, edge_feats)
 
@@ -398,10 +390,11 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         best_e = 0
         best_auc = 0
 
-        prev_ap = 0
+        prev_ap = 1e10
         prev_auc = 1e10
 
         epoch_time_sum = 0
+        early_stop = False
 
         for e in range(args.epoch):
             print("{}th retrain with Epoch {}".format(i//50, e))
@@ -447,7 +440,8 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                 mfgs_to_cuda(mfgs)
                 cuda_end.record()
 
-                mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
+                mfgs = prepare_input(
+                    mfgs, node_feats, edge_feats, combine_first=False)
                 feature_end.record()
                 # Train
                 optimizer.zero_grad()
@@ -465,8 +459,8 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
 
                 # MailBox Update:
                 model.update_mem_mail(target_nodes, ts, edge_feats, eid,
-                                    mfgs_deliver_to_neighbors,
-                                    args.deliver_to_neighbors)
+                                      mfgs_deliver_to_neighbors,
+                                      args.deliver_to_neighbors)
 
                 train_end.record()
 
@@ -489,17 +483,36 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             print("***Start retrain validation at epoch {}***".format(e))
             val_start = time.time()
             ap, auc = val(phase1_val_df, val_rand_sampler, sampler, model, None, node_feats,
-                        edge_feats, creterion, no_neg=args.no_neg,
-                        identity=args.arch_identity,
-                        deliver_to_neighbors=args.deliver_to_neighbors)
+                          edge_feats, creterion, no_neg=args.no_neg,
+                          identity=args.arch_identity,
+                          deliver_to_neighbors=args.deliver_to_neighbors)
             val_end = time.time()
             val_time = val_end - val_start
             print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
-                .format(epoch_time, val_time, ap, auc))
-            
+                  .format(epoch_time, val_time, ap, auc))
+
             # early stop
-            if abs(auc - prev_auc) < 1e-3:
-                print("Retrain Model Early Stop with auc:{}, prev_auc:{}".format(auc, prev_auc))
+            if abs(ap - prev_ap) < 1e-3:
+                print("Retrain Model Early Stop with ap:{}, prev_ap:{}".format(
+                    ap, prev_ap))
+                print("Retrain Model Early Stop with auc:{}, prev_auc:{}".format(
+                    auc, prev_auc))
+                early_stop = True
+                with open("profile_offline_phase2_{}.txt".format(args.model), "a") as f_phase2:
+                    f_phase2.write(
+                        "phase2 validation with {}th batch".format(i))
+                    f_phase2.write("early stop at {} epoch\n".format(e))
+                    f_phase2.write("val ap: {}\n".format(ap))
+                    f_phase2.write("val auc: {}\n".format(auc))
                 break
 
+            prev_ap = ap
             prev_auc = auc
+
+        if not early_stop:
+            with open("profile_offline_phase2_{}.txt".format(args.model), "a") as f_phase2:
+                f_phase2.write(
+                    "phase2 validation with {}th batch".format(i))
+                f_phase2.write("early stop at {} epoch\n".format(e))
+                f_phase2.write("val ap: {}\n".format(ap))
+                f_phase2.write("val auc: {}\n".format(auc))
