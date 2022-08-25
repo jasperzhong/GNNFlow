@@ -93,7 +93,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
 def get_batch(df: pd.DataFrame, rand_sampler = None, batch_size: int = 600):
     group_indexes = list()
 
-    group_indexes.append(np.array(df.index // batch_size))
+    group_indexes.append(np.array(np.arange(len(df)) // batch_size))
     for _, rows in df.groupby(
             group_indexes[random.randint(0, len(group_indexes) - 1)]):
         # np.random.randint(self.num_nodes, size=n)
