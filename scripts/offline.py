@@ -157,9 +157,9 @@ path_saver = os.path.join(get_project_root_dir(),
 
 _, _, _, df = load_dataset(args.data)
 phase1 = int(len(df) * 0.6)
-phase1_val = int(len(df) * 0.1)
+validation_length = int(len(df) * 0.1)
 phase1_df = df[:phase1]
-phase1_val_df = df[phase1:phase1_val + phase1]
+phase1_val_df = df[phase1:validation_length + phase1]
 rand_sampler = RandEdgeSampler(
     phase1_df['src'].to_numpy(), phase1_df['dst'].to_numpy())
 val_rand_sampler = RandEdgeSampler(
@@ -167,11 +167,13 @@ val_rand_sampler = RandEdgeSampler(
 
 # use the full data to build graph
 config = get_default_config(args.dataset)
+
+# use all the edges to build graph
 dgraph = build_dynamic_graph(
-    phase1_df, **config,
+    df, **config,
     add_reverse=args.graph_reverse)
 
-edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
+edge_count = dgraph.num_edges()
 node_count = dgraph.num_vertices()
 node_feats, edge_feats = load_feat(
     args.data, rand_de=args.rand_edge_features,
@@ -210,6 +212,8 @@ best_e = 0
 best_auc = 0
 
 epoch_time_sum = 0
+
+prev_ap = 1e10
 
 with open("profile_offline_{}.txt".format(args.model), "a") as f:
     f.write("\n")
@@ -313,6 +317,11 @@ for e in range(args.epoch):
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
           .format(epoch_time, val_time, ap, auc))
     torch.save(model.state_dict(), path_saver)
+    if abs(prev_ap - ap) < 1e-5:
+        print("early stop at epoch: {}".format(e))
+        break
+
+    prev_ap = ap
 
 with open("profile_offline_{}.txt".format(args.model), "a") as f:
     f.write("phase1 training done")
@@ -326,8 +335,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     src = target_nodes[:incremental_step]
     dst = target_nodes[incremental_step:incremental_step * 2]
     ts_inc = ts[:incremental_step]
-    dgraph.add_edges(src, dst, ts_inc, args.graph_reverse)
-    rand_sampler.add_src_dst_list(src, dst)
+    # elimnate add edges because all edges are added at first
     ap, auc = val(phase2_df[i * incremental_step: (i + 1) * incremental_step],
                   rand_sampler, sampler, model, None, node_feats, edge_feats, creterion)
     print("already add {}k edges".format(i))
@@ -345,18 +353,19 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     # retrain by using previous data 50k
     if i % 51 == 0 and i != 0:
         # all of the data before
-        phase_retrain = phase1 + incremental_step * (i - 1)
-        phase_retrain_val = incremental_step
-        phase_retrain_df = df[:phase_retrain]
-        phase_retrain_val_df = df[phase_retrain: phase_retrain_val + phase_retrain]
+        phase2_retrain = phase1 + incremental_step * (i - 1)
+        phase2_retrain_val = validation_length
+        phase2_retrain_df = df[:phase2_retrain]
+        phase2_retrain_val_df = df[phase2_retrain:
+                                   phase2_retrain_val + phase2_retrain]
         rand_sampler = RandEdgeSampler(
-            phase_retrain_df['src'].to_numpy(), phase_retrain_df['dst'].to_numpy())
+            phase2_retrain_df['src'].to_numpy(), phase2_retrain_df['dst'].to_numpy())
         val_rand_sampler = RandEdgeSampler(
-            phase_retrain_val_df['src'].to_numpy(), phase_retrain_val_df['dst'].to_numpy())
+            phase2_retrain_val_df['src'].to_numpy(), phase2_retrain_val_df['dst'].to_numpy())
 
         # dgraph has been built, no need to build again
 
-        edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
+        edge_count = dgraph.num_edges()
         node_count = dgraph.num_vertices()
         node_feats, edge_feats = load_feat(
             args.data, rand_de=args.rand_edge_features,
@@ -422,7 +431,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             cuda_end = torch.cuda.Event(enable_timing=True)
             train_end = torch.cuda.Event(enable_timing=True)
 
-            for _, (target_nodes, ts, eid) in enumerate(get_batch(phase_retrain_df, rand_sampler)):
+            for _, (target_nodes, ts, eid) in enumerate(get_batch(phase2_retrain_df, rand_sampler)):
                 time_start.record()
                 mfgs = None
                 if sampler is not None:
@@ -485,7 +494,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             # Validation in epoch
             print("***Start retrain validation at epoch {}***".format(e))
             val_start = time.time()
-            ap, auc = val(phase_retrain_val_df, val_rand_sampler, sampler, model, None, node_feats,
+            ap, auc = val(phase2_retrain_val_df, val_rand_sampler, sampler, model, None, node_feats,
                           edge_feats, creterion, no_neg=args.no_neg,
                           identity=args.arch_identity,
                           deliver_to_neighbors=args.deliver_to_neighbors)
@@ -495,7 +504,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                   .format(epoch_time, val_time, ap, auc))
 
             # early stop
-            if abs(ap - prev_ap) < 1e-3:
+            if abs(ap - prev_ap) < 1e-4:
                 print("Retrain Model Early Stop with ap:{}, prev_ap:{}".format(
                     ap, prev_ap))
                 print("Retrain Model Early Stop with auc:{}, prev_auc:{}".format(
