@@ -325,22 +325,25 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     # add 1k
     src = target_nodes[:incremental_step]
     dst = target_nodes[incremental_step:incremental_step * 2]
-    time = ts[:incremental_step]
-    dgraph.add_edges(src, dst, time, args.graph_reverse)
+    ts_inc = ts[:incremental_step]
+    dgraph.add_edges(src, dst, ts_inc, args.graph_reverse)
     rand_sampler.add_src_dst_list(src, dst)
     ap, auc = val(phase2_df[i * incremental_step: (i + 1) * incremental_step],
                   rand_sampler, sampler, model, None, node_feats, edge_feats, creterion)
+    print("already add {}k edges".format(i))
+    print("test new edges ap: {} auc: {}".format(ap, auc))
 
-    # print the record
-    with open("profile_offline_phase2_{}.txt".format(args.model), "a") as f_phase2:
-        f_phase2.write("phase2 validation with {}th batch", i)
+    # save the record
+    with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
         f_phase2.write("val ap: {}\n".format(ap))
+
+    with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
         f_phase2.write("val auc: {}\n".format(auc))
 
     model.load_state_dict(torch.load(path_saver))
 
     # retrain by using previous data 50k
-    if i % 51 == 0:
+    if i % 51 == 0 and i != 0:
         # all of the data before
         phase_retrain = phase1 + incremental_step * (i - 1)
         phase_retrain_val = incremental_step
@@ -419,7 +422,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             cuda_end = torch.cuda.Event(enable_timing=True)
             train_end = torch.cuda.Event(enable_timing=True)
 
-            for i, (target_nodes, ts, eid) in enumerate(get_batch(phase_retrain_df, rand_sampler)):
+            for _, (target_nodes, ts, eid) in enumerate(get_batch(phase_retrain_df, rand_sampler)):
                 time_start.record()
                 mfgs = None
                 if sampler is not None:
@@ -482,7 +485,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             # Validation in epoch
             print("***Start retrain validation at epoch {}***".format(e))
             val_start = time.time()
-            ap, auc = val(phase1_val_df, val_rand_sampler, sampler, model, None, node_feats,
+            ap, auc = val(phase_retrain_val_df, val_rand_sampler, sampler, model, None, node_feats,
                           edge_feats, creterion, no_neg=args.no_neg,
                           identity=args.arch_identity,
                           deliver_to_neighbors=args.deliver_to_neighbors)
@@ -498,11 +501,15 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                 print("Retrain Model Early Stop with auc:{}, prev_auc:{}".format(
                     auc, prev_auc))
                 early_stop = True
-                with open("profile_offline_phase2_{}.txt".format(args.model), "a") as f_phase2:
+                print("early stop at {} epoch\n".format(e))
+                with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
                     f_phase2.write(
-                        "phase2 validation with {}th batch".format(i))
-                    f_phase2.write("early stop at {} epoch\n".format(e))
+                        "phase2 retrain validation with {}th batch\n".format(i))
                     f_phase2.write("val ap: {}\n".format(ap))
+
+                with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
+                    f_phase2.write(
+                        "phase2 retrain validation with {}th batch\n".format(i))
                     f_phase2.write("val auc: {}\n".format(auc))
                 break
 
@@ -510,9 +517,12 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
             prev_auc = auc
 
         if not early_stop:
-            with open("profile_offline_phase2_{}.txt".format(args.model), "a") as f_phase2:
+            with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
                 f_phase2.write(
-                    "phase2 validation with {}th batch".format(i))
-                f_phase2.write("early stop at {} epoch\n".format(e))
+                    "phase2 retrain validation with {}th batch\n".format(i))
                 f_phase2.write("val ap: {}\n".format(ap))
+
+            with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
+                f_phase2.write(
+                    "phase2 retrain validation with {}th batch\n".format(i))
                 f_phase2.write("val auc: {}\n".format(auc))
