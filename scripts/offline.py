@@ -74,6 +74,7 @@ parser.add_argument('--rand_edge_features', type=int, default=0,
 parser.add_argument('--rand_node_features', type=int, default=0,
                     help='use random node featrues')
 parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--retrain", type=int, default=1e10)
 args = parser.parse_args()
 
 
@@ -156,7 +157,7 @@ path_saver = os.path.join(get_project_root_dir(),
                           '{}_offline.pt'.format(args.model))
 
 _, _, _, df = load_dataset(args.data)
-phase1 = int(len(df) * 0.6)
+phase1 = int(len(df) * 0.3)
 validation_length = int(len(df) * 0.1)
 phase1_df = df[:phase1]
 phase1_val_df = df[phase1:validation_length + phase1]
@@ -348,13 +349,13 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
         f_phase2.write("val auc: {}\n".format(auc))
 
-    model.load_state_dict(torch.load(path_saver))
-
     # retrain by using previous data 50k
-    if i % 51 == 0 and i != 0:
+    if i % args.retrain == 0 and i != 0:
         # all of the data before
+        model.load_state_dict(torch.load(path_saver))
+
         phase2_retrain = phase1 + incremental_step * (i - 1)
-        phase2_retrain_val = validation_length
+        phase2_retrain_val = validation_length  # 10% of the dataset
         phase2_retrain_df = df[:phase2_retrain]
         phase2_retrain_val_df = df[phase2_retrain:
                                    phase2_retrain_val + phase2_retrain]
@@ -376,10 +377,6 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
 
         gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
         gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
-
-        model = models.__dict__[args.model](
-            gnn_dim_node, gnn_dim_edge, dgraph.num_vertices())
-        model.cuda()
 
         args.arch_identity = args.model in ['JODIE', 'APAN']
 
@@ -535,3 +532,5 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                 f_phase2.write(
                     "phase2 retrain validation with {}th batch\n".format(i))
                 f_phase2.write("val auc: {}\n".format(auc))
+
+        torch.save(model.state_dict(), path_saver)
