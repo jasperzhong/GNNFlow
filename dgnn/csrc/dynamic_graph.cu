@@ -88,6 +88,8 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
 
   std::vector<EIDType> eids(src_nodes.size());
   std::iota(eids.begin(), eids.end(), num_edges_);
+  // NB: num_edges_ does not count the reverse edges
+  num_edges_ += eids.size();
 
   // for undirected graphs, we need to add the reverse edges
   if (add_reverse_edges) {
@@ -97,7 +99,6 @@ void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
     timestamps.insert(timestamps.end(), timestamps.begin(), timestamps.end());
     eids.insert(eids.end(), eids.begin(), eids.end());
   }
-  num_edges_ += eids.size();
 
   // add nodes
   NIDType max_node =
