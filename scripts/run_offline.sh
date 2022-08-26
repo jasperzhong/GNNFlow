@@ -6,7 +6,7 @@ RETRAIN=$2
 if [ $MODEL == "tgat" ] || [ $MODEL == "TGAT" ];then
     cmd="python offline.py --model TGAT --dropout 0.1 --attn-dropout 0.1 \
                     --sample-layer 2 --sample-neighbor 10 10 \
-                    --data WIKI --sample-strategy uniform"
+                    --data MOOC --sample-strategy uniform"
 fi
 
 # TGN

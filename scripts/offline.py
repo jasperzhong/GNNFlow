@@ -68,8 +68,8 @@ parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
 parser.add_argument("--reorder", help="", type=int, default=0)
 parser.add_argument("--graph-reverse",
-                    help="build undirected graph", type=bool, default=True)
-parser.add_argument('--rand_edge_features', type=int, default=0,
+                    help="build undirected graph", type=bool, default=False)
+parser.add_argument('--rand_edge_features', type=int, default=1,
                     help='use random edge featrues')
 parser.add_argument('--rand_node_features', type=int, default=0,
                     help='use random node featrues')
@@ -318,7 +318,7 @@ for e in range(args.epoch):
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
           .format(epoch_time, val_time, ap, auc))
     torch.save(model.state_dict(), path_saver)
-    if abs(prev_ap - ap) < 1e-5:
+    if abs(prev_ap - ap) < 1e-4:
         print("early stop at epoch: {}".format(e))
         break
 
@@ -352,8 +352,6 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     # retrain by using previous data 50k
     if i % args.retrain == 0 and i != 0:
         # all of the data before
-        model.load_state_dict(torch.load(path_saver))
-
         phase2_retrain = phase1 + incremental_step * (i - 1)
         phase2_retrain_val = validation_length  # 10% of the dataset
         phase2_retrain_df = df[:phase2_retrain]
@@ -509,13 +507,9 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                 early_stop = True
                 print("early stop at {} epoch\n".format(e))
                 with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
-                    f_phase2.write(
-                        "phase2 retrain validation with {}th batch\n".format(i))
                     f_phase2.write("val ap: {}\n".format(ap))
 
                 with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
-                    f_phase2.write(
-                        "phase2 retrain validation with {}th batch\n".format(i))
                     f_phase2.write("val auc: {}\n".format(auc))
                 break
 
@@ -533,4 +527,11 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                     "phase2 retrain validation with {}th batch\n".format(i))
                 f_phase2.write("val auc: {}\n".format(auc))
 
-        torch.save(model.state_dict(), path_saver)
+
+with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
+    f_phase2.write("********\n")
+    f_phase2.write("\n")
+
+with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
+    f_phase2.write("********\n")
+    f_phase2.write("\n")
