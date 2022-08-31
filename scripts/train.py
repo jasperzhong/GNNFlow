@@ -201,7 +201,7 @@ dgraph = build_dynamic_graph(
     df, **config,
     add_reverse=args.graph_reverse)
 
-edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
+edge_count = dgraph.num_edges()
 node_count = dgraph.num_vertices()
 node_feats, edge_feats = load_feat(
     args.data, rand_de=args.rand_edge_features,

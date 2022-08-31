@@ -26,3 +26,17 @@ strategy: uniform
 Data: LASTFM
 Cache: LRUCache
 strategy: uniform
+
+Data: REDDIT
+Cache: FIFOCache
+strategy: uniform
+
+Data: REDDIT
+Cache: LFUCache
+strategy: uniform
+
+Data: REDDIT
+Cache: LFUCache
+strategy: uniform
+Epoch: 0
+Epoch time:69.56s; dataloader time:0.93s sample time:4.84s; cuda time:5.85s; feature time: 11.29s train time:46.65s.; fetch time:5.34s ; update node time:0.00s; cache node ratio: 0.00; cache edge ratio: 0.75
