@@ -112,7 +112,7 @@ def build_dynamic_graph(
         minimum_block_size: int,
         blocks_to_preallocate: int,
         insertion_policy: str,
-        add_reverse: bool = False) -> DynamicGraph:
+        undirected: bool) -> DynamicGraph:
     """
     Builds a dynamic graph from the given dataframe.
 
@@ -126,7 +126,7 @@ def build_dynamic_graph(
         blocks_to_preallocate: optional, int, the number of blocks to preallocate.
         insertion_policy: the insertion policy to use 
             valid options: ("insert" or "replace") (case insensitive).
-        add_reverse: optional, bool, whether to add reverse edges.
+        undirected: whether the graph is undirected.
     """
     src = dataset_df['src'].to_numpy(dtype=np.int64)
     dst = dataset_df['dst'].to_numpy(dtype=np.int64)
@@ -140,7 +140,7 @@ def build_dynamic_graph(
         blocks_to_preallocate,
         insertion_policy,
         src, dst, ts,
-        add_reverse)
+        undirected)
 
     return dgraph
 
@@ -237,10 +237,16 @@ def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_fea
     return pinned_nfeat_buffs, pinned_efeat_buffs
 
 
-<<<<<<< HEAD
-  def reset_random_state(self):
+<< << << < HEAD
+
+
+def reset_random_state(self):
     self.random_state = np.random.RandomState(self.seed)
-=======
+
+
+== == == =
+
+
 class RandEdgeSampler(object):
     def __init__(self, src_list, dst_list, seed=None):
         self.seed = None
@@ -263,4 +269,6 @@ class RandEdgeSampler(object):
 
     def reset_random_state(self):
         self.random_state = np.random.RandomState(self.seed)
->>>>>>> fb1c873... update
+
+
+>>>>>> > fb1c873... update

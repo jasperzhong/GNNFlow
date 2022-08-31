@@ -29,13 +29,10 @@ cache_names = sorted(name for name in caches.__dict__
                      and callable(caches.__dict__[name]))
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", choices=model_names, default='TGN',
-                    help="model architecture" +
-                    '|'.join(model_names) +
-                    '(default: tgn)')
-parser.add_argument("--data", choices=datasets,
-                    default='REDDIT', help="dataset:" +
-                    '|'.join(datasets) + '(default: REDDIT)')
+parser.add_argument("--model", choices=model_names, requires=True,
+                    help="model architecture" + '|'.join(model_names))
+parser.add_argument("--data", choices=datasets, requires=True,
+                    help="dataset:" + '|'.join(datasets))
 parser.add_argument("--cache", choices=cache_names,
                     default='LFUCache', help="cache:" +
                     '|'.join(cache_names) + '(default: LFUCache)')
@@ -49,8 +46,6 @@ parser.add_argument("--reorder", help="whether to use a different start point ev
 parser.add_argument("--seed", type=int, default=42)
 
 
-parser.add_argument("--cache", choices=cache_names,
-                    default='LFUCache', help="cache strategy")
 args = parser.parse_args()
 
 
@@ -101,9 +96,7 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
 
             aps.append(average_precision_score(y_true, y_pred))
 
-            model.update_mem_mail(target_nodes, ts, edge_feats, eid,
-                                  mfgs_deliver_to_neighbors,
-                                  deliver_to_neighbors)
+            model.update_mem_mail(target_nodes, ts, edge_feats, eid)
 
         val_losses.append(float(total_loss))
 
@@ -159,10 +152,9 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
-config = get_default_config(args.data)
+model_config, graph_config = get_default_config(args.model, args.data)
 dgraph = build_dynamic_graph(
-    df, **config,
-    add_reverse=args.graph_reverse)
+    df, **graph_config)
 
 edge_count = dgraph.num_edges()
 node_count = dgraph.num_vertices()
