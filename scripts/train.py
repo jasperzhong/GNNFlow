@@ -1,33 +1,32 @@
 import argparse
-from cgi import test
 import os
 import random
 import time
+
 import numpy as np
 import torch
+import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
-from dgnn.cache.cache import Cache
 
+import dgnn.cache as caches
 import dgnn.models as models
+from dgnn.cache.cache import Cache
 from dgnn.config import get_default_config
 from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
 from dgnn.sampler import BatchSamplerReorder
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import (build_dynamic_graph, get_project_root_dir,
-                        load_dataset, load_feat, mfgs_to_cuda,
-                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input)
-import dgnn.cache as caches
+from dgnn.utils import (RandEdgeSampler, build_dynamic_graph,
+                        get_pinned_buffers, get_project_root_dir, load_dataset,
+                        load_feat, mfgs_to_cuda)
 
+datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = sorted(name for name in models.__dict__
                      if not name.startswith("__")
                      and callable(models.__dict__[name]))
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
                      and callable(caches.__dict__[name]))
-print(cache_names)
-
-datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", choices=model_names, default='TGN',
@@ -43,39 +42,15 @@ parser.add_argument("--cache", choices=cache_names,
 parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
-parser.add_argument("--num-workers", help="num workers", type=int, default=0)
-parser.add_argument("--dropout", help="dropout", type=float, default=0.2)
-parser.add_argument(
-    "--attn-dropout", help="attention dropout", type=float, default=0.2)
-parser.add_argument("--deliver-to-neighbors",
-                    help='deliver to neighbors', action='store_true',
-                    default=False)
-parser.add_argument("--use-memory", help='use memory module',
-                    action='store_true', default=True)
-parser.add_argument("--no-sample", help='do not need sampling',
-                    action='store_true', default=False)
-parser.add_argument("--prop-time", help='use prop time',
-                    action='store_true', default=False)
-parser.add_argument("--no-neg", help='not using neg samples in sampling',
-                    action='store_true', default=False)
-parser.add_argument("--sample-layer", help="sample layer", type=int, default=1)
-parser.add_argument("--sample-strategy",
-                    help="sample strategy", type=str, default='recent')
-parser.add_argument("--sample-neighbor",
-                    help="how many neighbors to sample in each layer",
-                    type=int, nargs="+", default=[10, 10])
-parser.add_argument("--sample-history",
-                    help="the number of snapshot", type=int, default=1)
-parser.add_argument("--sample-duration",
-                    help="snapshot duration", type=int, default=0)
-parser.add_argument("--reorder", help="", type=int, default=0)
-parser.add_argument("--graph-reverse",
-                    help="build undirected graph", type=bool, default=True)
-parser.add_argument('--rand_edge_features', type=int, default=0,
-                    help='use random edge featrues')
-parser.add_argument('--rand_node_features', type=int, default=0,
-                    help='use random node featrues')
+parser.add_argument("--num-workers", help="num workers for dataloaders",
+                    type=int, default=0)
+parser.add_argument("--reorder", help="whether to use a different start point every epoch",
+                    type=int, default=0)
 parser.add_argument("--seed", type=int, default=42)
+
+
+parser.add_argument("--cache", choices=cache_names,
+                    default='LFUCache', help="cache strategy")
 args = parser.parse_args()
 
 
@@ -91,8 +66,7 @@ set_seed(args.seed)
 
 def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
         model: torch.nn.Module, cache: Cache, node_feats: torch.Tensor,
-        edge_feats: torch.Tensor, creterion: torch.nn.Module, neg_samples=1,
-        no_neg=False, identity=False, deliver_to_neighbors=False):
+        edge_feats: torch.Tensor, creterion: torch.nn.Module, neg_samples=1):
     model.eval()
     val_losses = list()
     aps = list()
@@ -104,20 +78,9 @@ def val(dataloader: torch.utils.data.DataLoader, sampler: TemporalSampler,
         mfgs = None
         for i, (target_nodes, ts, eid) in enumerate(dataloader):
 
-            if sampler is not None:
-                if no_neg:
-                    pos_root_end = target_nodes.shape[0] * 2 // 3
-                    mfgs = sampler.sample(
-                        target_nodes[:pos_root_end], ts[:pos_root_end])
-                else:
-                    mfgs = sampler.sample(target_nodes, ts)
-            # if identity
-            mfgs_deliver_to_neighbors = None
-            if identity:
-                mfgs_deliver_to_neighbors = mfgs
-                mfgs = node_to_dgl_blocks(target_nodes, ts)
-
+            mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs)
+
             # TODO: update caceh maybe False
             mfgs = cache.fetch_feature(mfgs, update_cache=True)
 
@@ -207,6 +170,7 @@ node_feats, edge_feats = load_feat(
     args.data, rand_de=args.rand_edge_features,
     rand_dn=args.rand_node_features,
     edge_count=edge_count, node_count=node_count)
+
 # for test
 node_feats = None
 
@@ -217,15 +181,11 @@ model = models.__dict__[args.model](
     gnn_dim_node, gnn_dim_edge, dgraph.num_vertices())
 model.cuda()
 
-args.arch_identity = args.model in ['JODIE', 'APAN']
 
-# TODO: maybe use dgl's index_select
-# so that these pin_buffers is unnecessary
 pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
     args.sample_neighbor, args.sample_history, args.batch_size, node_feats, edge_feats)
 
 # Cache
-# TODO: cache device: Default cuda:0
 cache = caches.__dict__[args.cache](0.2, dgraph.num_vertices(),
                                     edge_count,
                                     node_feats, edge_feats, 'cuda:0',
@@ -236,17 +196,13 @@ assert args.sample_layer == model.gnn_layer, "sample layers must match the gnn l
 assert args.sample_layer == len(
     args.sample_neighbor), "sample layer must match the length of sample_neighbors"
 
-sampler = None
-
-if not args.no_sample:
-    sampler = TemporalSampler(dgraph,
-                              fanouts=args.sample_neighbor,
-                              strategy=args.sample_strategy,
-                              num_snapshots=args.sample_history,
-                              snapshot_time_window=args.sample_duration,
-                              prop_time=args.prop_time,
-                              reverse=args.deliver_to_neighbors,
-                              seed=args.seed)
+sampler = TemporalSampler(dgraph,
+                          fanouts=args.sample_neighbor,
+                          strategy=args.sample_strategy,
+                          num_snapshots=args.sample_history,
+                          snapshot_time_window=args.sample_duration,
+                          prop_time=args.prop_time,
+                          seed=args.seed)
 
 # only gnnlab static need to pass param
 cache.init_cache()
@@ -264,6 +220,7 @@ with open("profile.txt", "a") as f:
     f.write("Data: {}\n".format(args.data))
     f.write("Cache: {}\n".format(args.cache))
     f.write("strategy: {}\n".format(args.sample_strategy))
+
 for e in range(args.epoch):
     print("Epoch {}".format(e))
     epoch_time_start = time.time()
@@ -299,20 +256,9 @@ for e in range(args.epoch):
     train_end = torch.cuda.Event(enable_timing=True)
     for i, (target_nodes, ts, eid) in enumerate(train_loader):
         time_start.record()
-        mfgs = None
-        if sampler is not None:
-            if args.no_neg:
-                pos_root_end = target_nodes.shape[0] * 2 // 3
-                mfgs = sampler.sample(
-                    target_nodes[:pos_root_end], ts[:pos_root_end])
-            else:
-                mfgs = sampler.sample(target_nodes, ts)
+        mfgs = sampler.sample(target_nodes, ts)
 
         # if identity
-        mfgs_deliver_to_neighbors = None
-        if args.arch_identity:
-            mfgs_deliver_to_neighbors = mfgs
-            mfgs = node_to_dgl_blocks(target_nodes, ts)
         sample_end.record()
 
         # mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=False)
@@ -337,8 +283,7 @@ for e in range(args.epoch):
 
         # MailBox Update:
         model.update_mem_mail(target_nodes, ts, edge_feats, eid,
-                              mfgs_deliver_to_neighbors,
-                              args.deliver_to_neighbors)
+                              mfgs_deliver_to_neighbors)
 
         train_end.record()
 
@@ -370,9 +315,7 @@ for e in range(args.epoch):
     print("***Start validation at epoch {}***".format(e))
     val_start = time.time()
     ap, auc = val(val_loader, sampler, model, cache, node_feats,
-                  edge_feats, creterion, no_neg=args.no_neg,
-                  identity=args.arch_identity,
-                  deliver_to_neighbors=args.deliver_to_neighbors)
+                  edge_feats, creterion, no_neg=args.no_neg)
     val_end = time.time()
     val_time = val_end - val_start
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
@@ -390,18 +333,12 @@ model.load_state_dict(torch.load(path_saver))
 if model.use_mailbox():
     model.mailbox_reset()
     val(train_loader, sampler, model, cache, node_feats,
-        edge_feats, creterion, no_neg=args.no_neg,
-        identity=args.arch_identity,
-        deliver_to_neighbors=args.deliver_to_neighbors)
+        edge_feats, creterion, no_neg=args.no_neg)
     val(val_loader, sampler, model, cache, node_feats,
-        edge_feats, creterion, no_neg=args.no_neg,
-        identity=args.arch_identity,
-        deliver_to_neighbors=args.deliver_to_neighbors)
+        edge_feats, creterion, no_neg=args.no_neg)
 
 ap, auc = val(test_loader, sampler, model, cache, node_feats,
-              edge_feats, creterion, no_neg=args.no_neg,
-              identity=args.arch_identity,
-              deliver_to_neighbors=args.deliver_to_neighbors)
+              edge_feats, creterion, no_neg=args.no_neg)
 print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 print('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
 print("*********************")

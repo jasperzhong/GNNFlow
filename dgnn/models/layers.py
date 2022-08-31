@@ -43,7 +43,7 @@ class EdgePredictor(torch.nn.Module):
 class TransfomerAttentionLayer(torch.nn.Module):
 
     def __init__(self, dim_node_feat, dim_edge_feat, dim_time, num_head,
-                 dropout, att_dropout, dim_out, combined=False):
+                 dropout, att_dropout, dim_out):
         super(TransfomerAttentionLayer, self).__init__()
         self.num_head = num_head
         self.dim_node_feat = dim_node_feat
@@ -53,36 +53,23 @@ class TransfomerAttentionLayer(torch.nn.Module):
         self.dropout = torch.nn.Dropout(dropout)
         self.att_dropout = torch.nn.Dropout(att_dropout)
         self.att_act = torch.nn.LeakyReLU(0.2)
-        self.combined = combined
         if dim_time > 0:
             # use a linear function to encode time
             self.time_enc = TimeEncode(dim_time)
-        if combined:
-            if dim_node_feat > 0:
-                self.w_q_n = torch.nn.Linear(dim_node_feat, dim_out)
-                self.w_k_n = torch.nn.Linear(dim_node_feat, dim_out)
-                self.w_v_n = torch.nn.Linear(dim_node_feat, dim_out)
-            if dim_edge_feat > 0:
-                self.w_k_e = torch.nn.Linear(dim_edge_feat, dim_out)
-                self.w_v_e = torch.nn.Linear(dim_edge_feat, dim_out)
-            if dim_time > 0:
-                self.w_q_t = torch.nn.Linear(dim_time, dim_out)
-                self.w_k_t = torch.nn.Linear(dim_time, dim_out)
-                self.w_v_t = torch.nn.Linear(dim_time, dim_out)
-        else:
-            # In the origin TGN, dim_out == dim_node_feat + dim_time.
-            # TGL unify them all to dim_out
-            if dim_node_feat + dim_time > 0:
-                self.w_q = torch.nn.Linear(dim_node_feat + dim_time, dim_out)
-            self.w_k = torch.nn.Linear(
-                dim_node_feat + dim_edge_feat + dim_time, dim_out)
-            self.w_v = torch.nn.Linear(
-                dim_node_feat + dim_edge_feat + dim_time, dim_out)
+
+        # In the origin TGN, dim_out == dim_node_feat + dim_time.
+        # TGL unify them all to dim_out
+        if dim_node_feat + dim_time > 0:
+            self.w_q = torch.nn.Linear(dim_node_feat + dim_time, dim_out)
+        self.w_k = torch.nn.Linear(
+            dim_node_feat + dim_edge_feat + dim_time, dim_out)
+        self.w_v = torch.nn.Linear(
+            dim_node_feat + dim_edge_feat + dim_time, dim_out)
         self.w_out = torch.nn.Linear(dim_node_feat + dim_out, dim_out)
         self.layer_norm = torch.nn.LayerNorm(dim_out)
 
     def forward(self, b):
-        assert(self.dim_time + self.dim_node_feat + self.dim_edge_feat > 0)
+        assert (self.dim_time + self.dim_node_feat + self.dim_edge_feat > 0)
         if b.num_edges() == 0:
             return torch.zeros(
                 (b.num_dst_nodes(),

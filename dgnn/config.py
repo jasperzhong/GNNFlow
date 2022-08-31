@@ -1,33 +1,63 @@
-from typing import Dict
+import sys
 
 MB = 1 << 20
 GB = 1 << 30
 
 
-def get_default_config(dataset: str) -> Dict:
+def get_default_config(model: str, dataset: str):
     """
-    Get default configuration for a dataset.
+    Get default configuration for a model and dataset.
 
     Args:
+        model: Model name.
         dataset: Name of the dataset.
 
     Returns:
+        Default configuration for the model and dataset.
     """
-    if dataset == "WIKI":
-        return _wiki_default_config
-    elif dataset == "REDDIT":
-        return _reddit_default_config
-    elif dataset == "MOOC":
-        return _mooc_default_config
-    elif dataset == "LASTFM":
-        return _lastfm_default_config
-    elif dataset == "GDELT":
-        return _gdelt_default_config
-    elif dataset == "MAG":
-        return _mag_default_config
-    else:
-        raise ValueError(f"Unknown dataset: {dataset}")
+    model, dataset = model.lower(), dataset.lower()
+    assert model in ["tgn", "tgat", "dysat"] and dataset in [
+        "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag"], "Invalid model or dataset."
 
+    mod = sys.modules[__name__]
+    return getattr(mod, f"_{model}_default_config"), getattr(mod, f"_{dataset}_default_config")
+
+
+_tgn_default_config = {
+    "dropout": 0.2,
+    "attn_dropout": 0.2,
+    "sample_layer": 1,
+    "sample_neighbor": [10],
+    "sample_strategy": "recent",
+    "sample_history": 1,
+    "sample_duration": 0,
+    "prop_time": False,
+    "use_memory": True
+}
+
+_tgat_default_config = {
+    "dropout": 0.1,
+    "attn_dropout": 0.1,
+    "sample_layer": 2,
+    "sample_neighbor": [10, 10],
+    "sample_strategy": "uniform",
+    "sample_history": 1,
+    "sample_duration": 0,
+    "prop_time": False,
+    "use_memory": False
+}
+
+_dysat_default_config = {
+    "dropout": 0.1,
+    "attn_dropout": 0.1,
+    "sample_layer": 2,
+    "sample_neighbor": [10, 10],
+    "sample_strategy": "uniform",
+    "sample_history": 3,
+    "sample_duration": 0,
+    "prop_time": False,
+    "use_memory": False
+}
 
 _wiki_default_config = {
     "initial_pool_size": 10 * MB,
@@ -36,6 +66,9 @@ _wiki_default_config = {
     "minimum_block_size": 64,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
+    "undirected": True,
+    "node_feature": False,
+    "edge_feature": True
 }
 
 _reddit_default_config = {
@@ -45,6 +78,9 @@ _reddit_default_config = {
     "minimum_block_size": 64,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
+    "undirected": True,
+    "node_feature": False,
+    "edge_feature": True
 }
 
 _mooc_default_config = {
@@ -54,7 +90,9 @@ _mooc_default_config = {
     "minimum_block_size": 64,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-
+    "undirected": True,
+    "node_feature": False,
+    "edge_feature": True
 }
 
 _lastfm_default_config = {
@@ -64,6 +102,9 @@ _lastfm_default_config = {
     "minimum_block_size": 64,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
+    "undirected": True,
+    "node_feature": False,
+    "edge_feature": True
 }
 
 _gdelt_default_config = {
@@ -73,6 +114,9 @@ _gdelt_default_config = {
     "minimum_block_size": 128,
     "blocks_to_preallocate": 8196,
     "insertion_policy": "insert",
+    "undirected": False,
+    "node_feature": True,
+    "edge_feature": True
 }
 
 _mag_default_config = {
@@ -82,4 +126,7 @@ _mag_default_config = {
     "minimum_block_size": 1024,
     "blocks_to_preallocate": 65536,
     "insertion_policy": "insert",
+    "undirected": False,
+    "node_feature": True,
+    "edge_feature": False
 }

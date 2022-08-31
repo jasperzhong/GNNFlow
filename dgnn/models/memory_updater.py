@@ -1,6 +1,4 @@
-import dgl
 import torch
-from torch_scatter import scatter
 
 from .layers import TimeEncode
 
@@ -128,107 +126,52 @@ class MailBox():
             self.node_memory[nid.long()] = memory
             self.node_memory_ts[nid.long()] = ts
 
-    def update_mailbox(self, nid, memory, root_nodes, ts, edge_feats, block,
+    def update_mailbox(self, nid, memory, root_nodes, ts, edge_feats, 
                        neg_samples=1):
         with torch.no_grad():
             num_true_edges = nid.shape[0] // (neg_samples + 2)
             memory = memory.to(self.device)
             if edge_feats is not None:
                 edge_feats = edge_feats.to(self.device)
-            if block is not None:
-                block = block.to(self.device)
-            # TGN/JODIE
-            if not self.deliver_to_neighbors:
-                src = torch.from_numpy(
-                    root_nodes[: num_true_edges]).to(
-                    self.device)
-                dst = torch.from_numpy(
-                    root_nodes[num_true_edges:num_true_edges * 2]).to(self.device)
-                mem_src = memory[:num_true_edges]
-                mem_dst = memory[num_true_edges:num_true_edges * 2]
-                if self.dim_edge_feat > 0:
-                    src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
-                    dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)
-                else:
-                    src_mail = torch.cat([mem_src, mem_dst], dim=1)
-                    dst_mail = torch.cat([mem_dst, mem_src], dim=1)
-                mail = torch.cat([src_mail, dst_mail],
-                                 dim=1).reshape(-1, src_mail.shape[1])
-                nid = torch.cat([src.unsqueeze(1),
-                                 dst.unsqueeze(1)],
-                                dim=1).reshape(-1)
-                mail_ts = torch.from_numpy(
-                    ts[:num_true_edges * 2]).to(self.device)
-                if mail_ts.dtype == torch.float64:
-                    import pdb
-                    pdb.set_trace()
-                # find unique nid to update mailbox
-                uni, inv = torch.unique(nid, return_inverse=True)
-                perm = torch.arange(
-                    inv.size(0),
-                    dtype=inv.dtype, device=inv.device)
-                perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-                nid = nid[perm]
-                mail = mail[perm]
-                mail_ts = mail_ts[perm]
-                if self.mail_combine == 'last':
-                    self.mailbox[nid.long(),
-                                 self.next_mail_pos[nid.long()]] = mail
-                    self.mailbox_ts[nid.long(),
-                                    self.next_mail_pos[nid.long()]] = mail_ts
-                    if self.mailbox_size > 1:
-                        self.next_mail_pos[nid.long()] = torch.remainder(
-                            self.next_mail_pos[nid.long()] + 1, self.mailbox_size)
-            elif self.deliver_to_neighbors:
-                mem_src = memory[:num_true_edges]
-                mem_dst = memory[num_true_edges:num_true_edges * 2]
-                if self.dim_edge_feat > 0:
-                    src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
-                    dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)
-                else:
-                    src_mail = torch.cat([mem_src, mem_dst], dim=1)
-                    dst_mail = torch.cat([mem_dst, mem_src], dim=1)
-                mail = torch.cat([src_mail, dst_mail], dim=0)
-                mail = torch.cat([mail, mail[block.edges()[0].long()]], dim=0)
-                mail_ts = torch.from_numpy(
-                    ts[:num_true_edges * 2]).to(self.device)
-                mail_ts = torch.cat(
-                    [mail_ts, mail_ts[block.edges()[0].long()]],
-                    dim=0)
-                if self.mail_combine == 'mean':
-                    (nid, idx) = torch.unique(
-                        block.dstdata['ID'], return_inverse=True)
-                    mail = scatter(mail, idx, reduce='mean', dim=0)
-                    mail_ts = scatter(mail_ts, idx, reduce='mean')
-                    self.mailbox[nid.long(),
-                                 self.next_mail_pos[nid.long()]] = mail
-                    self.mailbox_ts[nid.long(),
-                                    self.next_mail_pos[nid.long()]] = mail_ts
-                elif self.mail_combine == 'last':
-                    nid = block.dstdata['ID']
-                    # find unique nid to update mailbox
-                    uni, inv = torch.unique(nid, return_inverse=True)
-                    perm = torch.arange(
-                        inv.size(0),
-                        dtype=inv.dtype, device=inv.device)
-                    perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-                    nid = nid[perm]
-                    mail = mail[perm]
-                    mail_ts = mail_ts[perm]
-                    self.mailbox[nid.long(),
-                                 self.next_mail_pos[nid.long()]] = mail
-                    self.mailbox_ts[nid.long(),
-                                    self.next_mail_pos[nid.long()]] = mail_ts
-                else:
-                    raise NotImplementedError
-                if self.mailbox_size > 1:
-                    if self.update_mail_pos is None:
-                        self.next_mail_pos[nid.long()] = torch.remainder(
-                            self.next_mail_pos[nid.long()] + 1, self.mailbox_size)
-                    else:
-                        self.update_mail_pos[nid.long()] = 1
+
+            src = torch.from_numpy(
+                root_nodes[: num_true_edges]).to(
+                self.device)
+            dst = torch.from_numpy(
+                root_nodes[num_true_edges:num_true_edges * 2]).to(self.device)
+            mem_src = memory[:num_true_edges]
+            mem_dst = memory[num_true_edges:num_true_edges * 2]
+            if self.dim_edge_feat > 0:
+                src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
+                dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)
             else:
-                raise NotImplementedError
+                src_mail = torch.cat([mem_src, mem_dst], dim=1)
+                dst_mail = torch.cat([mem_dst, mem_src], dim=1)
+            mail = torch.cat([src_mail, dst_mail],
+                             dim=1).reshape(-1, src_mail.shape[1])
+            nid = torch.cat([src.unsqueeze(1),
+                             dst.unsqueeze(1)],
+                            dim=1).reshape(-1)
+            mail_ts = torch.from_numpy(
+                ts[:num_true_edges * 2]).to(self.device)
+
+            # find unique nid to update mailbox
+            uni, inv = torch.unique(nid, return_inverse=True)
+            perm = torch.arange(
+                inv.size(0),
+                dtype=inv.dtype, device=inv.device)
+            perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
+            nid = nid[perm]
+            mail = mail[perm]
+            mail_ts = mail_ts[perm]
+            if self.mail_combine == 'last':
+                self.mailbox[nid.long(),
+                             self.next_mail_pos[nid.long()]] = mail
+                self.mailbox_ts[nid.long(),
+                                self.next_mail_pos[nid.long()]] = mail_ts
+                if self.mailbox_size > 1:
+                    self.next_mail_pos[nid.long()] = torch.remainder(
+                        self.next_mail_pos[nid.long()] + 1, self.mailbox_size)
 
     def update_next_mail_pos(self):
         if self.update_mail_pos is not None:

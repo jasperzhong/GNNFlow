@@ -10,7 +10,7 @@ class TGN(Model):
     def __init__(self, dim_node, dim_edge, num_nodes, sample_history=1, memory_dim_out=100,
                  memory_dim_time=100, layer=1, gnn_dim_out=100, gnn_dim_time=100, gnn_attn_head=2,
                  dropout=0.2, attn_dropout=0.2, combined=False, combine_node_feature=True,
-                 mailbox_size=1, mail_combine='last', deliver_to_neighbors=False):
+                 mailbox_size=1, mail_combine='last'):
         super(TGN, self).__init__()
         self.dim_node = dim_node
         self.dim_node_input = dim_node
@@ -29,8 +29,7 @@ class TGN(Model):
 
         # Use Memory
         self.mailbox = MailBox(memory_dim_out, mailbox_size,
-                               mail_combine, num_nodes, dim_edge,
-                               deliver_to_neighbors)
+                               mail_combine, num_nodes, dim_edge)
         self.mailbox.move_to_gpu()
 
         # Memory updater
