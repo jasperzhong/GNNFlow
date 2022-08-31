@@ -30,8 +30,6 @@ print(cache_names)
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str,
-                    default="REDDIT", help="dataset name")
 parser.add_argument("--model", choices=model_names, default='TGN',
                     help="model architecture" +
                     '|'.join(model_names) +
@@ -198,12 +196,12 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # use the full data to build graph
-config = get_default_config(args.dataset)
+config = get_default_config(args.data)
 dgraph = build_dynamic_graph(
     df, **config,
     add_reverse=args.graph_reverse)
 
-edge_count = dgraph.num_edges() // 2 + 1 if args.graph_reverse else dgraph.num_edges()
+edge_count = dgraph.num_edges()
 node_count = dgraph.num_vertices()
 node_feats, edge_feats = load_feat(
     args.data, rand_de=args.rand_edge_features,
