@@ -1,0 +1,28 @@
+
+Data: REDDIT
+Cache: LFUCache
+strategy: uniform
+
+Data: LASTFM
+Cache: LFUCache
+strategy: uniform
+
+Data: LASTFM
+Cache: LFUCache
+strategy: uniform
+
+Data: REDDIT
+Cache: LFUCache
+strategy: uniform
+
+Data: LASTFM
+Cache: LFUCache
+strategy: uniform
+
+Data: LASTFM
+Cache: LFUCache
+strategy: uniform
+
+Data: LASTFM
+Cache: LRUCache
+strategy: uniform
