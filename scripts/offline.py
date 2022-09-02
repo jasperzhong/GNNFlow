@@ -356,7 +356,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     # retrain by using previous data 50k
     if i % args.retrain == 0 and i != 0:
         # all of the data before
-        phase2_retrain = phase1 + incremental_step * (i - 1)
+        phase2_retrain = phase1 + incremental_step * i
         phase2_retrain_val = validation_length  # 10% of the dataset
         phase2_retrain_df = df[:phase2_retrain]
         phase2_retrain_val_df = df[phase2_retrain:
