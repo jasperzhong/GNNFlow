@@ -90,7 +90,7 @@ _mooc_default_config = {
     "minimum_block_size": 64,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-    "undirected": True,
+    "undirected": False,
     "node_feature": False,
     "edge_feature": True
 }
@@ -102,7 +102,7 @@ _lastfm_default_config = {
     "minimum_block_size": 64,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-    "undirected": True,
+    "undirected": False,
     "node_feature": False,
     "edge_feature": True
 }

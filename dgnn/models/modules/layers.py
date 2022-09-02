@@ -9,54 +9,24 @@ from dgl.heterograph import DGLBlock
 
 class TimeEncode(torch.nn.Module):
     """
-    Time encoding layer
+    Time encoding layer proposed by TGAT
     """
 
-    def __init__(self, dim: int):
+    def __init__(self, dim_time: int):
         """
         Args:
             dim: dimension of time features
         """
         super(TimeEncode, self).__init__()
-        self.dim = dim
-        self.w = torch.nn.Linear(1, dim)
+        self.w = torch.nn.Linear(1, dim_time)
         self.w.weight = nn.parameter.Parameter((torch.from_numpy(
-            1 / 10 ** np.linspace(0, 9, dim, dtype=np.float32))).reshape(dim, -1))
-        self.w.bias = nn.parameter.Parameter(torch.zeros(dim))
+            1 / 10 ** np.linspace(0, 9, dim_time, dtype=np.float32))).
+            reshape(dim_time, -1))
+        self.w.bias = nn.parameter.Parameter(torch.zeros(dim_time))
 
     def forward(self, delta_time: torch.Tensor):
         output = torch.cos(self.w(delta_time.reshape((-1, 1))))
         return output
-
-
-class EdgePredictor(torch.nn.Module):
-    """
-    Edge prediction layer
-    """
-
-    def __init__(self, dim: int):
-        """
-        Args:
-            dim_in: dimension of embedding
-        """
-        super(EdgePredictor, self).__init__()
-        self.dim_in = dim
-        self.src_fc = torch.nn.Linear(dim, dim)
-        self.dst_fc = torch.nn.Linear(dim, dim)
-        self.out_fc = torch.nn.Linear(dim, 1)
-
-    def forward(self, h: torch.Tensor):
-        """
-        Args:
-            h: embeddings of source, destination and negative sampling nodes
-        """
-        num_edge = h.shape[0] // 3
-        h_src = self.src_fc(h[:num_edge])
-        h_pos_dst = self.dst_fc(h[num_edge:2 * num_edge])
-        h_neg_dst = self.dst_fc(h[2 * num_edge:])
-        h_pos_edge = torch.nn.functional.relu(h_src + h_pos_dst)
-        h_neg_edge = torch.nn.functional.relu(h_src + h_neg_dst)
-        return self.out_fc(h_pos_edge), self.out_fc(h_neg_edge)
 
 
 class TransfomerAttentionLayer(torch.nn.Module):
@@ -128,39 +98,36 @@ class TransfomerAttentionLayer(torch.nn.Module):
         if num_edges == 0:
             return torch.zeros((num_dst_nodes, self.dim_out), device=device)
 
-        target_node_embeddings = b.srcdata['h'][:num_dst_nodes]
-        source_node_embeddings = b.srcdata['h'][num_dst_nodes:]
-        edge_feats = b.edata['f']
-        delta_time = b.edata['dt']
-        assert isinstance(edge_feats, torch.Tensor)
-
-        # determine Q, K, and V (whether to use node features/embeddings,
-        # edge features and time encoding
-        if self.use_time_enc:
-            if self.use_node_feat and self.use_edge_feat:
-                Q = target_node_embeddings
-                K = V = torch.cat((source_node_embeddings, edge_feats), dim=1)
-            elif self.use_node_feat:
-                Q = target_node_embeddings
-                K = V = source_node_embeddings
-            else:
-                Q = torch.ones((num_edges, self.dim_out), device=device)
-                K = V = edge_feats
+        if self.use_node_feat:
+            target_node_embeddings = b.srcdata['h'][:num_dst_nodes]
+            source_node_embeddings = b.srcdata['h'][num_dst_nodes:]
         else:
+            # dummy node embeddings
+            target_node_embeddings = torch.ones(
+                (num_dst_nodes, self.dim_out), device=device)
+            source_node_embeddings = torch.zeros(
+                (num_edges, 0), device=device)
+
+        if self.use_edge_feat:
+            edge_feats = b.edata['f']
+        else:
+            # dummy edge features
+            edge_feats = torch.zeros((num_edges, 0), device=device)
+
+        if self.use_time_enc:
+            delta_time = b.edata['dt']
             time_feats = self.time_enc(delta_time)
             zero_time_feats = self.time_enc(torch.zeros(
                 num_dst_nodes, dtype=torch.float32, device=device))
+        else:
+            # dummy time features
+            time_feats = torch.zeros((num_edges, 0), device=device)
+            zero_time_feats = torch.zeros((num_dst_nodes, 0), device=device)
 
-            if self.use_node_feat and self.use_edge_feat:
-                Q = torch.cat((target_node_embeddings, zero_time_feats), dim=1)
-                K = V = torch.cat(
-                    (source_node_embeddings, edge_feats, time_feats), dim=1)
-            elif self.use_node_feat:
-                Q = torch.cat((target_node_embeddings, zero_time_feats), dim=1)
-                K = V = torch.cat((source_node_embeddings, time_feats), dim=1)
-            else:
-                Q = zero_time_feats
-                K = V = torch.cat((edge_feats, time_feats), dim=1)
+        assert isinstance(edge_feats, torch.Tensor)
+        Q = torch.cat([target_node_embeddings, zero_time_feats], dim=1)
+        K = torch.cat([source_node_embeddings, edge_feats, time_feats], dim=1)
+        V = torch.cat([source_node_embeddings, edge_feats, time_feats], dim=1)
 
         Q = self.w_q(Q)[b.edges()[1]]
         K = self.w_k(K)
@@ -175,8 +142,8 @@ class TransfomerAttentionLayer(torch.nn.Module):
         att = self.att_dropout(att)
         V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
 
-        b.srcdata['v'] = torch.cat([torch.zeros(
-            (num_dst_nodes, V.shape[1]), device=device), V], dim=0)
+        b.srcdata['v'] = torch.cat((torch.zeros(
+            (num_dst_nodes, V.shape[1]), device=device), V), dim=0)
         b.update_all(fn.copy_src('v', 'm'), fn.sum('m', 'h'))
 
         if self.use_node_feat:
@@ -187,3 +154,49 @@ class TransfomerAttentionLayer(torch.nn.Module):
         rst = self.w_out(rst)
         rst = F.relu(self.dropout(rst))
         return self.layer_norm(rst)
+
+
+class EdgePredictor(torch.nn.Module):
+    """
+    Edge prediction layer
+    """
+
+    def __init__(self, dim_embed: int):
+        """
+        Args:
+            dim: dimension of embedding
+        """
+        super(EdgePredictor, self).__init__()
+        self.src_fc = torch.nn.Linear(dim_embed, dim_embed)
+        self.dst_fc = torch.nn.Linear(dim_embed, dim_embed)
+        self.out_fc = torch.nn.Linear(dim_embed, 1)
+
+    def forward(self, h: torch.Tensor):
+        """
+        Args:
+            h: embeddings of source, destination and negative sampling nodes
+        """
+        src_h, pos_dst_h, neg_dst_h = h.tensor_split(3)
+        src_h = self.src_fc(src_h)
+        pos_dst_h = self.dst_fc(pos_dst_h)
+        neg_dst_h = self.dst_fc(neg_dst_h)
+        pos_edge = F.relu(src_h + pos_dst_h)
+        neg_edge = F.relu(src_h + neg_dst_h)
+        return self.out_fc(pos_edge), self.out_fc(neg_edge)
+
+
+class MLP(torch.nn.Module):
+    """
+    Node classification 
+    """
+
+    def __init__(self, dim_in, dim_hid, num_class):
+        super(MLP, self).__init__()
+        self.fc1 = torch.nn.Linear(dim_in, dim_hid)
+        self.fc2 = torch.nn.Linear(dim_hid, num_class)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = torch.nn.functional.relu(x)
+        x = self.fc2(x)
+        return x

@@ -2,7 +2,6 @@ import os
 import random
 from typing import Optional, Tuple
 
-import dgl
 import numpy as np
 import pandas as pd
 import torch
@@ -14,8 +13,7 @@ def get_project_root_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame,
-                                                                        pd.DataFrame, pd.DataFrame]:
+def load_dataset(dataset: str, data_dir: Optional[str] = None):
     """
     Loads the dataset and returns the dataframes for the train, validation, test and
 
@@ -120,11 +118,11 @@ def build_dynamic_graph(
         dataset_df: the dataframe for the whole dataset.
         initial_pool_size: optional, int, the initial pool size of the graph.
         maximum_pool_size: optional, int, the maximum pool size of the graph.
-        mem_resource_type: optional, str, the memory resource type. 
+        mem_resource_type: optional, str, the memory resource type.
             valid options: ("cuda", "unified", or "pinned") (case insensitive).
         minimum_block_size: optional, int, the minimum block size of the graph.
         blocks_to_preallocate: optional, int, the number of blocks to preallocate.
-        insertion_policy: the insertion policy to use 
+        insertion_policy: the insertion policy to use
             valid options: ("insert" or "replace") (case insensitive).
         undirected: whether the graph is undirected.
     """
@@ -145,69 +143,16 @@ def build_dynamic_graph(
     return dgraph
 
 
-def prepare_input(
-        mfgs, node_feats, edge_feats, combine_first=False, pinned=False,
-        nfeat_buffs=None, efeat_buffs=None, nids=None, eids=None):
-    if combine_first:
-        for i in range(len(mfgs[0])):
-            if mfgs[0][i].num_src_nodes() > mfgs[0][i].num_dst_nodes():
-                num_dst = mfgs[0][i].num_dst_nodes()
-                ts = mfgs[0][i].srcdata['ts'][num_dst:]
-                nid = mfgs[0][i].srcdata['ID'][num_dst:].float()
-                nts = torch.stack([ts, nid], dim=1)
-                unts, idx = torch.unique(nts, dim=0, return_inverse=True)
-                uts = unts[:, 0]
-                unid = unts[:, 1]
-                # import pdb; pdb.set_trace()
-                b = dgl.create_block(
-                    (idx + num_dst, mfgs[0][i].edges()[1]),
-                    num_src_nodes=unts.shape[0] + num_dst, num_dst_nodes=num_dst,
-                    device=torch.device('cuda:0'))
-                b.srcdata['ts'] = torch.cat(
-                    [mfgs[0][i].srcdata['ts'][:num_dst], uts], dim=0)
-                b.srcdata['ID'] = torch.cat(
-                    [mfgs[0][i].srcdata['ID'][:num_dst], unid], dim=0)
-                b.edata['dt'] = mfgs[0][i].edata['dt']
-                b.edata['ID'] = mfgs[0][i].edata['ID']
-                mfgs[0][i] = b
-    t_idx = 0
-    t_cuda = 0
-    i = 0
+def prepare_input(mfgs, node_feats, edge_feats):
     if node_feats is not None:
         for b in mfgs[0]:
-            if pinned:
-                if nids is not None:
-                    idx = nids[i]
-                else:
-                    idx = b.srcdata['ID'].cpu().long()
-                torch.index_select(node_feats, 0, idx,
-                                   out=nfeat_buffs[i][:idx.shape[0]])
-                b.srcdata['h'] = nfeat_buffs[i][
-                    : idx.shape[0]].cuda(
-                    non_blocking=True)
-                i += 1
-            else:
-                srch = node_feats[b.srcdata['ID'].long()].float()
-                b.srcdata['h'] = srch.cuda()
-    i = 0
+            srch = node_feats[b.srcdata['ID']].float()
+            b.srcdata['h'] = srch.cuda()
+
     if edge_feats is not None:
         for mfg in mfgs:
             for b in mfg:
-                if b.num_src_nodes() > b.num_dst_nodes():
-                    if pinned:
-                        if eids is not None:
-                            idx = eids[i]
-                        else:
-                            idx = b.edata['ID'].cpu().long()
-                        torch.index_select(
-                            edge_feats, 0, idx,
-                            out=efeat_buffs[i][: idx.shape[0]])
-                        b.edata['f'] = efeat_buffs[i][
-                            : idx.shape[0]].cuda(
-                            non_blocking=True)
-                        i += 1
-                    else:
-                        b.edata['f'] = edge_feats[b.edata['ID'].long()].float()
+                b.edata['f'] = edge_feats[b.edata['ID']].float()
     return mfgs
 
 
@@ -237,17 +182,11 @@ def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_fea
     return pinned_nfeat_buffs, pinned_efeat_buffs
 
 
-<< << << < HEAD
+class RandEdgeSampler:
+    """
+    Samples random edges from the graph.
+    """
 
-
-def reset_random_state(self):
-    self.random_state = np.random.RandomState(self.seed)
-
-
-== == == =
-
-
-class RandEdgeSampler(object):
     def __init__(self, src_list, dst_list, seed=None):
         self.seed = None
         self.src_list = np.unique(src_list)
@@ -271,4 +210,34 @@ class RandEdgeSampler(object):
         self.random_state = np.random.RandomState(self.seed)
 
 
->>>>>> > fb1c873... update
+class EarlyStopMonitor:
+    """
+    Monitor the early stopping criteria.
+    """
+
+    def __init__(self, max_round=3, higher_better=True, tolerance=1e-10):
+        self.max_round = max_round
+        self.num_round = 0
+
+        self.epoch_count = 0
+        self.best_epoch = 0
+
+        self.last_best = None
+        self.higher_better = higher_better
+        self.tolerance = tolerance
+
+    def early_stop_check(self, curr_val):
+        if not self.higher_better:
+            curr_val *= -1
+        if self.last_best is None:
+            self.last_best = curr_val
+        elif (curr_val - self.last_best) / np.abs(self.last_best) > self.tolerance:
+            self.last_best = curr_val
+            self.num_round = 0
+            self.best_epoch = self.epoch_count
+        else:
+            self.num_round += 1
+
+        self.epoch_count += 1
+
+        return self.num_round >= self.max_round
