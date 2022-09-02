@@ -27,18 +27,18 @@ datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str,
-                    default="REDDIT", help="dataset name")
+                    default="LASTFM", help="dataset name")
 parser.add_argument("--model", choices=model_names, default='TGN',
                     help="model architecture" +
                     '|'.join(model_names) +
                     '(default: tgn)')
 parser.add_argument("--data", choices=datasets,
-                    default='REDDIT', help="dataset:" +
+                    default='LASTFM', help="dataset:" +
                     '|'.join(datasets) + '(default: REDDIT)')
 parser.add_argument("--cache", choices=cache_names,
                     default='LFUCache', help="cache:" +
                     '|'.join(cache_names) + '(default: LFUCache)')
-parser.add_argument("--epoch", help="training epoch", type=int, default=50)
+parser.add_argument("--epoch", help="training epoch", type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--batch-size", help="batch size", type=int, default=600)
 parser.add_argument("--num-workers", help="num workers", type=int, default=0)
@@ -68,7 +68,7 @@ parser.add_argument("--sample-duration",
                     help="snapshot duration", type=int, default=0)
 parser.add_argument("--reorder", help="", type=int, default=0)
 parser.add_argument("--graph-reverse",
-                    help="build undirected graph", type=bool, default=False)
+                    help="build undirected graph", type=bool, default=True)
 parser.add_argument('--rand_edge_features', type=int, default=1,
                     help='use random edge featrues')
 parser.add_argument('--rand_node_features', type=int, default=0,
@@ -154,7 +154,7 @@ def val(df, rand_sampler, sampler: TemporalSampler,
 
 
 path_saver = os.path.join(get_project_root_dir(),
-                          '{}_offline.pt'.format(args.model))
+                          '{}_{}_offline.pt'.format(args.model, args.data))
 
 _, _, _, df = load_dataset(args.data)
 phase1 = int(len(df) * 0.3)
@@ -167,7 +167,7 @@ val_rand_sampler = RandEdgeSampler(
     phase1_val_df['src'].to_numpy(), phase1_val_df['dst'].to_numpy())
 
 # use the full data to build graph
-config = get_default_config(args.dataset)
+config = get_default_config(args.data)
 
 # use all the edges to build graph
 dgraph = build_dynamic_graph(
@@ -318,7 +318,7 @@ for e in range(args.epoch):
     print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
           .format(epoch_time, val_time, ap, auc))
     torch.save(model.state_dict(), path_saver)
-    if abs(prev_ap - ap) < 1e-4:
+    if abs(prev_ap - ap) < 1e-5:
         print("early stop at epoch: {}".format(e))
         break
 
@@ -328,8 +328,12 @@ with open("profile_offline_{}.txt".format(args.model), "a") as f:
     f.write("phase1 training done")
 model.load_state_dict(torch.load(path_saver))
 
+print("phase2")
+with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
+    f_phase2.write("*********\n".format(args.retrain))
+    f_phase2.write("retrain: {}\n".format(args.retrain))
 # Phase2: incremental offline training
-phase2_df = df[phase1:]
+phase2_df = df[phase1:-validation_length]
 incremental_step = 1000
 for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, incremental_step)):
     # add 1k
