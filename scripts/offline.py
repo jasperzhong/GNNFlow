@@ -510,26 +510,10 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
                     auc, prev_auc))
                 early_stop = True
                 print("early stop at {} epoch\n".format(e))
-                with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
-                    f_phase2.write("val ap: {}\n".format(ap))
-
-                with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
-                    f_phase2.write("val auc: {}\n".format(auc))
                 break
 
             prev_ap = ap
             prev_auc = auc
-
-        if not early_stop:
-            with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
-                f_phase2.write(
-                    "phase2 retrain validation with {}th batch\n".format(i))
-                f_phase2.write("val ap: {}\n".format(ap))
-
-            with open("profile_offline_{}_auc.txt".format(args.model), "a") as f_phase2:
-                f_phase2.write(
-                    "phase2 retrain validation with {}th batch\n".format(i))
-                f_phase2.write("val auc: {}\n".format(auc))
 
 
 with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
