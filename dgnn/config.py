@@ -20,43 +20,56 @@ def get_default_config(model: str, dataset: str):
         "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag"], "Invalid model or dataset."
 
     mod = sys.modules[__name__]
-    return getattr(mod, f"_{model}_default_config"), getattr(mod, f"_{dataset}_default_config")
+    return getattr(
+        mod, f"_{model}_default_config"), getattr(
+        mod, f"_{dataset}_default_config")
 
 
 _tgn_default_config = {
     "dropout": 0.2,
-    "attn_dropout": 0.2,
-    "sample_layer": 1,
-    "sample_neighbor": [10],
+    "att_head": 2,
+    "att_dropout": 0.2,
+    "num_layers": 1,
+    "fanouts": [10],
     "sample_strategy": "recent",
-    "sample_history": 1,
+    "num_snapshots": 1,
     "sample_duration": 0,
     "prop_time": False,
-    "use_memory": True
+    "use_memory": True,
+    "dim_time": 100,
+    "dim_embed": 100,
+    "dim_memory": 100
 }
 
 _tgat_default_config = {
     "dropout": 0.1,
-    "attn_dropout": 0.1,
-    "sample_layer": 2,
-    "sample_neighbor": [10, 10],
+    "att_head": 2,
+    "att_dropout": 0.1,
+    "num_layers": 2,
+    "fanouts": [10, 10],
     "sample_strategy": "uniform",
-    "sample_history": 1,
+    "num_snapshots": 1,
     "sample_duration": 0,
     "prop_time": False,
-    "use_memory": False
+    "use_memory": False,
+    "dim_time": 100,
+    "dim_embed": 100
 }
 
 _dysat_default_config = {
     "dropout": 0.1,
-    "attn_dropout": 0.1,
-    "sample_layer": 2,
-    "sample_neighbor": [10, 10],
+    "att_head": 2,
+    "att_head": 2,
+    "att_dropout": 0.1,
+    "num_layers": 2,
+    "fanouts": [10, 10],
     "sample_strategy": "uniform",
-    "sample_history": 3,
+    "num_snapshots": 3,
     "sample_duration": 0,
     "prop_time": False,
-    "use_memory": False
+    "use_memory": False,
+    "dim_time": 0,
+    "dim_embed": 100
 }
 
 _wiki_default_config = {
@@ -68,7 +81,8 @@ _wiki_default_config = {
     "insertion_policy": "insert",
     "undirected": True,
     "node_feature": False,
-    "edge_feature": True
+    "edge_feature": True,
+    "batch_size": 600
 }
 
 _reddit_default_config = {
@@ -80,7 +94,8 @@ _reddit_default_config = {
     "insertion_policy": "insert",
     "undirected": True,
     "node_feature": False,
-    "edge_feature": True
+    "edge_feature": True,
+    "batch_size": 600
 }
 
 _mooc_default_config = {
@@ -92,7 +107,8 @@ _mooc_default_config = {
     "insertion_policy": "insert",
     "undirected": False,
     "node_feature": False,
-    "edge_feature": True
+    "edge_feature": True,
+    "batch_size": 600
 }
 
 _lastfm_default_config = {
@@ -104,7 +120,8 @@ _lastfm_default_config = {
     "insertion_policy": "insert",
     "undirected": False,
     "node_feature": False,
-    "edge_feature": True
+    "edge_feature": True,
+    "batch_size": 600
 }
 
 _gdelt_default_config = {
@@ -116,7 +133,8 @@ _gdelt_default_config = {
     "insertion_policy": "insert",
     "undirected": False,
     "node_feature": True,
-    "edge_feature": True
+    "edge_feature": True,
+    "batch_size": 4000
 }
 
 _mag_default_config = {
@@ -128,5 +146,6 @@ _mag_default_config = {
     "insertion_policy": "insert",
     "undirected": False,
     "node_feature": True,
-    "edge_feature": False
+    "edge_feature": False,
+    "batch_size": 4000
 }

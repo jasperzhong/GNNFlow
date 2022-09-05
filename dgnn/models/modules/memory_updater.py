@@ -7,8 +7,8 @@ class GRUMemeoryUpdater(torch.nn.Module):
     GRU memory updater proposed by TGN
     """
 
-    def __init__(self, dim_node: int, dim_edge: int, dim_time: int, dim_embed: int,
-                 dim_memory: int):
+    def __init__(self, dim_node: int, dim_edge: int, dim_time: int,
+                 dim_embed: int, dim_memory: int):
         """
         Args:
             dim_node: dimension of node features/embeddings
@@ -22,7 +22,8 @@ class GRUMemeoryUpdater(torch.nn.Module):
         self.dim_embed = dim_embed
         self.dim_node = dim_node
         self.dim_time = dim_time
-        self.updater = torch.nn.GRUCell(self.dim_message, dim_embed)
+        self.updater = torch.nn.GRUCell(
+            self.dim_message + self.dim_time, dim_embed)
 
         if dim_node > 0 and dim_node != dim_embed:
             self.node_feat_proj = torch.nn.Linear(dim_node, dim_embed)
@@ -45,15 +46,16 @@ class GRUMemeoryUpdater(torch.nn.Module):
             }
         """
         num_dst_nodes = b.num_dst_nodes()
+        device = b.device
 
         target_node_memory_input = b.dstdata['mem_input']
-        target_node_memory = b.srcdata['mem_input'][:num_dst_nodes]
+        target_node_memory = b.srcdata['mem'][:num_dst_nodes]
         updated_memory = self.updater(
             target_node_memory_input, target_node_memory)
 
-        last_updated_nid = b.srcdata['ID'][:num_dst_nodes].to(self.device)
-        last_updated_memory = updated_memory.detach().clone().to(self.device)
-        last_updated_ts = b.srcdata['ts'][:num_dst_nodes].to(self.device)
+        last_updated_nid = b.srcdata['ID'][:num_dst_nodes].to(device)
+        last_updated_memory = updated_memory.detach().clone().to(device)
+        last_updated_ts = b.srcdata['ts'][:num_dst_nodes].to(device)
 
         new_memory = torch.cat(
             (updated_memory, b.srcdata['mem'][num_dst_nodes:]), dim=0)

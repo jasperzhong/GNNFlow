@@ -1,23 +1,39 @@
 import collections
+import random
 import re
+from typing import Iterable, Iterator, List, Union
 
 import numpy as np
+import pandas as pd
 import torch
 from torch._six import string_classes
-from torch.utils.data import Dataset
+from torch.utils.data import BatchSampler, Dataset, Sampler
+
+from dgnn.utils import RandEdgeSampler
 
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
 
-class DynamicGraphDataset(Dataset):
-    def __init__(self, df, neg_sampler=None):
-        super(DynamicGraphDataset).__init__()
-        self.df = df
-        self.length = np.max(np.array(df['dst'], dtype=int))
+class EdgePredictionDataset(Dataset):
+    """
+    Edge prediction dataset.
+
+    It samples negative edges from the given graph and returns the node ids,
+    timestamps and edge ids for the positive and negative edges.
+
+    Args:
+        data: the dataframe for the dataset.
+        neg_sampler: the negative sampler.
+    """
+
+    def __init__(self, data: pd.DataFrame, neg_sampler: RandEdgeSampler):
+        super(EdgePredictionDataset, self).__init__()
+        self.data = data
+        self.length = np.max(np.array(data['dst'], dtype=int))
         self.neg_sampler = neg_sampler
 
     def __getitem__(self, index):
-        row = self.df.iloc[index]
+        row = self.data.iloc[index]
         _, neg_batch = self.neg_sampler.sample(len(row.src.values))
         target_nodes = np.concatenate(
             [row.src.values, row.dst.values, neg_batch]).astype(
@@ -25,11 +41,59 @@ class DynamicGraphDataset(Dataset):
         ts = np.concatenate(
             [row.time.values, row.time.values, row.time.values]).astype(
             np.float32)
-        eid = row['Unnamed: 0'].values
-        return (target_nodes, ts, eid)
+        return (target_nodes, ts)
 
     def __len__(self):
-        return len(self.df)
+        return len(self.data)
+
+
+class RandomStartBatchSampler(BatchSampler):
+    """
+    The sampler select a random start point for each epoch.
+    """
+
+    def __init__(self, sampler: Union[Sampler[int], Iterable[int]],
+                 batch_size: int, drop_last: bool,
+                 num_chunks: int = 1):
+        """
+        Args:
+            sampler: Base class for all Samplers.
+            batch_size: Size of mini-batch.
+            drop_last: Set to ``True`` to drop the last incomplete batch, if the
+                dataset size is not divisible by the batch size. If ``False`` and
+                the size of dataset is not divisible by the batch size, then the
+                last batch will be smaller.
+            num_chunks: Number of chunks to split the batch into.
+        """
+        super(RandomStartBatchSampler, self).__init__(sampler, batch_size,
+                                                      drop_last)
+        assert 0 < num_chunks < batch_size, "num_chunks must be in (0, batch_size)"
+
+        self.num_chunks = num_chunks
+        self.chunk_size = batch_size // num_chunks
+        self.reorder = self.num_chunks > 1
+        self.random_size = batch_size
+
+    def __iter__(self) -> Iterator[List[int]]:
+        batch = []
+        for idx in self.sampler:
+            batch.append(idx)
+            if self.reorder:
+                if len(batch) == self.random_size:
+                    yield batch
+                    self.reorder = False
+                    batch = []
+            else:
+                if len(batch) == self.batch_size:
+                    yield batch
+                    batch = []
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+    def reset(self):
+        self.reorder = self.num_chunks > 1
+        l = self.batch_size // self.chunk_size
+        self.random_size = random.randint(0, l - 1) * self.chunk_size
 
 
 default_collate_err_msg_format = (

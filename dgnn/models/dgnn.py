@@ -3,7 +3,7 @@ from typing import List, Optional, Union
 import torch
 from dgl.heterograph import DGLBlock
 
-from dgnn.models.modules.layers import (EdgePredictor, NodeClassificationModel,
+from dgnn.models.modules.layers import (EdgePredictor,
                                         TransfomerAttentionLayer)
 from dgnn.models.modules.memory import Memory
 from dgnn.models.modules.memory_updater import GRUMemeoryUpdater
@@ -19,7 +19,7 @@ class DGNN(torch.nn.Module):
                  att_head: int, dropout: float, att_dropout: float,
                  use_memory: bool, dim_memory: Optional[int] = None,
                  num_nodes: Optional[int] = None,
-                 memory_device: Union[torch.device, str] = 'cpu'):
+                 memory_device: Union[torch.device, str] = 'cpu', *args, **kwargs):
         """
         Args:
             dim_node: dimension of node features/embeddings
@@ -57,7 +57,7 @@ class DGNN(torch.nn.Module):
                                  memory_device)
 
             self.memory_updater = GRUMemeoryUpdater(
-                dim_memory, dim_edge, dim_embed, dim_time, dim_node)
+                dim_node, dim_edge, dim_time, dim_embed, dim_memory)
 
         self.layers = torch.nn.ModuleDict()
         for l in range(num_layers):
@@ -82,7 +82,18 @@ class DGNN(torch.nn.Module):
 
         self.edge_predictor = EdgePredictor(dim_embed)
 
-    def forward(self, mfgs: List[List[DGLBlock]]): 
+    def reset(self):
+        if self.use_memory:
+            self.memory.reset()
+
+    def resize(self, num_nodes: int):
+        if self.use_memory:
+            self.memory.resize(num_nodes)
+
+    def has_memory(self):
+        return self.use_memory
+
+    def forward(self, mfgs: List[List[DGLBlock]]):
         """
         Args:
             mfgs: list of list of DGLBlocks

@@ -17,31 +17,33 @@ class TemporalSampler:
 
     def __init__(
             self, graph: DynamicGraph, fanouts: List[int],
-            strategy: str = "recent", num_snapshots: int = 1,
+            sample_strategy: str = "recent", num_snapshots: int = 1,
             snapshot_time_window: float = 0.0, prop_time: bool = False,
-            seed: int = 1234):
+            seed: int = 1234, *args, **kwargs):
         """
         Initialize the sampler.
 
         Args:
             graph: the dynamic graph.
             fanouts: fanouts of each layer.
-            strategy: sampling strategy, 'recent' or 'uniform' (case insensitive).
+            samplle_strategy: sampling strategy, 'recent' or 'uniform' (case insensitive).
             num_snapshots: number of snapshots to sample.
             snapshot_time_window: time window every snapshot cover. It only makes
                                   sense when num_snapshots > 1.
+            prop_time: whether to propagate timestamps to neighbors.
+            seed: random seed.
         """
-        strategy = strategy.lower()
-        if strategy not in ["recent", "uniform"]:
+        sample_strategy = sample_strategy.lower()
+        if sample_strategy not in ["recent", "uniform"]:
             raise ValueError("strategy must be 'recent' or 'uniform'")
 
-        if strategy == "recent":
-            strategy = SamplingPolicy.RECENT
+        if sample_strategy == "recent":
+            sample_strategy = SamplingPolicy.RECENT
         else:
-            strategy = SamplingPolicy.UNIFORM
+            sample_strategy = SamplingPolicy.UNIFORM
 
         self._sampler = _TemporalSampler(
-            graph._dgraph, fanouts, strategy, num_snapshots,
+            graph._dgraph, fanouts, sample_strategy, num_snapshots,
             snapshot_time_window, prop_time, seed)
         self._num_snapshots = num_snapshots
 

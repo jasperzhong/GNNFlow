@@ -1,10 +1,11 @@
 import os
 import random
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
+from dgl.heterograph import DGLBlock
 
 from .dynamic_graph import DynamicGraph
 
@@ -13,9 +14,11 @@ def get_project_root_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def load_dataset(dataset: str, data_dir: Optional[str] = None):
+def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Loads the dataset and returns the dataframes for the train, validation, test and
+    whole dataset.
 
 
     Args:
@@ -23,72 +26,79 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None):
         data_dir: the directory where the dataset is stored.
 
     Returns:
-        train_df: the dataframe for the train set.
-        val_df: the dataframe for the validation set.
-        test_df: the dataframe for the test set.
-        df: the dataframe for the whole dataset.
+        train_data: the dataframe for the train dataset.
+        val_data: the dataframe for the validation dataset.
+        test_data: the dataframe for the test dataset.
+        full_data: the dataframe for the whole dataset.
     """
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     path = os.path.join(data_dir, dataset, 'edges.csv')
-    if os.path.exists(path):
-        df = pd.read_csv(path)
-    else:
+    if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
-    train_edge_end = df[df['ext_roll'].gt(0)].index[0]
-    val_edge_end = df[df['ext_roll'].gt(1)].index[0]
-    train_df = df[:train_edge_end]
-    val_df = df[train_edge_end:val_edge_end]
-    test_df = df[val_edge_end:]
+    full_data = pd.read_csv(path)
+    assert isinstance(full_data, pd.DataFrame)
 
-    return train_df, val_df, test_df, df
+    full_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
+    train_end = full_data['ext_roll'].values.searchsorted(1)
+    val_end = full_data['ext_roll'].values.searchsorted(2)
+    train_data = full_data[:train_end]
+    val_data = full_data[train_end:val_end]
+    test_data = full_data[val_end:]
+    return train_data, val_data, test_data, full_data
 
 
-def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0, edge_count=0, node_count=0) -> Tuple[torch.Tensor, torch.Tensor]:
+def load_feat(dataset: str, data_dir: Optional[str] = None):
+    """
+    Loads the node and edge features for the given dataset.
 
+    NB: either node_feats or edge_feats can be None, but not both.
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+
+    Returns:
+        node_feats: the node features. (None if not available)
+        edge_feats: the edge features. (None if not available)
+    """
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     dataset_path = os.path.join(data_dir, dataset)
-
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
+
+    if not os.path.exists(node_feat_path) and \
+            not os.path.exists(edge_feat_path):
+        raise ValueError("Both {} and {} do not exist".format(
+            node_feat_path, edge_feat_path))
+
     node_feats = None
     if os.path.exists(node_feat_path):
         node_feats = torch.load(node_feat_path)
         if node_feats.dtype == torch.bool:
             node_feats = node_feats.type(torch.float32)
-
-    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
+        node_feats = node_feats.pin_memory()
 
     edge_feats = None
     if os.path.exists(edge_feat_path):
         edge_feats = torch.load(edge_feat_path)
         if edge_feats.dtype == torch.bool:
             edge_feats = edge_feats.type(torch.float32)
-
-    if rand_de > 0 and edge_feats is None:
-        edge_feats = torch.randn(edge_count, rand_de)
-    if rand_dn > 0 and node_feats is None:
-        node_feats = torch.randn(node_count, rand_dn)
-
-    if node_feats is not None:
-        node_feats = node_feats.pin_memory()
-    if edge_feats is not None:
         edge_feats = edge_feats.pin_memory()
+
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, batch_size: int = 600):
+def get_batch(df: pd.DataFrame, batch_size: int):
     group_indexes = list()
 
     group_indexes.append(np.array(df.index // batch_size))
     for _, rows in df.groupby(
             group_indexes[random.randint(0, len(group_indexes) - 1)]):
-        # np.random.randint(self.num_nodes, size=n)
-        # TODO: wrap a neglink sampler
-        length = np.max(np.array(df['dst'], dtype=int))
 
         target_nodes = np.concatenate(
             [rows.src.values, rows.dst.values]).astype(
@@ -96,8 +106,8 @@ def get_batch(df: pd.DataFrame, batch_size: int = 600):
         ts = np.concatenate(
             [rows.time.values, rows.time.values]).astype(
             np.float32)
-        # TODO: align with our edge id
-        eid = rows['Unnamed: 0'].values
+
+        eid = rows['eid'].values
 
         yield target_nodes, ts, eid
 
@@ -110,7 +120,8 @@ def build_dynamic_graph(
         minimum_block_size: int,
         blocks_to_preallocate: int,
         insertion_policy: str,
-        undirected: bool) -> DynamicGraph:
+        undirected: bool,
+        *args, **kwargs) -> DynamicGraph:
     """
     Builds a dynamic graph from the given dataframe.
 
@@ -126,9 +137,9 @@ def build_dynamic_graph(
             valid options: ("insert" or "replace") (case insensitive).
         undirected: whether the graph is undirected.
     """
-    src = dataset_df['src'].to_numpy(dtype=np.int64)
-    dst = dataset_df['dst'].to_numpy(dtype=np.int64)
-    ts = dataset_df['time'].to_numpy(dtype=np.float32)
+    src = dataset_df['src'].values.astype(np.int64)
+    dst = dataset_df['dst'].values.astype(np.int64)
+    ts = dataset_df['time'].values.astype(np.float32)
 
     dgraph = DynamicGraph(
         initial_pool_size,
@@ -156,14 +167,15 @@ def prepare_input(mfgs, node_feats, edge_feats):
     return mfgs
 
 
-def mfgs_to_cuda(mfgs):
+def mfgs_to_cuda(mfgs: List[List[DGLBlock]], device: Union[str, torch.device]):
     for mfg in mfgs:
         for i in range(len(mfg)):
-            mfg[i] = mfg[i].to('cuda:0')
+            mfg[i] = mfg[i].to(device)
     return mfgs
 
 
-def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_feats):
+def get_pinned_buffers(
+        fanouts, sample_history, batch_size, node_feats, edge_feats):
     pinned_nfeat_buffs = list()
     pinned_efeat_buffs = list()
     limit = int(batch_size * 3.3)

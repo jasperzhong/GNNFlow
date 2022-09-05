@@ -33,6 +33,8 @@ class Memory:
         self.use_time_enc = dim_time > 0
         if self.use_time_enc:
             self.time_enc = TimeEncode(dim_time)
+            self.time_enc.to(device)
+
 
         # memory data structure (default on CPU)
         self.node_memory = torch.zeros(
