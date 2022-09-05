@@ -154,7 +154,7 @@ def val(df, rand_sampler, sampler: TemporalSampler,
 
 
 def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
-          sampler, model, cache, node_feats, edge_feats, creterion, optimizer):
+          sampler, model, cache, node_feats, edge_feats, creterion, optimizer, save_model):
 
     epoch_time_sum = 0
     prev_ap = 1e10
@@ -256,7 +256,8 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
         val_time = val_end - val_start
         print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
               .format(epoch_time, val_time, ap, auc))
-        torch.save(model.state_dict(), path_saver)
+        if save_model:
+            torch.save(model.state_dict(), path_saver)
         if abs(prev_ap - ap) < 1e-5:
             print("early stop at epoch: {}".format(e))
             break
@@ -321,7 +322,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 train(args, path_saver, phase1_train_df, rand_sampler,
       phase1_val_df, val_rand_sampler, sampler, model, None,
-      node_feats, edge_feats, creterion, optimizer)
+      node_feats, edge_feats, creterion, optimizer, True)
 
 # phase1 training done
 # update rand_sampler
@@ -370,7 +371,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         # dgraph has been built, no need to build again
         train(args, path_saver, phase2_train_df, rand_sampler,
               phase2_val_df, val_rand_sampler, sampler, model, None,
-              node_feats, edge_feats, creterion, optimizer)
+              node_feats, edge_feats, creterion, optimizer, False)
 
 with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
     f_phase2.write("********\n")
