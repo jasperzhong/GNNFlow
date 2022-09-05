@@ -321,7 +321,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 train(args, path_saver, phase1_train_df, rand_sampler,
       phase1_val_df, val_rand_sampler, sampler, model, None,
-      node_feats, edge_feats, creterion)
+      node_feats, edge_feats, creterion, optimizer)
 
 # phase1 training done
 # update rand_sampler
