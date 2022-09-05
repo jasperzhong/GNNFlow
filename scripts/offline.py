@@ -256,7 +256,7 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
         val_time = val_end - val_start
         print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
               .format(epoch_time, val_time, ap, auc))
-        # torch.save(model.state_dict(), path_saver)
+        torch.save(model.state_dict(), path_saver)
         if abs(prev_ap - ap) < 1e-5:
             print("early stop at epoch: {}".format(e))
             break
@@ -321,7 +321,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 train(args, path_saver, phase1_train_df, rand_sampler,
       phase1_val_df, val_rand_sampler, sampler, model, None,
-      node_feats, edge_feats, creterion, optimizer)
+      node_feats, edge_feats, creterion)
 
 # phase1 training done
 # update rand_sampler
@@ -367,7 +367,6 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         val_rand_sampler = RandEdgeSampler(
             phase2_val_df['src'].to_numpy(), phase2_val_df['dst'].to_numpy())
 
-        # TODO: implement weighted sampling and add a parameter to control replay ratio
         # dgraph has been built, no need to build again
         train(args, path_saver, phase2_train_df, rand_sampler,
               phase2_val_df, val_rand_sampler, sampler, model, None,
