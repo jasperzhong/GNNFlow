@@ -367,6 +367,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         val_rand_sampler = RandEdgeSampler(
             phase2_val_df['src'].to_numpy(), phase2_val_df['dst'].to_numpy())
 
+        # TODO: implement weighted sampling and add a parameter to control replay ratio
         # dgraph has been built, no need to build again
         train(args, path_saver, phase2_train_df, rand_sampler,
               phase2_val_df, val_rand_sampler, sampler, model, None,
