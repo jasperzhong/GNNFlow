@@ -54,6 +54,7 @@ class TransfomerAttentionLayer(torch.nn.Module):
         self.use_edge_feat = dim_edge > 0
         self.use_time_enc = dim_time > 0
 
+        self.dim_node = dim_node
         self.num_head = num_head
         self.dim_time = dim_time
         self.dim_out = dim_out
@@ -103,8 +104,13 @@ class TransfomerAttentionLayer(torch.nn.Module):
             source_node_embeddings = b.srcdata['h'][num_dst_nodes:]
         else:
             # dummy node embeddings
-            target_node_embeddings = torch.ones(
-                (num_dst_nodes, self.dim_out), device=device)
+            if self.use_time_enc:
+                target_node_embeddings = torch.zeros(
+                    (num_dst_nodes, 0), device=device)
+            else:
+                target_node_embeddings = torch.ones(
+                    (num_dst_nodes, self.dim_out), device=device)
+
             source_node_embeddings = torch.zeros(
                 (num_edges, 0), device=device)
 

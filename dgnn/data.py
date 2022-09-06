@@ -41,7 +41,8 @@ class EdgePredictionDataset(Dataset):
         ts = np.concatenate(
             [row.time.values, row.time.values, row.time.values]).astype(
             np.float32)
-        return (target_nodes, ts)
+        eid = row['eid'].values
+        return (target_nodes, ts, eid)
 
     def __len__(self):
         return len(self.data)

@@ -151,7 +151,7 @@ class Memory:
         if edge_feats is None:
             # dummy edge features
             edge_feats = torch.zeros(
-                last_updated_nid.shape[0], 0, device=self.device)
+                last_updated_nid.shape[0]//3, 0, device=self.device)
 
         edge_feats = edge_feats.to(self.device)
 

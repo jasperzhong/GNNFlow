@@ -46,7 +46,7 @@ parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--cache", choices=cache_names,
                     default='LFUCache', help="feature cache:" +
                     '|'.join(cache_names) + '(default: LFUCache)')
-parser.add_argument("--cache-ratio", type=float, default=0,
+parser.add_argument("--cache-ratio", type=float, default=0.2,
                     help="cache ratio for feature cache")
 args = parser.parse_args()
 
@@ -54,6 +54,7 @@ if args.profile:
     logging.basicConfig(filename='profile.log',
                         encoding='utf-8', level=logging.DEBUG)
 
+logging.basicConfig(level=logging.DEBUG)
 logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
@@ -78,11 +79,12 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
 
     with torch.no_grad():
         total_loss = 0
-        for target_nodes, ts in dataloader:
+        for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(mfgs, update_cache=False)
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg = model(
+                mfgs, eid=eid, edge_feats=cache.edge_features)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -223,7 +225,7 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
         feature_end = torch.cuda.Event(enable_timing=True)
         cuda_end = torch.cuda.Event(enable_timing=True)
         train_end = torch.cuda.Event(enable_timing=True)
-        for i, (target_nodes, ts) in enumerate(train_loader):
+        for i, (target_nodes, ts, eid) in enumerate(train_loader):
             time_start.record()
             mfgs = sampler.sample(target_nodes, ts)
 
@@ -237,11 +239,12 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
 
             # Train
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg = model(
+                mfgs, eid=eid, edge_feats=cache.edge_features)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
-            total_loss += float(loss) * args.batch_size
+            total_loss += float(loss) * len(target_nodes)
             loss.backward()
             optimizer.step()
             train_end.record()

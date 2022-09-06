@@ -93,7 +93,7 @@ class DGNN(torch.nn.Module):
     def has_memory(self):
         return self.use_memory
 
-    def forward(self, mfgs: List[List[DGLBlock]]):
+    def forward(self, mfgs: List[List[DGLBlock]], *args, **kwargs):
         """
         Args:
             mfgs: list of list of DGLBlocks
@@ -122,7 +122,11 @@ class DGNN(torch.nn.Module):
         if self.use_memory:
             # NB: no need to do backward here
             with torch.no_grad():
-                self.memory.update_mailbox(**last_updated)
+                eid = kwargs['eid']
+                edge_feats = kwargs['edge_feats']
+                edge_feats = edge_feats[eid]
+                self.memory.update_mailbox(
+                    **last_updated, edge_feats=edge_feats)
                 self.memory.update_memory(**last_updated)
 
         return self.edge_predictor(embed)
