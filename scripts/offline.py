@@ -281,7 +281,7 @@ phase1_val_df = df[phase1_train:phase1]
 rand_sampler = RandEdgeSampler(
     phase1_train_df['src'].to_numpy(), phase1_train_df['dst'].to_numpy())
 val_rand_sampler = RandEdgeSampler(
-    phase1_val_df['src'].to_numpy(), phase1_val_df['dst'].to_numpy())
+    df[:phase1]['src'].to_numpy(), df[:phase1]['dst'].to_numpy())
 
 # use the full data to build graph
 config = get_default_config(args.data)
@@ -325,14 +325,14 @@ if not args.no_sample:
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-# train(args, path_saver, phase1_train_df, rand_sampler,
-#       phase1_val_df, val_rand_sampler, sampler, model, None,
-#       node_feats, edge_feats, creterion, optimizer, True)
+train(args, path_saver, phase1_train_df, rand_sampler,
+      phase1_val_df, val_rand_sampler, sampler, model, None,
+      node_feats, edge_feats, creterion, optimizer, True, 5)
 
-# # phase1 training done
-# # update rand_sampler
-# rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
-#                               phase1_val_df['dst'].to_numpy())
+# phase1 training done
+# update rand_sampler
+rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
+                              phase1_val_df['dst'].to_numpy())
 model.load_state_dict(torch.load(path_saver))
 
 print("phase2")
@@ -371,7 +371,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         rand_sampler = RandEdgeSampler(
             phase2_train_df['src'].to_numpy(), phase2_train_df['dst'].to_numpy())
         val_rand_sampler = RandEdgeSampler(
-            phase2_val_df['src'].to_numpy(), phase2_val_df['dst'].to_numpy())
+            df[:phase2_retrain_end]['src'].to_numpy(), df[:phase2_retrain_end]['dst'].to_numpy())
 
         # dgraph has been built, no need to build again
         train(args, path_saver, phase2_train_df, rand_sampler,
