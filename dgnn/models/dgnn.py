@@ -126,7 +126,8 @@ class DGNN(torch.nn.Module):
             # NB: no need to do backward here
             with torch.no_grad():
                 edge_feats = None
-                if 'eid' in kwargs and 'edge_feats' in kwargs:
+                if 'eid' in kwargs and 'edge_feats' in kwargs and \
+                        kwargs['edge_feats'] is not None:
                     eid = kwargs['eid']
                     edge_feats = kwargs['edge_feats']
                     edge_feats = edge_feats[eid]
