@@ -227,7 +227,7 @@ class EarlyStopMonitor:
     Monitor the early stopping criteria.
     """
 
-    def __init__(self, max_round=3, higher_better=True, tolerance=1e-10):
+    def __init__(self, max_round=5, higher_better=True, tolerance=1e-10):
         self.max_round = max_round
         self.num_round = 0
 
