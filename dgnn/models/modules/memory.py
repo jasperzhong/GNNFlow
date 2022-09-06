@@ -35,7 +35,6 @@ class Memory:
             self.time_enc = TimeEncode(dim_time)
             self.time_enc.to(device)
 
-
         # memory data structure (default on CPU)
         self.node_memory = torch.zeros(
             (num_nodes, dim_memory), dtype=torch.float32, device=device)
@@ -134,7 +133,8 @@ class Memory:
     def update_mailbox(self, last_updated_nid: torch.Tensor,
                        last_updated_memory: torch.Tensor,
                        last_updated_ts: torch.Tensor,
-                       edge_feats: Optional[torch.Tensor] = None):
+                       edge_feats: Optional[torch.Tensor] = None,
+                       neg_sample_ratio: int = 1):
         """
         Update the mailbox of last updated nodes.
 
@@ -143,20 +143,23 @@ class Memory:
             last_updated_memory: new memory of the nodes
             last_updated_ts: new timestamp of the nodes
             edge_feats: edge features of the nodes
+            neg_sample_ratio: negative sampling ratio
         """
         last_updated_nid = last_updated_nid.to(self.device)
         last_updated_memory = last_updated_memory.to(self.device)
         last_updated_ts = last_updated_ts.to(self.device)
 
+        split_chunks = 2 + neg_sample_ratio
         if edge_feats is None:
             # dummy edge features
             edge_feats = torch.zeros(
-                last_updated_nid.shape[0]//3, 0, device=self.device)
+                last_updated_nid.shape[0] // split_chunks, self.dim_edge,
+                device=self.device)
 
         edge_feats = edge_feats.to(self.device)
 
-        src, dst, _ = last_updated_nid.tensor_split(3)
-        mem_src, mem_dst, _ = last_updated_memory.tensor_split(3)
+        src, dst, *_ = last_updated_nid.tensor_split(split_chunks)
+        mem_src, mem_dst, *_ = last_updated_memory.tensor_split(split_chunks)
 
         src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
         dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)

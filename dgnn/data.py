@@ -1,7 +1,7 @@
 import collections
 import random
 import re
-from typing import Iterable, Iterator, List, Union
+from typing import Iterable, Iterator, List, Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -26,7 +26,8 @@ class EdgePredictionDataset(Dataset):
         neg_sampler: the negative sampler.
     """
 
-    def __init__(self, data: pd.DataFrame, neg_sampler: RandEdgeSampler):
+    def __init__(self, data: pd.DataFrame,
+                 neg_sampler: Optional[RandEdgeSampler] = None):
         super(EdgePredictionDataset, self).__init__()
         self.data = data
         self.length = np.max(np.array(data['dst'], dtype=int))
@@ -34,13 +35,19 @@ class EdgePredictionDataset(Dataset):
 
     def __getitem__(self, index):
         row = self.data.iloc[index]
-        _, neg_batch = self.neg_sampler.sample(len(row.src.values))
-        target_nodes = np.concatenate(
-            [row.src.values, row.dst.values, neg_batch]).astype(
-            np.int64)
-        ts = np.concatenate(
-            [row.time.values, row.time.values, row.time.values]).astype(
-            np.float32)
+        if self.neg_sampler is not None:
+            _, neg_batch = self.neg_sampler.sample(len(row.src.values))
+            target_nodes = np.concatenate(
+                [row.src.values, row.dst.values, neg_batch]).astype(
+                np.int64)
+            ts = np.concatenate(
+                [row.time.values, row.time.values, row.time.values]).astype(
+                np.float32)
+        else:
+            target_nodes = np.concatenate(
+                [row.src.values, row.dst.values]).astype(np.int64)
+            ts = np.concatenate(
+                [row.time.values, row.time.values]).astype(np.float32)
         eid = row['eid'].values
         return (target_nodes, ts, eid)
 

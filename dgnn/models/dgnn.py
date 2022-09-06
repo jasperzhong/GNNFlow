@@ -3,8 +3,7 @@ from typing import List, Optional, Union
 import torch
 from dgl.heterograph import DGLBlock
 
-from dgnn.models.modules.layers import (EdgePredictor,
-                                        TransfomerAttentionLayer)
+from dgnn.models.modules.layers import EdgePredictor, TransfomerAttentionLayer
 from dgnn.models.modules.memory import Memory
 from dgnn.models.modules.memory_updater import GRUMemeoryUpdater
 
@@ -95,10 +94,12 @@ class DGNN(torch.nn.Module):
     def has_memory(self):
         return self.use_memory
 
-    def forward(self, mfgs: List[List[DGLBlock]], *args, **kwargs):
+    def forward(self, mfgs: List[List[DGLBlock]],
+                neg_sample_ratio: int = 1, *args, **kwargs):
         """
         Args:
             mfgs: list of list of DGLBlocks
+            neg_sample_ratio: negative sampling ratio 
         """
         if self.use_memory:
             b = mfgs[0][0]  # type: DGLBlock
@@ -124,11 +125,15 @@ class DGNN(torch.nn.Module):
         if self.use_memory:
             # NB: no need to do backward here
             with torch.no_grad():
-                eid = kwargs['eid']
-                edge_feats = kwargs['edge_feats']
-                edge_feats = edge_feats[eid]
+                edge_feats = None
+                if 'eid' in kwargs and 'edge_feats' in kwargs:
+                    eid = kwargs['eid']
+                    edge_feats = kwargs['edge_feats']
+                    edge_feats = edge_feats[eid]
+
                 self.memory.update_mailbox(
-                    **last_updated, edge_feats=edge_feats)
+                    **last_updated, edge_feats=edge_feats,
+                    neg_sample_ratio=neg_sample_ratio)
                 self.memory.update_memory(**last_updated)
 
         return self.edge_predictor(embed)
