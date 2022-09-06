@@ -153,7 +153,7 @@ class TransfomerAttentionLayer(torch.nn.Module):
         b.update_all(fn.copy_src('v', 'm'), fn.sum('m', 'h'))
 
         if self.use_node_feat:
-            rst = torch.cat((b.dstdata['h'], source_node_embeddings), dim=1)
+            rst = torch.cat((b.dstdata['h'], target_node_embeddings), dim=1)
         else:
             rst = b.dstdata['h']
 

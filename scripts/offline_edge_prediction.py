@@ -108,9 +108,9 @@ def main():
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values, seed=0)
+        full_data['src'].values, full_data['dst'].values)
     test_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values, seed=2)
+        full_data['src'].values, full_data['dst'].values)
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
