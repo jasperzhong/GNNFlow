@@ -117,7 +117,7 @@ class DGNN(torch.nn.Module):
             embed = out[0]
         else:
             embed = torch.stack(out, dim=0)
-            embed = self.combiner(out)[0][-1, :, :]
+            embed = self.combiner(embed)[0][-1, :, :]
 
         if self.use_memory:
             # NB: no need to do backward here
