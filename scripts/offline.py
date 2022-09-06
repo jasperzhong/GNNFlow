@@ -275,23 +275,20 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
 
 def weighted_sample(replay_ratio, df, weights, phase1,
                     i, incremental_step, retrain_interval, retrain_count):
-    # TODO: if num of val is larger than adding one...
+
     weights = torch.cat(
         (weights, torch.tensor([retrain_count] * (retrain_interval * incremental_step))))
-    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
     phase2_new_data_end = phase1 + incremental_step * i
-    phase2_train = int(phase2_new_data_end * 0.9 + 1)
+    phase2_train_end = int(phase2_new_data_end * 0.9 + 1)
     # get validation data (10% of the current data)
-    phase2_val_df = df[phase2_train: phase2_new_data_end]
+    phase2_val_df = df[phase2_train_end: phase2_new_data_end]
     # start to construct the train data
-    phase2_new_data_df = df[phase2_new_data_start: phase2_train]
-    # num of old data * replay ratio = number of data is collected
-    num_replay = int(replay_ratio * phase2_new_data_start)
-    # only use old data in weights
-    index_select = torch.multinomial(weights[:phase2_new_data_start],
+    # num of data (except val) * replay ratio = number of data is collected
+    num_replay = int(replay_ratio * phase2_train_end)
+    # use all data left in weights
+    index_select = torch.multinomial(weights[:phase2_train_end],
                                      num_replay).sort().values
-    weighted_sample_df = df.iloc[index_select.numpy()]
-    phase2_train_df = pd.concat([weighted_sample_df, phase2_new_data_df])
+    phase2_train_df = df.iloc[index_select.numpy()]
 
     return phase2_train_df, phase2_val_df, phase2_new_data_end
 
@@ -351,14 +348,14 @@ if not args.no_sample:
 creterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-train(args, path_saver, phase1_train_df, rand_sampler,
-      phase1_val_df, val_rand_sampler, sampler, model, None,
-      node_feats, edge_feats, creterion, optimizer, True, 5)
+# train(args, path_saver, phase1_train_df, rand_sampler,
+#       phase1_val_df, val_rand_sampler, sampler, model, None,
+#       node_feats, edge_feats, creterion, optimizer, True, 5)
 
-# phase1 training done
-# update rand_sampler
-rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
-                              phase1_val_df['dst'].to_numpy())
+# # phase1 training done
+# # update rand_sampler
+# rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
+#                               phase1_val_df['dst'].to_numpy())
 model.load_state_dict(torch.load(path_saver))
 
 print("phase2")
