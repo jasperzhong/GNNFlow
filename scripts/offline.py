@@ -3,6 +3,8 @@ import os
 import random
 import time
 import numpy as np
+import pandas as pd
+from pyrsistent import inc
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
 from dgnn.cache.cache import Cache
@@ -75,6 +77,7 @@ parser.add_argument('--rand_node_features', type=int, default=0,
                     help='use random node featrues')
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--retrain", type=int, default=1e10)
+parser.add_argument("--replay_ratio", type=float, default=0.5)
 args = parser.parse_args()
 
 
@@ -270,6 +273,29 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
             break
 
 
+def weighted_sample(replay_ratio, df, weights, phase1,
+                    i, incremental_step, retrain_interval, retrain_count):
+    # TODO: if num of val is larger than adding one...
+    weights = torch.cat(
+        (weights, torch.tensor([retrain_count] * (retrain_interval * incremental_step))))
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
+    phase2_new_data_end = phase1 + incremental_step * i
+    phase2_train = int(phase2_new_data_end * 0.9 + 1)
+    # get validation data (10% of the current data)
+    phase2_val_df = df[phase2_train: phase2_new_data_end]
+    # start to construct the train data
+    phase2_new_data_df = df[phase2_new_data_start: phase2_train]
+    # num of old data * replay ratio = number of data is collected
+    num_replay = int(replay_ratio * phase2_new_data_start)
+    # only use old data in weights
+    index_select = torch.multinomial(weights[:phase2_new_data_start],
+                                     num_replay).sort().values
+    weighted_sample_df = df.iloc[index_select.numpy()]
+    phase2_train_df = pd.concat([weighted_sample_df, phase2_new_data_df])
+
+    return phase2_train_df, phase2_val_df, phase2_new_data_end
+
+
 path_saver = os.path.join(get_project_root_dir(),
                           '{}_{}_offline.pt'.format(args.model, args.data))
 
@@ -342,6 +368,8 @@ with open("profile_offline_{}_ap.txt".format(args.model), "a") as f_phase2:
 # Phase2: incremental offline training
 phase2_df = df[phase1:]
 incremental_step = 1000
+retrain_count = 1.0
+weights = torch.tensor([1.0] * phase1)
 for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, incremental_step)):
     # add to rand_sampler
     src = target_nodes[:incremental_step]
@@ -362,16 +390,14 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
 
     # retrain by using previous data 50k
     if i % args.retrain == 0 and i != 0:
-        # all of the data before
-        phase2_retrain_end = phase1 + incremental_step * i
-        phase2_train = int(phase2_retrain_end * 0.9 + 1)
-        phase2_train_df = df[:phase2_train]
-        phase2_val_df = df[phase2_train: phase2_retrain_end]
+        retrain_count += 1
+        phase2_train_df, phase2_val_df, phase2_new_data_end = weighted_sample(
+            0.5, df, weights, phase1, i, incremental_step, args.retrain, retrain_count)
         # reconstruct the rand_sampler again(may not be necessary)
         rand_sampler = RandEdgeSampler(
             phase2_train_df['src'].to_numpy(), phase2_train_df['dst'].to_numpy())
         val_rand_sampler = RandEdgeSampler(
-            df[:phase2_retrain_end]['src'].to_numpy(), df[:phase2_retrain_end]['dst'].to_numpy())
+            df[:phase2_new_data_end]['src'].to_numpy(), df[:phase2_new_data_end]['dst'].to_numpy())
 
         # dgraph has been built, no need to build again
         train(args, path_saver, phase2_train_df, rand_sampler,
