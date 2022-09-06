@@ -127,7 +127,7 @@ _lastfm_default_config = {
 _gdelt_default_config = {
     "initial_pool_size": 5*GB,
     "maximum_pool_size": 10*GB,
-    "mem_resource_type": "managed",
+    "mem_resource_type": "unified",
     "minimum_block_size": 128,
     "blocks_to_preallocate": 8196,
     "insertion_policy": "insert",
@@ -140,7 +140,7 @@ _gdelt_default_config = {
 _mag_default_config = {
     "initial_pool_size": 50*GB,
     "maximum_pool_size": 100*GB,
-    "mem_resource_type": "managed",
+    "mem_resource_type": "unified",
     "minimum_block_size": 1024,
     "blocks_to_preallocate": 65536,
     "insertion_policy": "insert",
