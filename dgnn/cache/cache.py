@@ -1,5 +1,4 @@
 import torch
-import time
 
 
 class Cache:
@@ -157,7 +156,7 @@ class Cache:
                     cache_update_node_time = 0
 
             self.update_node_time = update_node_time / 1000
-            self.cache_node_ratio = cache_node_ratio_sum / i
+            self.cache_node_ratio = cache_node_ratio_sum / i if i > 0 else 0
 
         # Edge feature
         i = 0
@@ -206,7 +205,7 @@ class Cache:
                             update_edge_time += cache_update_time
                         else:
                             cache_update_time = 0
-            self.cache_edge_ratio = cache_edge_ratio_sum / i
+            self.cache_edge_ratio = cache_edge_ratio_sum / i if i > 0 else 0
 
         end.record()
         end.synchronize()

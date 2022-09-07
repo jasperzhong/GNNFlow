@@ -17,34 +17,35 @@ class TemporalSampler:
 
     def __init__(
             self, graph: DynamicGraph, fanouts: List[int],
-            strategy: str = "recent", num_snapshots: int = 1,
+            sample_strategy: str = "recent", num_snapshots: int = 1,
             snapshot_time_window: float = 0.0, prop_time: bool = False,
-            reverse: bool = False, seed: int = 1234):
+            seed: int = 1234, *args, **kwargs):
         """
         Initialize the sampler.
 
         Args:
             graph: the dynamic graph.
             fanouts: fanouts of each layer.
-            strategy: sampling strategy, 'recent' or 'uniform' (case insensitive).
+            samplle_strategy: sampling strategy, 'recent' or 'uniform' (case insensitive).
             num_snapshots: number of snapshots to sample.
             snapshot_time_window: time window every snapshot cover. It only makes
                                   sense when num_snapshots > 1.
+            prop_time: whether to propagate timestamps to neighbors.
+            seed: random seed.
         """
-        strategy = strategy.lower()
-        if strategy not in ["recent", "uniform"]:
+        sample_strategy = sample_strategy.lower()
+        if sample_strategy not in ["recent", "uniform"]:
             raise ValueError("strategy must be 'recent' or 'uniform'")
 
-        if strategy == "recent":
-            strategy = SamplingPolicy.RECENT
+        if sample_strategy == "recent":
+            sample_strategy = SamplingPolicy.RECENT
         else:
-            strategy = SamplingPolicy.UNIFORM
+            sample_strategy = SamplingPolicy.UNIFORM
 
         self._sampler = _TemporalSampler(
-            graph._dgraph, fanouts, strategy, num_snapshots,
+            graph._dgraph, fanouts, sample_strategy, num_snapshots,
             snapshot_time_window, prop_time, seed)
         self._num_snapshots = num_snapshots
-        self._reverse = reverse
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -66,24 +67,14 @@ class TemporalSampler:
         mfgs = list()
         for sampling_results_layer in sampling_results:
             for r in sampling_results_layer:
-                if not self._reverse:
-                    b = dgl.create_block(
-                        (r.col(),
-                         r.row()),
-                        num_src_nodes=r.num_src_nodes(),
-                        num_dst_nodes=r.num_dst_nodes())
-                    b.srcdata['ID'] = torch.from_numpy(r.all_nodes())
-                    b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
-                    b.srcdata['ts'] = torch.from_numpy(r.all_timestamps())
-                else:
-                    b = dgl.create_block(
-                        (r.row(),
-                         r.col()),
-                        num_src_nodes=r.num_dst_nodes(),
-                        num_dst_nodes=r.num_src_nodes())
-                    b.dstdata['ID'] = torch.from_numpy(r.all_nodes())
-                    b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
-                    b.dstdata['ts'] = torch.from_numpy(r.all_timestamps())
+                b = dgl.create_block(
+                    (r.col(),
+                     r.row()),
+                    num_src_nodes=r.num_src_nodes(),
+                    num_dst_nodes=r.num_dst_nodes())
+                b.srcdata['ID'] = torch.from_numpy(r.all_nodes())
+                b.edata['dt'] = torch.from_numpy(r.delta_timestamps())
+                b.srcdata['ts'] = torch.from_numpy(r.all_timestamps())
                 b.edata['ID'] = torch.from_numpy(r.eids())
                 mfgs.append(b)
         mfgs = list(map(list, zip(*[iter(mfgs)] * self._num_snapshots)))
