@@ -297,7 +297,7 @@ def weighted_sample(replay_ratio, df, weights, phase1,
     phase2_train_df = df.iloc[train_index.numpy()]
     phase2_val_df = df.iloc[val_index.numpy()]
 
-    return phase2_train_df, phase2_val_df, phase2_new_data_end
+    return phase2_train_df, phase2_val_df, phase2_new_data_end, weights
 
 
 path_saver = os.path.join(get_project_root_dir(),
@@ -395,7 +395,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     # retrain by using previous data 50k
     if i % args.retrain == 0 and i != 0:
         retrain_count += 1
-        phase2_train_df, phase2_val_df, phase2_new_data_end = weighted_sample(
+        phase2_train_df, phase2_val_df, phase2_new_data_end, weights = weighted_sample(
             args.replay_ratio, df, weights, phase1,
             i, incremental_step, args.retrain, retrain_count)
         # reconstruct the rand_sampler again(may not be necessary)
