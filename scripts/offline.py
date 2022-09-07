@@ -278,17 +278,24 @@ def weighted_sample(replay_ratio, df, weights, phase1,
 
     weights = torch.cat(
         (weights, torch.tensor([retrain_count] * (retrain_interval * incremental_step))))
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
     phase2_new_data_end = phase1 + incremental_step * i
-    phase2_train_end = int(phase2_new_data_end * 0.9 + 1)
-    # get validation data (10% of the current data)
-    phase2_val_df = df[phase2_train_end: phase2_new_data_end]
-    # start to construct the train data
-    # num of data (except val) * replay ratio = number of data is collected
-    num_replay = int(replay_ratio * phase2_train_end)
-    # use all data left in weights
-    index_select = torch.multinomial(weights[:phase2_train_end],
-                                     num_replay).sort().values
-    phase2_train_df = df.iloc[index_select.numpy()]
+    new_data_index = torch.arange(
+        phase2_new_data_start, phase2_new_data_end)
+    # first fetch replay samples in old data
+    # new data will all be selected to the replay samples
+    if replay_ratio != 0:
+        num_replay = int(replay_ratio * phase2_new_data_start)
+        index_select = torch.multinomial(weights[:phase2_new_data_start],
+                                         num_replay).sort().values
+        all_index = torch.cat((index_select, new_data_index))
+    else:
+        all_index = new_data_index
+    train_length = int(len(all_index) * 0.9) + 1
+    train_index = all_index[:train_length]
+    val_index = all_index[train_length:]
+    phase2_train_df = df.iloc[train_index.numpy()]
+    phase2_val_df = df.iloc[val_index.numpy()]
 
     return phase2_train_df, phase2_val_df, phase2_new_data_end
 
