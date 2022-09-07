@@ -1,25 +1,17 @@
 #!/bin/bash
+
 MODEL=$1
-RETRAIN=$2
-DATA=$3
-RATIO=$4
+DATA=$2
+CACHE="${3:-LFUCache}"
+CACHE_RATIO="${4:-0.2}" # default 20% of cache
 
-# TGAT
-if [ $MODEL == "tgat" ] || [ $MODEL == "TGAT" ];then
-    cmd="python offline.py --model TGAT --dropout 0.1 --attn-dropout 0.1 \
-                    --sample-layer 2 --sample-neighbor 10 10 \
-                    --data $DATA --sample-strategy uniform --replay_ratio $RATIO"
+cmd="python offline_edge_prediction.py --model $MODEL --data $DATA "
+
+if [ -n "$CACHE" ]; then
+    cmd="$cmd --cache $CACHE --cache-ratio $CACHE_RATIO"
 fi
-
-# TGN
-if [ $MODEL == "tgn" ] || [ $MODEL == "TGN" ];then
-    cmd="python offline.py --dataset REDDIT --model TGN"
-fi
-
-if [ -n "$RETRAIN" ]; then
-    cmd="$cmd --retrain $RETRAIN"
-fi
-
 
 echo $cmd
 exec $cmd
+
+

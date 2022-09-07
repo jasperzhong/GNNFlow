@@ -53,7 +53,7 @@ if args.profile:
     logging.basicConfig(filename='profile.log',
                         encoding='utf-8', level=logging.DEBUG)
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),

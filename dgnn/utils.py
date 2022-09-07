@@ -91,14 +91,14 @@ def load_feat(dataset: str, data_dir: Optional[str] = None):
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, rand_sampler=None, batch_size: int = 600):
+def get_batch(df: pd.DataFrame, batch_size: int, neg_sampler = None):
     group_indexes = list()
 
     group_indexes.append(np.array(np.arange(len(df)) // batch_size))
     for _, rows in df.groupby(
             group_indexes[random.randint(0, len(group_indexes) - 1)]):
-        if rand_sampler is not None:
-            _, neg_batch = rand_sampler.sample(len(rows.src.values))
+        if neg_sampler is not None:
+            _, neg_batch = neg_sampler.sample(len(rows.src.values))
             target_nodes = np.concatenate(
                 [rows.src.values, rows.dst.values, neg_batch]).astype(
                 np.int64)
@@ -199,7 +199,7 @@ def get_pinned_buffers(
     return pinned_nfeat_buffs, pinned_efeat_buffs
 
 
-class RandEdgeSampler(object):
+class RandEdgeSampler:
     def __init__(self, src_list, dst_list, seed=None):
         self.seed = None
         self.src_list = np.unique(src_list)
