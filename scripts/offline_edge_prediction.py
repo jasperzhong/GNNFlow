@@ -43,10 +43,9 @@ parser.add_argument("--profile", help="enable profiling", action="store_true")
 parser.add_argument("--seed", type=int, default=42)
 
 # optimization
-parser.add_argument("--cache", choices=cache_names,
-                    default='LFUCache', help="feature cache:" +
-                    '|'.join(cache_names) + '(default: LFUCache)')
-parser.add_argument("--cache-ratio", type=float, default=0.2,
+parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
+                    '|'.join(cache_names))
+parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
 args = parser.parse_args()
 

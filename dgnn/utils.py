@@ -81,14 +81,12 @@ def load_feat(dataset: str, data_dir: Optional[str] = None):
         node_feats = torch.load(node_feat_path)
         if node_feats.dtype == torch.bool:
             node_feats = node_feats.type(torch.float32)
-        node_feats = node_feats.pin_memory()
 
     edge_feats = None
     if os.path.exists(edge_feat_path):
         edge_feats = torch.load(edge_feat_path)
         if edge_feats.dtype == torch.bool:
             edge_feats = edge_feats.type(torch.float32)
-        edge_feats = edge_feats.pin_memory()
 
     return node_feats, edge_feats
 
