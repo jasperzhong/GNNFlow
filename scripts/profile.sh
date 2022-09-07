@@ -1,45 +1,45 @@
 #!/bin/bash
-./run.sh tgat uniform REDDIT GNNLabStaticCache
-./run.sh tgat recent REDDIT GNNLabStaticCache
-./run.sh tgat uniform WIKI GNNLabStaticCache
-./run.sh tgat recent WIKI GNNLabStaticCache
-./run.sh tgat uniform MOOC GNNLabStaticCache
-./run.sh tgat recent MOOC GNNLabStaticCache
-./run.sh tgat uniform LASTFM GNNLabStaticCache
-./run.sh tgat recent LASTFM GNNLabStaticCache
-./run.sh tgat uniform REDDIT LFUCache
-./run.sh tgat uniform REDDIT LRUCache
-./run.sh tgat uniform REDDIT FIFOCache
-./run.sh tgat recent REDDIT LFUCache
-./run.sh tgat recent REDDIT LRUCache
-./run.sh tgat recent REDDIT FIFOCache
-./run.sh tgat uniform WIKI LFUCache
-./run.sh tgat uniform WIKI LRUCache
-./run.sh tgat uniform WIKI FIFOCache
-./run.sh tgat recent WIKI LFUCache
-./run.sh tgat recent WIKI LRUCache
-./run.sh tgat recent WIKI FIFOCache
-./run.sh tgat uniform MOOC LRUCache
-./run.sh tgat uniform MOOC LFUCache
-./run.sh tgat uniform MOOC FIFOCache
-./run.sh tgat recent MOOC LRUCache
-./run.sh tgat recent MOOC LFUCache
-./run.sh tgat recent MOOC FIFOCache
-./run.sh tgat uniform LASTFM LRUCache
-./run.sh tgat uniform LASTFM LFUCache
-./run.sh tgat uniform LASTFM FIFOCache
-./run.sh tgat recent LASTFM LRUCache
-./run.sh tgat recent LASTFM LFUCache
-./run.sh tgat recent LASTFM FIFOCache
-./run.sh tgat uniform MAG LRUCache
-./run.sh tgat uniform MAG LFUCache
-./run.sh tgat uniform MAG FIFOCache
-./run.sh tgat recent MAG LRUCache
-./run.sh tgat recent MAG LFUCache
-./run.sh tgat recent MAG FIFOCache
-./run.sh tgat uniform GDELT LRUCache
-./run.sh tgat uniform GDELT LFUCache
-./run.sh tgat uniform GDELT FIFOCache
-./run.sh tgat recent GDELT LRUCache
-./run.sh tgat recent GDELT LFUCache
-./run.sh tgat recent GDELT FIFOCache
+./run.sh TGAT REDDIT GNNLabStaticCache
+./run.sh TGAT REDDIT GNNLabStaticCache
+./run.sh TGAT WIKI GNNLabStaticCache
+./run.sh TGAT WIKI GNNLabStaticCache
+./run.sh TGAT MOOC GNNLabStaticCache
+./run.sh TGAT MOOC GNNLabStaticCache
+./run.sh TGAT LASTFM GNNLabStaticCache
+./run.sh TGAT LASTFM GNNLabStaticCache
+./run.sh TGAT REDDIT LFUCache
+./run.sh TGAT REDDIT LRUCache
+./run.sh TGAT REDDIT FIFOCache
+./run.sh TGAT REDDIT LFUCache
+./run.sh TGAT REDDIT LRUCache
+./run.sh TGAT REDDIT FIFOCache
+./run.sh TGAT WIKI LFUCache
+./run.sh TGAT WIKI LRUCache
+./run.sh TGAT WIKI FIFOCache
+./run.sh TGAT WIKI LFUCache
+./run.sh TGAT WIKI LRUCache
+./run.sh TGAT WIKI FIFOCache
+./run.sh TGAT MOOC LRUCache
+./run.sh TGAT MOOC LFUCache
+./run.sh TGAT MOOC FIFOCache
+./run.sh TGAT MOOC LRUCache
+./run.sh TGAT MOOC LFUCache
+./run.sh TGAT MOOC FIFOCache
+./run.sh TGAT LASTFM LRUCache
+./run.sh TGAT LASTFM LFUCache
+./run.sh TGAT LASTFM FIFOCache
+./run.sh TGAT LASTFM LRUCache
+./run.sh TGAT LASTFM LFUCache
+./run.sh TGAT LASTFM FIFOCache
+./run.sh TGAT MAG LRUCache
+./run.sh TGAT MAG LFUCache
+./run.sh TGAT MAG FIFOCache
+./run.sh TGAT MAG LRUCache
+./run.sh TGAT MAG LFUCache
+./run.sh TGAT MAG FIFOCache
+./run.sh TGAT GDELT LRUCache
+./run.sh TGAT GDELT LFUCache
+./run.sh TGAT GDELT FIFOCache
+./run.sh TGAT GDELT LRUCache
+./run.sh TGAT GDELT LFUCache
+./run.sh TGAT GDELT FIFOCache

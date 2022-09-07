@@ -1,22 +1,16 @@
+import itertools
 import unittest
 
 import numpy as np
-
 from parameterized import parameterized
-import itertools
+
+from dgnn.config import get_default_config
 from dgnn.utils import build_dynamic_graph, load_dataset
 
 MB = 1 << 20
 GB = 1 << 30
 
-default_config = {
-    "initial_pool_size": 20 * MB,
-    "maximum_pool_size": 50 * MB,
-    "mem_resource_type": "cuda",
-    "minimum_block_size": 64,
-    "blocks_to_preallocate": 1024,
-    "insertion_policy": "insert",
-}
+_ , default_config = get_default_config("TGN", "REDDIT")
 
 
 class TestBuildGraph(unittest.TestCase):

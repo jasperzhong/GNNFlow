@@ -2,22 +2,18 @@ import time
 import unittest
 
 import numpy as np
-import pandas as pd
-from parameterized import parameterized
 from torch.utils.data import BatchSampler, DataLoader, SequentialSampler
 
-from dgnn.dataset import DynamicGraphDataset, default_collate_ndarray
-from dgnn.sampler import BatchSamplerReorder
+from dgnn.data import (EdgePredictionDataset, RandomStartBatchSampler,
+                       default_collate_ndarray)
 from dgnn.utils import get_batch, load_dataset
 
 
 class TestDataset(unittest.TestCase):
-
-    # @parameterized.expand(itertools.product([0, 2, 4, 8, 16, 32]))
     def test_loader(self, num_workers=0):
         train_df, val_df, test_df, df = load_dataset('REDDIT')
 
-        ds = DynamicGraphDataset(train_df)
+        ds = EdgePredictionDataset(train_df)
 
         sampler = BatchSampler(SequentialSampler(
             ds), batch_size=600, drop_last=False)
@@ -55,9 +51,9 @@ class TestDataset(unittest.TestCase):
     def test_sampler(self):
         train_df, val_df, test_df, df = load_dataset('REDDIT')
 
-        ds = DynamicGraphDataset(train_df)
+        ds = EdgePredictionDataset(train_df)
 
-        sampler = BatchSamplerReorder(SequentialSampler(
+        sampler = RandomStartBatchSampler(SequentialSampler(
             ds), batch_size=600, drop_last=False, num_chunks=8)
 
         a = DataLoader(dataset=ds, sampler=sampler,

@@ -1,11 +1,11 @@
 import os
 import random
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
-import dgl
 import numpy as np
 import pandas as pd
 import torch
+from dgl.heterograph import DGLBlock
 
 from .dynamic_graph import DynamicGraph
 
@@ -14,10 +14,11 @@ def get_project_root_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame,
-                                                                        pd.DataFrame, pd.DataFrame]:
+def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Loads the dataset and returns the dataframes for the train, validation, test and
+    whole dataset.
 
 
     Args:
@@ -25,44 +26,61 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> Tuple[pd.DataF
         data_dir: the directory where the dataset is stored.
 
     Returns:
-        train_df: the dataframe for the train set.
-        val_df: the dataframe for the validation set.
-        test_df: the dataframe for the test set.
-        df: the dataframe for the whole dataset.
+        train_data: the dataframe for the train dataset.
+        val_data: the dataframe for the validation dataset.
+        test_data: the dataframe for the test dataset.
+        full_data: the dataframe for the whole dataset.
     """
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     path = os.path.join(data_dir, dataset, 'edges.csv')
-    if os.path.exists(path):
-        df = pd.read_csv(path)
-    else:
+    if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
-    train_edge_end = df[df['ext_roll'].gt(0)].index[0]
-    val_edge_end = df[df['ext_roll'].gt(1)].index[0]
-    train_df = df[:train_edge_end]
-    val_df = df[train_edge_end:val_edge_end]
-    test_df = df[val_edge_end:]
+    full_data = pd.read_csv(path)
+    assert isinstance(full_data, pd.DataFrame)
 
-    return train_df, val_df, test_df, df
+    full_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
+    train_end = full_data['ext_roll'].values.searchsorted(1)
+    val_end = full_data['ext_roll'].values.searchsorted(2)
+    train_data = full_data[:train_end]
+    val_data = full_data[train_end:val_end]
+    test_data = full_data[val_end:]
+    return train_data, val_data, test_data, full_data
 
 
-def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0, edge_count=0, node_count=0) -> Tuple[torch.Tensor, torch.Tensor]:
+def load_feat(dataset: str, data_dir: Optional[str] = None):
+    """
+    Loads the node and edge features for the given dataset.
 
+    NB: either node_feats or edge_feats can be None, but not both.
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+
+    Returns:
+        node_feats: the node features. (None if not available)
+        edge_feats: the edge features. (None if not available)
+    """
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     dataset_path = os.path.join(data_dir, dataset)
-
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
+
+    if not os.path.exists(node_feat_path) and \
+            not os.path.exists(edge_feat_path):
+        raise ValueError("Both {} and {} do not exist".format(
+            node_feat_path, edge_feat_path))
+
     node_feats = None
     if os.path.exists(node_feat_path):
         node_feats = torch.load(node_feat_path)
         if node_feats.dtype == torch.bool:
             node_feats = node_feats.type(torch.float32)
-
-    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
 
     edge_feats = None
     if os.path.exists(edge_feat_path):
@@ -70,35 +88,15 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
         if edge_feats.dtype == torch.bool:
             edge_feats = edge_feats.type(torch.float32)
 
-    if rand_de > 0 and edge_feats is None:
-        edge_feats = torch.randn(edge_count, rand_de)
-        # if dataset == 'LASTFM':
-        #     edge_feats = torch.randn(1293103, rand_de)
-        # elif dataset == 'MOOC':
-        #     edge_feats = torch.randn(411749, rand_de)
-    if rand_dn > 0 and node_feats is None:
-        node_feats = torch.randn(node_count, rand_dn)
-        # if dataset == 'LASTFM':
-        #     node_feats = torch.randn(1980, rand_dn)
-        # elif dataset == 'MOOC':
-        #     node_feats = torch.randn(7144, rand_dn)
-
-    if node_feats is not None:
-        node_feats = node_feats.pin_memory()
-    if edge_feats is not None:
-        edge_feats = edge_feats.pin_memory()
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, rand_sampler = None, batch_size: int = 600):
+def get_batch(df: pd.DataFrame, rand_sampler=None, batch_size: int = 600):
     group_indexes = list()
 
     group_indexes.append(np.array(np.arange(len(df)) // batch_size))
     for _, rows in df.groupby(
             group_indexes[random.randint(0, len(group_indexes) - 1)]):
-        # np.random.randint(self.num_nodes, size=n)
-        # TODO: wrap a neglink sampler
-        length = np.max(np.array(df['dst'], dtype=int))
         if rand_sampler is not None:
             _, neg_batch = rand_sampler.sample(len(rows.src.values))
             target_nodes = np.concatenate(
@@ -114,9 +112,8 @@ def get_batch(df: pd.DataFrame, rand_sampler = None, batch_size: int = 600):
             ts = np.concatenate(
                 [rows.time.values, rows.time.values]).astype(
                 np.float32)
-        # TODO: align with our edge id
-        eid = rows['Unnamed: 0'].values
 
+        eid = rows['eid'].values
         yield target_nodes, ts, eid
 
 
@@ -128,7 +125,8 @@ def build_dynamic_graph(
         minimum_block_size: int,
         blocks_to_preallocate: int,
         insertion_policy: str,
-        add_reverse: bool = False) -> DynamicGraph:
+        undirected: bool,
+        *args, **kwargs) -> DynamicGraph:
     """
     Builds a dynamic graph from the given dataframe.
 
@@ -142,11 +140,11 @@ def build_dynamic_graph(
         blocks_to_preallocate: optional, int, the number of blocks to preallocate.
         insertion_policy: the insertion policy to use
             valid options: ("insert" or "replace") (case insensitive).
-        add_reverse: optional, bool, whether to add reverse edges.
+        undirected: whether the graph is undirected.
     """
-    src = dataset_df['src'].to_numpy(dtype=np.int64)
-    dst = dataset_df['dst'].to_numpy(dtype=np.int64)
-    ts = dataset_df['time'].to_numpy(dtype=np.float32)
+    src = dataset_df['src'].values.astype(np.int64)
+    dst = dataset_df['dst'].values.astype(np.int64)
+    ts = dataset_df['time'].values.astype(np.float32)
 
     dgraph = DynamicGraph(
         initial_pool_size,
@@ -156,113 +154,33 @@ def build_dynamic_graph(
         blocks_to_preallocate,
         insertion_policy,
         src, dst, ts,
-        add_reverse)
+        undirected)
 
     return dgraph
 
 
-def prepare_input(
-        mfgs, node_feats, edge_feats, combine_first=False, pinned=False,
-        nfeat_buffs=None, efeat_buffs=None, nids=None, eids=None):
-    if combine_first:
-        for i in range(len(mfgs[0])):
-            if mfgs[0][i].num_src_nodes() > mfgs[0][i].num_dst_nodes():
-                num_dst = mfgs[0][i].num_dst_nodes()
-                ts = mfgs[0][i].srcdata['ts'][num_dst:]
-                nid = mfgs[0][i].srcdata['ID'][num_dst:].float()
-                nts = torch.stack([ts, nid], dim=1)
-                unts, idx = torch.unique(nts, dim=0, return_inverse=True)
-                uts = unts[:, 0]
-                unid = unts[:, 1]
-                # import pdb; pdb.set_trace()
-                b = dgl.create_block(
-                    (idx + num_dst, mfgs[0][i].edges()[1]),
-                    num_src_nodes=unts.shape[0] + num_dst, num_dst_nodes=num_dst,
-                    device=torch.device('cuda:0'))
-                b.srcdata['ts'] = torch.cat(
-                    [mfgs[0][i].srcdata['ts'][:num_dst], uts], dim=0)
-                b.srcdata['ID'] = torch.cat(
-                    [mfgs[0][i].srcdata['ID'][:num_dst], unid], dim=0)
-                b.edata['dt'] = mfgs[0][i].edata['dt']
-                b.edata['ID'] = mfgs[0][i].edata['ID']
-                mfgs[0][i] = b
-    t_idx = 0
-    t_cuda = 0
-    i = 0
+def prepare_input(mfgs, node_feats, edge_feats):
     if node_feats is not None:
         for b in mfgs[0]:
-            if pinned:
-                if nids is not None:
-                    idx = nids[i]
-                else:
-                    idx = b.srcdata['ID'].cpu().long()
-                torch.index_select(node_feats, 0, idx,
-                                   out=nfeat_buffs[i][:idx.shape[0]])
-                b.srcdata['h'] = nfeat_buffs[i][
-                    : idx.shape[0]].cuda(
-                    non_blocking=True)
-                i += 1
-            else:
-                srch = node_feats[b.srcdata['ID'].long()].float()
-                b.srcdata['h'] = srch.cuda()
-    i = 0
+            srch = node_feats[b.srcdata['ID']].float()
+            b.srcdata['h'] = srch.cuda()
+
     if edge_feats is not None:
         for mfg in mfgs:
             for b in mfg:
-                if b.num_src_nodes() > b.num_dst_nodes():
-                    if pinned:
-                        if eids is not None:
-                            idx = eids[i]
-                        else:
-                            idx = b.edata['ID'].cpu().long()
-                        torch.index_select(
-                            edge_feats, 0, idx,
-                            out=efeat_buffs[i][: idx.shape[0]])
-                        b.edata['f'] = efeat_buffs[i][
-                            : idx.shape[0]].cuda(
-                            non_blocking=True)
-                        i += 1
-                    else:
-                        b.edata['f'] = edge_feats[b.edata['ID'].long()
-                                                  ].float().cuda()
+                b.edata['f'] = edge_feats[b.edata['ID']].float()
     return mfgs
 
 
-def mfgs_to_cuda(mfgs):
+def mfgs_to_cuda(mfgs: List[List[DGLBlock]], device: Union[str, torch.device]):
     for mfg in mfgs:
         for i in range(len(mfg)):
-            mfg[i] = mfg[i].to('cuda:0')
+            mfg[i] = mfg[i].to(device)
     return mfgs
 
 
-def node_to_dgl_blocks(target_nodes, ts, cuda=True):
-    target_nodes = torch.tensor(target_nodes)
-    ts = torch.tensor(ts)
-    mfgs = list()
-    b = dgl.create_block(
-        ([],
-         []),
-        num_src_nodes=target_nodes.shape[0],
-        num_dst_nodes=target_nodes.shape[0])
-    b.srcdata['ID'] = target_nodes
-    b.srcdata['ts'] = ts
-    if cuda:
-        mfgs.insert(0, [b.to('cuda:0')])
-    else:
-        mfgs.insert(0, [b])
-    return mfgs
-
-
-class NegLinkSampler:
-
-    def __init__(self, num_nodes):
-        self.num_nodes = num_nodes
-
-    def sample(self, n):
-        return np.random.randint(self.num_nodes, size=n)
-
-
-def get_pinned_buffers(fanouts, sample_history, batch_size, node_feats, edge_feats):
+def get_pinned_buffers(
+        fanouts, sample_history, batch_size, node_feats, edge_feats):
     pinned_nfeat_buffs = list()
     pinned_efeat_buffs = list()
     limit = int(batch_size * 3.3)
@@ -307,3 +225,36 @@ class RandEdgeSampler(object):
     def add_src_dst_list(self, src, dst):
         self.src_list = np.unique(np.concatenate((self.src_list, src)))
         self.dst_list = np.unique(np.concatenate((self.dst_list, dst)))
+
+
+class EarlyStopMonitor:
+    """
+    Monitor the early stopping criteria.
+    """
+
+    def __init__(self, max_round=5, higher_better=True, tolerance=1e-10):
+        self.max_round = max_round
+        self.num_round = 0
+
+        self.epoch_count = 0
+        self.best_epoch = 0
+
+        self.last_best = None
+        self.higher_better = higher_better
+        self.tolerance = tolerance
+
+    def early_stop_check(self, curr_val):
+        if not self.higher_better:
+            curr_val *= -1
+        if self.last_best is None:
+            self.last_best = curr_val
+        elif (curr_val - self.last_best) / np.abs(self.last_best) > self.tolerance:
+            self.last_best = curr_val
+            self.num_round = 0
+            self.best_epoch = self.epoch_count
+        else:
+            self.num_round += 1
+
+        self.epoch_count += 1
+
+        return self.num_round >= self.max_round
