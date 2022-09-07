@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 import torch
 from dgl.heterograph import DGLBlock
@@ -82,6 +82,29 @@ class Memory:
         self.mailbox_ts[self.num_nodes:].fill_(0)
 
         self.num_nodes = num_nodes
+
+    def backup(self) -> Dict:
+        """
+        Backup the current memory and mailbox.
+        """
+        return {
+            'node_memory': self.node_memory.clone(),
+            'node_memory_ts': self.node_memory_ts.clone(),
+            'mailbox': self.mailbox.clone(),
+            'mailbox_ts': self.mailbox_ts.clone(),
+        }
+
+    def restore(self, backup: Dict):
+        """
+        Restore the memory and mailbox from the backup.
+
+        Args:
+            backup: backup of the memory and mailbox
+        """
+        self.node_memory.copy_(backup['node_memory'])
+        self.node_memory_ts.copy_(backup['node_memory_ts'])
+        self.mailbox.copy_(backup['mailbox'])
+        self.mailbox_ts.copy_(backup['mailbox_ts'])
 
     def prepare_input(self, b: DGLBlock):
         """

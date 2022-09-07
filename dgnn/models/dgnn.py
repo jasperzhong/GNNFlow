@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import torch
 from dgl.heterograph import DGLBlock
@@ -93,6 +93,15 @@ class DGNN(torch.nn.Module):
 
     def has_memory(self):
         return self.use_memory
+
+    def backup_memory(self) -> Dict:
+        if self.use_memory:
+            return self.memory.backup()
+        return {}
+
+    def restore_memory(self, backup: Dict):
+        if self.use_memory:
+            self.memory.restore(backup)
 
     def forward(self, mfgs: List[List[DGLBlock]],
                 neg_sample_ratio: int = 1, *args, **kwargs):
