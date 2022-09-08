@@ -19,10 +19,9 @@ from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        default_collate_ndarray)
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler,
-                        get_pinned_buffers, build_dynamic_graph,
-                        get_project_root_dir, load_dataset, load_feat,
-                        mfgs_to_cuda)
+from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
+                        get_pinned_buffers, get_project_root_dir, load_dataset,
+                        load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT']
@@ -264,7 +263,7 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
             logging.info(
                 "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
 
-        if rank == 0 and early_stopper.early_stop_check(val_ap):
+        if early_stopper.early_stop_check(val_ap):
             logging.info("Early stop at epoch {}".format(e))
             break
 
