@@ -51,7 +51,7 @@ args = parser.parse_args()
 
 if args.profile:
     logging.basicConfig(filename='profile.log',
-                        encoding='utf-8', level=logging.DEBUG)
+                        level=logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
 logging.info(args)

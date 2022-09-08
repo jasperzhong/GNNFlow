@@ -52,8 +52,9 @@ parser.add_argument("--cache-ratio", type=float, default=0,
 args = parser.parse_args()
 
 if args.profile:
-    logging.basicConfig(filename='profile.log',
-                        encoding='utf-8', level=logging.DEBUG)
+    logging.basicConfig(filename='profile_{0}_{1}.log'.format(
+        args.model, args.data),
+        encoding='utf-8', level=logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
 logging.info(args)
@@ -178,15 +179,11 @@ def main():
         logging.info('Loading model at epoch {}...'.format(best_e))
         model.load_state_dict(torch.load(checkpoint_path))
 
-        # To update the memory
-        # if model.has_memory():
-        #     model.reset()
-        #     evaluate(train_loader, sampler, model, criterion, cache, device)
-        #     evaluate(val_loader, sampler, model, criterion, cache, device)
-
         ap, auc = evaluate(test_loader, sampler, model,
                            criterion, node_feats, edge_feats, device)
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+
+    torch.distributed.barrier()
 
 
 def train(train_loader, val_loader, train_sampler, sampler, model,
