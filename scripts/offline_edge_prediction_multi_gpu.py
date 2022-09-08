@@ -20,8 +20,8 @@ from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
-                        prepare_input, get_project_root_dir, load_dataset,
-                        load_feat, mfgs_to_cuda)
+                        get_project_root_dir, load_dataset, load_feat,
+                        mfgs_to_cuda, prepare_input)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT']
@@ -126,7 +126,7 @@ def main():
     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
 
     batch_size = data_config['batch_size']
-    args.lr = args.lr * math.sqrt(world_size)
+    args.lr = args.lr * math.sqrt(world_size) * math.sqrt(math.sqrt(world_size))
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
     train_sampler = DistributedBatchSampler(
         SequentialSampler(train_ds), batch_size=batch_size,
@@ -259,6 +259,8 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
 
     if rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+
+    torch.distributed.barrier()
     return best_e
 
 
