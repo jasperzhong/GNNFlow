@@ -38,9 +38,9 @@ parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
-                    type=int, default=0)
+                    type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
-                    type=int, default=1)
+                    type=int, default=8)
 parser.add_argument("--profile", help="enable profiling", action="store_true")
 parser.add_argument("--seed", type=int, default=42)
 
@@ -130,7 +130,7 @@ def main():
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
     train_sampler = DistributedBatchSampler(
         SequentialSampler(train_ds), batch_size=batch_size,
-        drop_last=False, rank=rank, world_size=world_size)
+        drop_last=False, rank=rank, world_size=world_size, num_chunks=args.num_chunks)
     val_sampler = DistributedBatchSampler(
         SequentialSampler(val_ds),
         batch_size=batch_size, drop_last=False, rank=rank, world_size=world_size)
