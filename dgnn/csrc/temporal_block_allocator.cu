@@ -4,6 +4,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pinned_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/shared_memory_resource.hpp>
 
 #include "logging.h"
 #include "temporal_block_allocator.h"
@@ -13,8 +14,10 @@ namespace dgnn {
 
 TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t initial_pool_size, std::size_t maximum_pool_size,
-    std::size_t minium_block_size, MemoryResourceType mem_resource_type)
+    std::size_t minium_block_size, MemoryResourceType mem_resource_type,
+    int device)
     : minium_block_size_(minium_block_size) {
+  CUDA_CALL(cudaSetDevice(device));
   // create a memory pool
   switch (mem_resource_type) {
     case MemoryResourceType::kMemoryResourceTypeCUDA: {
@@ -40,6 +43,16 @@ TemporalBlockAllocator::TemporalBlockAllocator(
       mem_resources_.push(mem_res);
       auto pool_res =
           new rmm::mr::pool_memory_resource<rmm::mr::pinned_memory_resource>(
+              mem_res, initial_pool_size, maximum_pool_size);
+      mem_resources_.push(pool_res);
+      break;
+    }
+    case MemoryResourceType::kMemoryResourceTypeShared: {
+      // NB: device ID is equal to the local rank
+      auto mem_res = new rmm::mr::shared_memory_resource(device);
+      mem_resources_.push(mem_res);
+      auto pool_res =
+          new rmm::mr::pool_memory_resource<rmm::mr::shared_memory_resource>(
               mem_res, initial_pool_size, maximum_pool_size);
       mem_resources_.push(pool_res);
       break;
