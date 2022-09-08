@@ -41,7 +41,6 @@ parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
                     type=int, default=8)
-parser.add_argument("--profile", help="enable profiling", action="store_true")
 parser.add_argument("--seed", type=int, default=42)
 
 # optimization
@@ -50,11 +49,6 @@ parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
 parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
 args = parser.parse_args()
-
-if args.profile:
-    logging.basicConfig(filename='profile_{0}_{1}.log'.format(
-        args.model, args.data),
-        encoding='utf-8', level=logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
 logging.info(args)
@@ -73,7 +67,7 @@ def set_seed(seed):
 set_seed(args.seed)
 
 
-def evaluate(dataloader, sampler, model, criterion, node_feats, edge_feats, device):
+def evaluate(dataloader, sampler, model, criterion, cache, device):
     model.eval()
     val_losses = list()
     aps = list()
@@ -83,10 +77,10 @@ def evaluate(dataloader, sampler, model, criterion, node_feats, edge_feats, devi
         total_loss = 0
         for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
-            mfgs = prepare_input(mfgs, node_feats, edge_feats)
             mfgs_to_cuda(mfgs, device)
+            mfgs = cache.fetch_feature(mfgs)
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=edge_feats)
+                mfgs, eid=eid, edge_feats=cache.edge_features)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -167,27 +161,33 @@ def main():
     model = torch.nn.parallel.DistributedDataParallel(
         model, device_ids=[local_rank])
     logging.debug("device: {}".format(device))
+
+    # Cache
+    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
+                                        num_edges, node_feats,
+                                        edge_feats, device)
+
     sampler = TemporalSampler(dgraph, **model_config)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
 
     best_e = train(train_loader, val_loader, train_sampler, sampler,
-                   model, optimizer, criterion, node_feats, edge_feats, device)
+                   model, optimizer, criterion, cache, device)
 
     if rank == 0:
         logging.info('Loading model at epoch {}...'.format(best_e))
         model.load_state_dict(torch.load(checkpoint_path))
 
         ap, auc = evaluate(test_loader, sampler, model,
-                           criterion, node_feats, edge_feats, device)
+                           criterion, cache, device)
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     torch.distributed.barrier()
 
 
 def train(train_loader, val_loader, train_sampler, sampler, model,
-          optimizer, criterion, node_feats, edge_feats, device):
+          optimizer, criterion, cache, device):
 
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
@@ -199,6 +199,8 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
     for e in range(args.epoch):
         model.train()
         total_loss = 0
+        cache_edge_ratio_sum = 0
+        cache_node_ratio_sum = 0
 
         epoch_time_start = time.time()
         model.train()
@@ -206,13 +208,14 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
             mfgs = sampler.sample(target_nodes, ts)
-            mfgs = prepare_input(mfgs, node_feats, edge_feats)
+
             mfgs_to_cuda(mfgs, device)
+            mfgs = cache.fetch_feature(mfgs)
 
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=edge_feats)
+                mfgs, eid=eid, edge_feats=cache.edge_features)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -220,9 +223,11 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
             loss.backward()
             optimizer.step()
 
+            cache_edge_ratio_sum += cache.cache_edge_ratio
+            cache_node_ratio_sum += cache.cache_node_ratio
+
             if (i+1) % 100 == 0 and rank == 0:
-                logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f}'.format(
-                    e + 1, args.epoch, i + 1, int(len(train_loader)/world_size), (i+1) * len(target_nodes) * world_size / (time.time() - epoch_time_start), total_loss / (i + 1) / world_size))
+                logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache edge ratio {:.4f} | Cache node ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(train_loader)/world_size), (i+1) * len(target_nodes) * world_size / (time.time() - epoch_time_start), total_loss / (i + 1) / world_size, cache_edge_ratio_sum / (i + 1), cache_node_ratio_sum / (i + 1)))
 
         epoch_time_end = time.time()
         epoch_time = epoch_time_end - epoch_time_start
@@ -231,17 +236,18 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
         # Validation
         val_start = time.time()
         val_ap, val_auc = evaluate(
-            val_loader, sampler, model, criterion, node_feats, edge_feats, device)
+            val_loader, sampler, model, criterion, cache, device)
 
         val_res = torch.tensor([val_ap, val_auc]).to(device)
         torch.distributed.all_reduce(val_res)
         val_res /= world_size
+        val_ap, val_auc = val_res[0].item(), val_res[1].item()
 
         val_end = time.time()
         val_time = val_end - val_start
         if rank == 0:
             logging.info("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
-                         .format(epoch_time, val_time, val_res[0], val_res[1]))
+                         .format(epoch_time, val_time, val_ap, val_auc))
 
         if rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e

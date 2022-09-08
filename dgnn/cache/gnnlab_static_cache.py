@@ -61,10 +61,14 @@ class GNNLabStaticCache(Cache):
             # Init parameters related to feature fetching
             cache_node_index = torch.arange(
                 self.node_capacity, dtype=torch.int64).to(self.device)
-            torch.index_select(self.node_features, 0, cache_node_id.to('cpu'),
-                               out=self.pinned_nfeat_buffs[0][:cache_node_id.shape[0]])
-            self.cache_node_buffer[cache_node_index] = self.pinned_nfeat_buffs[0][:cache_node_id.shape[0]].to(
-                self.device, non_blocking=True)
+            if self.pinned_nfeat_buffs is not None:
+                torch.index_select(self.node_features, 0, cache_node_id.to('cpu'),
+                                   out=self.pinned_nfeat_buffs[0][:cache_node_id.shape[0]])
+                self.cache_node_buffer[cache_node_index] = self.pinned_nfeat_buffs[0][:cache_node_id.shape[0]].to(
+                    self.device, non_blocking=True)
+            else:
+                self.cache_node_buffer[cache_node_index] = self.node_features[cache_node_id].to(
+                    self.device, non_blocking=True)
             self.cache_node_flag[cache_node_id] = True
             self.cache_node_map[cache_node_id] = cache_node_index
 
