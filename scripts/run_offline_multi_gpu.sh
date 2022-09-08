@@ -14,6 +14,6 @@ cmd="torchrun \
     --cache $CACHE --cache-ratio $CACHE_RATIO"
 
 echo $cmd
-OMP_NUM_THREADS=8 exec $cmd >> $MODEL-$DATA-$CACHE-$CACHE_RATIO.log 2>&1
+OMP_NUM_THREADS=8 exec $cmd > $MODEL-$DATA-$CACHE-$CACHE_RATIO.log 2>&1
 
 

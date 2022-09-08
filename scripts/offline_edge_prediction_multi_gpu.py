@@ -19,9 +19,10 @@ from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        default_collate_ndarray)
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
+from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler,
+                        get_pinned_buffers, build_dynamic_graph,
                         get_project_root_dir, load_dataset, load_feat,
-                        mfgs_to_cuda, prepare_input)
+                        mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT']
@@ -162,10 +163,16 @@ def main():
         model, device_ids=[local_rank])
     logging.debug("device: {}".format(device))
 
+    pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
+        model_config['fanouts'], model_config['num_snapshots'], batch_size,
+        node_feats, edge_feats)
+
     # Cache
     cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
                                         num_edges, node_feats,
-                                        edge_feats, device)
+                                        edge_feats, device,
+                                        pinned_nfeat_buffs,
+                                        pinned_efeat_buffs)
 
     sampler = TemporalSampler(dgraph, **model_config)
 
@@ -227,7 +234,8 @@ def train(train_loader, val_loader, train_sampler, sampler, model,
             cache_node_ratio_sum += cache.cache_node_ratio
 
             if (i+1) % 100 == 0 and rank == 0:
-                logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache edge ratio {:.4f} | Cache node ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(train_loader)/world_size), (i+1) * len(target_nodes) * world_size / (time.time() - epoch_time_start), total_loss / (i + 1) / world_size, cache_edge_ratio_sum / (i + 1), cache_node_ratio_sum / (i + 1)))
+                logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache edge ratio {:.4f} | Cache node ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
+                    train_loader)/world_size), (i+1) * len(target_nodes) * world_size / (time.time() - epoch_time_start), total_loss / (i + 1) / world_size, cache_edge_ratio_sum / (i + 1), cache_node_ratio_sum / (i + 1)))
 
         epoch_time_end = time.time()
         epoch_time = epoch_time_end - epoch_time_start
