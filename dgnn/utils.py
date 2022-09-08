@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 from typing import List, Optional, Tuple, Union
@@ -5,7 +6,9 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import torch
+import torch.distributed
 from dgl.heterograph import DGLBlock
+from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
 from .dynamic_graph import DynamicGraph
 
@@ -50,7 +53,8 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     return train_data, val_data, test_data, full_data
 
 
-def load_feat(dataset: str, data_dir: Optional[str] = None):
+def load_feat(dataset: str, data_dir: Optional[str] = None,
+              shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1):
     """
     Loads the node and edge features for the given dataset.
 
@@ -59,6 +63,9 @@ def load_feat(dataset: str, data_dir: Optional[str] = None):
     Args:
         dataset: the name of the dataset.
         data_dir: the directory where the dataset is stored.
+        shared_memory: whether to use shared memory.
+        local_rank: the local rank of the process.
+        local_world_size: the local world size of the process.
 
     Returns:
         node_feats: the node features. (None if not available)
@@ -77,16 +84,58 @@ def load_feat(dataset: str, data_dir: Optional[str] = None):
             node_feat_path, edge_feat_path))
 
     node_feats = None
-    if os.path.exists(node_feat_path):
-        node_feats = torch.load(node_feat_path)
-        if node_feats.dtype == torch.bool:
-            node_feats = node_feats.type(torch.float32)
-
     edge_feats = None
-    if os.path.exists(edge_feat_path):
-        edge_feats = torch.load(edge_feat_path)
-        if edge_feats.dtype == torch.bool:
-            edge_feats = edge_feats.type(torch.float32)
+    if not shared_memory or (shared_memory and local_rank == 0):
+        if os.path.exists(node_feat_path):
+            node_feats = torch.load(node_feat_path)
+            if node_feats.dtype == torch.bool:
+                node_feats = node_feats.type(torch.float32)
+
+        if os.path.exists(edge_feat_path):
+            edge_feats = torch.load(edge_feat_path)
+            if edge_feats.dtype == torch.bool:
+                edge_feats = edge_feats.type(torch.float32)
+
+    if shared_memory:
+        node_feats_shm, edge_feats_shm = None, None
+        if local_rank == 0:
+            if node_feats is not None:
+                node_feats_shm = create_shared_mem_array(
+                    'node_feats', node_feats.shape, node_feats.dtype)
+                node_feats_shm[:] = node_feats[:]
+            if edge_feats is not None:
+                edge_feats_shm = create_shared_mem_array(
+                    'edge_feats', edge_feats.shape, edge_feats.dtype)
+                edge_feats_shm[:] = edge_feats[:]
+            # broadcast the shape and dtype of the features
+            node_feats_shape = node_feats.shape if node_feats is not None else None
+            edge_feats_shape = edge_feats.shape if edge_feats is not None else None
+            torch.distributed.broadcast_object_list(
+                [node_feats_shape, edge_feats_shape], src=0)
+
+        if local_rank != 0:
+            shapes = [None, None]
+            torch.distributed.broadcast_object_list(
+                shapes, src=0)
+            node_feats_shape, edge_feats_shape = shapes
+            if node_feats_shape is not None:
+                node_feats_shm = get_shared_mem_array(
+                    'node_feats', node_feats_shape, torch.float32)
+            if edge_feats_shape is not None:
+                edge_feats_shm = get_shared_mem_array(
+                    'edge_feats', edge_feats_shape, torch.float32)
+
+        torch.distributed.barrier()
+        if node_feats_shm is not None:
+            logging.info("rank {} node_feats_shm shape {}".format(
+                local_rank, node_feats_shm.shape))
+
+
+        if edge_feats_shm is not None:
+            logging.info("rank {} edge_feats_shm shape {}".format(
+                local_rank, edge_feats_shm.shape))
+
+        return node_feats_shm, edge_feats_shm
 
     return node_feats, edge_feats
 
@@ -135,6 +184,7 @@ def build_dynamic_graph(
         insertion_policy: the insertion policy to use
             valid options: ("insert" or "replace") (case insensitive).
         undirected: whether the graph is undirected.
+        device: the device to use.
     """
     src = dataset_df['src'].values.astype(np.int64)
     dst = dataset_df['dst'].values.astype(np.int64)
@@ -148,7 +198,8 @@ def build_dynamic_graph(
         blocks_to_preallocate,
         insertion_policy,
         src, dst, ts,
-        undirected)
+        undirected,
+        device)
 
     return dgraph
 

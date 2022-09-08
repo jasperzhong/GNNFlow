@@ -104,6 +104,43 @@ class RandomStartBatchSampler(BatchSampler):
         self.random_size = random.randint(0, l - 1) * self.chunk_size
 
 
+class DistributedBatchSampler(BatchSampler):
+    """
+    Distributed batch sampler.
+    """
+
+    def __init__(self, sampler: Union[Sampler[int], Iterable[int]],
+                 batch_size: int, drop_last: bool,
+                 rank: int, world_size: int):
+        """
+        Args:
+            sampler: Base class for all Samplers.
+            batch_size: Size of mini-batch.
+            drop_last: Set to ``True`` to drop the last incomplete batch, if the
+                dataset size is not divisible by the batch size. If ``False`` and
+                the size of dataset is not divisible by the batch size, then the
+                last batch will be smaller.
+            rank: The rank of the current process.
+            world_size: The number of processes.
+        """
+        super(DistributedBatchSampler, self).__init__(sampler, batch_size,
+                                                      drop_last)
+        self.rank = rank
+        self.world_size = world_size
+
+    def __iter__(self) -> Iterator[List[int]]:
+        batch = []
+        for idx in self.sampler:
+            if idx % self.world_size != self.rank:
+                continue
+            batch.append(idx)
+            if len(batch) == self.batch_size:
+                yield batch
+                batch = []
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+
 default_collate_err_msg_format = (
     "default_collate_ndarray: batch must contain tensors, numpy arrays, numbers, "
     "dicts or lists; found {}")
