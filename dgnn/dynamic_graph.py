@@ -34,7 +34,7 @@ class DynamicGraph:
             initial_pool_size: optional, int, the initial pool size of the graph.
             maximum_pool_size: optional, int, the maximum pool size of the graph.
             mem_resource_type: optional, str, the memory resource type.
-                valid options: ("cuda", "unified", "pinned", "shared") (case insensitive).
+                valid options: ("cuda", "unified", "pinned", or "shared") (case insensitive).
             minimum_block_size: optional, int, the minimum block size of the graph.
             blocks_to_preallocate: optional, int, the number of blocks to preallocate.
             insertion_policy: the insertion policy to use

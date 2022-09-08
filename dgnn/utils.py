@@ -119,6 +119,7 @@ def build_dynamic_graph(
         blocks_to_preallocate: int,
         insertion_policy: str,
         undirected: bool,
+        device: int = 0,
         *args, **kwargs) -> DynamicGraph:
     """
     Builds a dynamic graph from the given dataframe.
