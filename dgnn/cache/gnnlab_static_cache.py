@@ -12,7 +12,7 @@ class GNNLabStaticCache(Cache):
     Fetching features from the caching, CPU mem or remote server automatically
     """
 
-    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
+    def __init__(self, capacity, num_nodes, num_edges, node_feats=None, edge_feats=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
         """
         Args:
             capacity: The capacity of the caching (# nodes cached at most)
@@ -23,8 +23,8 @@ class GNNLabStaticCache(Cache):
             cost_ratio: remote/local cost ratio
         """
         super(GNNLabStaticCache, self).__init__(capacity, num_nodes,
-                                                num_edges, node_features,
-                                                edge_features, device,
+                                                num_edges, node_feats,
+                                                edge_feats, device,
                                                 pinned_nfeat_buffs,
                                                 pinned_efeat_buffs)
         # name
@@ -44,16 +44,16 @@ class GNNLabStaticCache(Cache):
         for epoch in range(pre_sampling_rounds):
             for target_nodes, ts, eid in get_batch(train_df):
                 mfgs = sampler.sample(target_nodes, ts)
-                if self.node_features != None:
+                if self.node_feats != None:
                     for b in mfgs[0]:
                         node_sampled_count[b.srcdata['ID']] += 1
-                if self.edge_features != None:
+                if self.edge_feats != None:
                     for mfg in mfgs:
                         for b in mfg:
                             if b.num_src_nodes() > b.num_dst_nodes():
                                 edge_sampled_count[b.edata['ID']] += 1
 
-        if self.node_features != None:
+        if self.node_feats != None:
             # Get the top-k nodes with the highest sampling count
             cache_node_id = torch.topk(
                 node_sampled_count, k=self.node_capacity, largest=True).indices.to(self.device)
@@ -62,17 +62,17 @@ class GNNLabStaticCache(Cache):
             cache_node_index = torch.arange(
                 self.node_capacity, dtype=torch.int64).to(self.device)
             if self.pinned_nfeat_buffs is not None:
-                torch.index_select(self.node_features, 0, cache_node_id.to('cpu'),
+                torch.index_select(self.node_feats, 0, cache_node_id.to('cpu'),
                                    out=self.pinned_nfeat_buffs[0][:cache_node_id.shape[0]])
                 self.cache_node_buffer[cache_node_index] = self.pinned_nfeat_buffs[0][:cache_node_id.shape[0]].to(
                     self.device, non_blocking=True)
             else:
-                self.cache_node_buffer[cache_node_index] = self.node_features[cache_node_id].to(
+                self.cache_node_buffer[cache_node_index] = self.node_feats[cache_node_id].to(
                     self.device, non_blocking=True)
             self.cache_node_flag[cache_node_id] = True
             self.cache_node_map[cache_node_id] = cache_node_index
 
-        if self.edge_features != None:
+        if self.edge_feats != None:
             # Get the top-k edges with the highest sampling count
             cache_edge_id = torch.topk(
                 edge_sampled_count, k=self.edge_capacity, largest=True).indices.to(self.device)
@@ -80,9 +80,9 @@ class GNNLabStaticCache(Cache):
             # Init parameters related to feature fetching
             cache_edge_index = torch.arange(
                 self.edge_capacity, dtype=torch.int64).to(self.device)
-            self.cache_edge_buffer[cache_edge_index] = self.edge_features[cache_edge_id].to(
+            self.cache_edge_buffer[cache_edge_index] = self.edge_feats[cache_edge_id].to(
                 self.device)
-            # torch.index_select(self.edge_features, 0, cache_edge_id.to('cpu'),
+            # torch.index_select(self.edge_feats, 0, cache_edge_id.to('cpu'),
             #                    out=self.pinned_efeat_buffs[0][:cache_edge_id.shape[0]])
             # self.cache_edge_buffer[cache_edge_index] = self.pinned_efeat_buffs[0][:cache_edge_id.shape[0]].to(self.device, non_blocking=True)
             self.cache_edge_flag[cache_edge_id] = True

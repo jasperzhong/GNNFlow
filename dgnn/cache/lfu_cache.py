@@ -11,7 +11,7 @@ class LFUCache(Cache):
     Fetching features from the caching, CPU mem or remote server automatically
     """
 
-    def __init__(self, capacity, num_nodes, num_edges, node_features=None, edge_features=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
+    def __init__(self, capacity, num_nodes, num_edges, node_feats=None, edge_feats=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
         """
         Args:
             capacity: The capacity of the caching (# nodes cached at most)
@@ -19,8 +19,8 @@ class LFUCache(Cache):
             feature_dim: feature dimensions
         """
         super(LFUCache, self).__init__(capacity, num_nodes,
-                                       num_edges, node_features,
-                                       edge_features, device,
+                                       num_edges, node_feats,
+                                       edge_feats, device,
                                        pinned_nfeat_buffs,
                                        pinned_efeat_buffs)
         # name
@@ -32,10 +32,10 @@ class LFUCache(Cache):
         """
         cache_node_id, cache_edge_id = super(LFUCache, self).init_cache(
             sampler, train_df, pre_sampling_rounds=2)
-        if self.node_features != None:
+        if self.node_feats != None:
             self.cache_node_count[cache_node_id] += 1
 
-        if self.edge_features != None:
+        if self.edge_feats != None:
             self.cache_edge_count[cache_edge_id] += 1
 
     def update_node_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):

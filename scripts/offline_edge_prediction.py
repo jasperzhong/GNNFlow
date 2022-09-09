@@ -83,7 +83,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(mfgs)
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_features)
+                mfgs, eid=eid, edge_feats=cache.edge_feats)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -204,13 +204,6 @@ def main():
                                         edge_feats, device,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)
-
-    # only gnnlab static need to pass param
-    if args.cache == 'GNNLabStaticCache':
-        cache.init_cache(sampler, train_data, 2)
-    else:
-        cache.init_cache()
-
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
 
@@ -237,14 +230,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
-
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
         total_samples = 0
 
         epoch_time_start = time.time()
-
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
             mfgs = sampler.sample(target_nodes, ts)
@@ -256,7 +247,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_features)
+                mfgs, eid=eid, edge_feats=cache.edge_feats)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -289,6 +280,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_start = time.time()
         val_ap, val_auc = evaluate(
             val_loader, sampler, model, criterion, cache, device)
+        
+        if args.distributed:
+            val_res = torch.tensor([val_ap, val_auc]).to(device)
+            torch.distributed.all_reduce(val_res)
+            val_res /= args.world_size
+            val_ap, val_auc = val_res[0].item(), val_res[1].item()
+
         val_end = time.time()
         val_time = val_end - val_start
 
