@@ -188,6 +188,8 @@ def main():
                  memory_device=device)
     model.to(device)
 
+    sampler = TemporalSampler(dgraph, **model_config)
+
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank])
@@ -203,7 +205,11 @@ def main():
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)
 
-    sampler = TemporalSampler(dgraph, **model_config)
+    # only gnnlab static need to pass param
+    if args.cache == 'GNNLabStaticCache':
+        cache.init_cache(sampler, train_data, 2)
+    else:
+        cache.init_cache()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
