@@ -98,6 +98,8 @@ class DynamicGraph {
   void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
  private:
+  TemporalBlockAllocator allocator_;
+
   // The device node table. Blocks are allocated in the device memory pool.
   DeviceNodeTable d_node_table_;
 
@@ -107,7 +109,6 @@ class DynamicGraph {
   // the host pointer to the block -> the device pointer to the block
   std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
 
-  TemporalBlockAllocator allocator_;
   InsertionPolicy insertion_policy_;
 
   std::vector<cudaStream_t> streams_;

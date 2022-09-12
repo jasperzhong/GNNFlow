@@ -10,7 +10,7 @@ from dgnn.utils import build_dynamic_graph, load_dataset
 MB = 1 << 20
 GB = 1 << 30
 
-_ , default_config = get_default_config("TGN", "REDDIT")
+_, default_config = get_default_config("TGN", "REDDIT")
 
 
 class TestBuildGraph(unittest.TestCase):
@@ -24,6 +24,7 @@ class TestBuildGraph(unittest.TestCase):
         train_df, _, _, df = load_dataset(dataset="REDDIT")
         config = default_config.copy()
         config["mem_resource_type"] = mem_resource_type
+        config["undirected"] = False
         dgraph = build_dynamic_graph(train_df, **config)
 
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
@@ -49,16 +50,16 @@ class TestBuildGraph(unittest.TestCase):
             self.assertTrue(np.allclose(ts, graph_ts))
 
     @parameterized.expand(itertools.product(["cuda", "unified", "pinned", "shared"]))
-    def test_build_graph_add_reverse(self, mem_resource_type):
+    def test_build_graph_undirected(self, mem_resource_type):
         """
         Test building a dynamic graph from edges.csv(REDDIT)
         Only use training data to build a graph
         """
         train_df, _, _, df = load_dataset(dataset="REDDIT")
         config = default_config.copy()
-        config = default_config.copy()
         config["mem_resource_type"] = mem_resource_type
-        dgraph = build_dynamic_graph(train_df, **config, add_reverse=True)
+        config["undirected"] = True
+        dgraph = build_dynamic_graph(train_df, **config)
 
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)

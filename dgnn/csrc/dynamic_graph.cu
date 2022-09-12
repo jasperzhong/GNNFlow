@@ -45,12 +45,12 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
           mem_res, sizeof(TemporalBlock), blocks_to_preallocate);
   mem_resources_for_metadata_.push(pool_res);
 
-#ifdef DGNN_DEBUG
-  auto logging_res = new rmm::mr::logging_resource_adaptor<
-      std::remove_reference_t<decltype(*pool_res)>>(pool_res, "rmm_log.txt",
-                                                    true);
-  mem_resources_for_metadata_.push(logging_res);
-#endif
+// #ifdef DGNN_DEBUG
+//   auto logging_res = new rmm::mr::logging_resource_adaptor<
+//       std::remove_reference_t<decltype(*pool_res)>>(pool_res, "rmm_log.txt",
+//                                                     true);
+//   mem_resources_for_metadata_.push(logging_res);
+// #endif
 
   rmm::mr::set_current_device_resource(mem_resources_for_metadata_.top());
 }

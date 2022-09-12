@@ -52,7 +52,7 @@ class DynamicGraph:
         elif mem_resource_type == "pinned":
             mem_resource_type = MemoryResourceType.PINNED
         elif mem_resource_type == "shared":
-            mem_resource_type = MemoryResourceType.PINNED
+            mem_resource_type = MemoryResourceType.SHARED
         else:
             raise ValueError("Invalid memory resource type: {}".format(
                 mem_resource_type))
