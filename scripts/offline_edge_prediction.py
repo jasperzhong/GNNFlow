@@ -119,7 +119,7 @@ def main():
 
     if args.distributed:
         # graph is stored in shared memory
-        data_config["mem_resources_type"] = "shared"
+        data_config["mem_resource_type"] = "shared"
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
     train_rand_sampler = RandEdgeSampler(
