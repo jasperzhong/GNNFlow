@@ -1,32 +1,41 @@
-import time
-import numpy as np
+from typing import List, Optional, Union
+
 import torch
 
 from .cache import Cache
 
 
 class LFUCache(Cache):
-    """The class for caching mechanism and feature fetching
-    Caching the node features in GPU
-    Fetching features from the caching, CPU mem or remote server automatically
+    """
+    Least Frequently Used (LFU) Cache
     """
 
-    def __init__(self, capacity, num_nodes, num_edges, node_feats=None, edge_feats=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
+    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+                 device: Union[str, torch.device],
+                 node_feats: Optional[torch.Tensor] = None,
+                 edge_feats: Optional[torch.Tensor] = None,
+                 pinned_nfeat_buffs: Optional[torch.Tensor] = None,
+                 pinned_efeat_buffs: Optional[torch.Tensor] = None):
         """
+        Initialize the cache
+
         Args:
-            capacity: The capacity of the caching (# nodes cached at most)
-            num_nodes: number of nodes in the graph
-            feature_dim: feature dimensions
+            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            num_nodes: The number of nodes in the graph
+            num_edges: The number of edges in the graph
+            device: The device to use 
+            node_feats: The node features
+            edge_feats: The edge features
+            pinned_nfeat_buffs: The pinned memory buffers for node features
+            pinned_efeat_buffs: The pinned memory buffers for edge features
         """
-        super(LFUCache, self).__init__(capacity, num_nodes,
-                                       num_edges, node_feats,
-                                       edge_feats, device,
-                                       pinned_nfeat_buffs,
+        super(LFUCache, self).__init__(cache_ratio, num_nodes,
+                                       num_edges, device, node_feats,
+                                       edge_feats, pinned_nfeat_buffs,
                                        pinned_efeat_buffs)
-        # name
         self.name = 'lfu'
 
-    def init_cache(self, sampler=None, train_df=None, pre_sampling_rounds=2):
+    def init_cache(self, *args, **kwargs):
         """
         Init the caching with node features
         """

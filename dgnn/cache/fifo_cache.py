@@ -1,29 +1,37 @@
-import time
-import numpy as np
+from typing import List, Optional, Union
+
 import torch
 
-from .cache import Cache
+from dgnn.cache.cache import Cache
 
 
 class FIFOCache(Cache):
-    """The class for caching mechanism and feature fetching
-    Caching the node features in GPU
-    Fetching features from the caching, CPU mem or remote server automatically
+    """
+    First-in-first-out cache
     """
 
-    def __init__(self, capacity, num_nodes, num_edges, node_feats=None, edge_feats=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
+    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+                 device: Union[str, torch.device],
+                 node_feats: Optional[torch.Tensor] = None,
+                 edge_feats: Optional[torch.Tensor] = None,
+                 pinned_nfeat_buffs: Optional[torch.Tensor] = None,
+                 pinned_efeat_buffs: Optional[torch.Tensor] = None):
         """
+        Initialize the cache
+
         Args:
-            capacity: The capacity of the caching (# nodes cached at most)
-            num_nodes: number of nodes in the graph
-            feature_dim: feature dimensions
+            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            num_nodes: The number of nodes in the graph
+            num_edges: The number of edges in the graph
+            device: The device to use
+            node_feats: The node features
+            edge_feats: The edge features
+            pinned_nfeat_buffs: The pinned memory buffers for node features
+            pinned_efeat_buffs: The pinned memory buffers for edge features
         """
-        super(FIFOCache, self).__init__(capacity, num_nodes,
-                                        num_edges, node_feats,
-                                        edge_feats, device,
-                                        pinned_nfeat_buffs,
+        super(FIFOCache, self).__init__(cache_ratio, num_nodes, num_edges, device,
+                                        node_feats, edge_feats, pinned_nfeat_buffs,
                                         pinned_efeat_buffs)
-        # name
         self.name = 'fifo'
         # pointer to the last entry for the recent cached nodes
         self.cache_node_pointer = 0
@@ -32,15 +40,15 @@ class FIFOCache(Cache):
         self.cache_node_count = None
         self.cache_edge_count = None
 
-    def init_cache(self, sampler=None, train_df=None, pre_sampling_rounds=2):
-        """Init the caching with node features
+    def init_cache(self, *args, **kwargs):
         """
-        _, _ = super(FIFOCache, self).init_cache(
-            sampler, train_df, pre_sampling_rounds=2)
-        if self.node_feats != None:
+        Init the cache with features
+        """
+        super(FIFOCache, self).init_cache(*args, **kwargs)
+        if self.node_feats is not None:
             self.cache_node_pointer = self.node_capacity - 1
 
-        if self.edge_feats != None:
+        if self.edge_feats is not None:
             self.cache_edge_pointer = self.edge_capacity - 1
 
     def update_node_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):
