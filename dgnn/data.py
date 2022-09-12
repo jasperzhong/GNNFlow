@@ -1,11 +1,12 @@
 import collections
 import random
 import re
-from typing import Iterable, Iterator, List, Union, Optional
+from typing import Iterable, Iterator, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 import torch
+import torch.distributed
 from torch._six import string_classes
 from torch.utils.data import BatchSampler, Dataset, Sampler
 
@@ -83,6 +84,7 @@ class RandomStartBatchSampler(BatchSampler):
         self.random_size = batch_size
 
     def __iter__(self) -> Iterator[List[int]]:
+        self.reset()
         batch = []
         for idx in self.sampler:
             batch.append(idx)
@@ -129,14 +131,17 @@ class DistributedBatchSampler(BatchSampler):
                                                       drop_last)
         self.rank = rank
         self.world_size = world_size
+        self.local_rank = rank % torch.cuda.device_count()
+        self.device = torch.device('cuda', self.local_rank)
         assert 0 < num_chunks < batch_size, "num_chunks must be in (0, batch_size)"
 
         self.num_chunks = num_chunks
         self.chunk_size = batch_size // num_chunks
-        self.reorder = self.num_chunks > 1
+        self.reorder = False
         self.random_size = batch_size
 
     def __iter__(self) -> Iterator[List[int]]:
+        self.reset()
         batch = []
         for idx in self.sampler:
             if idx % self.world_size != self.rank:
@@ -156,8 +161,15 @@ class DistributedBatchSampler(BatchSampler):
 
     def reset(self):
         self.reorder = self.num_chunks > 1
-        l = self.batch_size // self.chunk_size
-        self.random_size = random.randint(0, l - 1) * self.chunk_size
+        if self.reorder:
+            if self.rank == 0:
+                randint = torch.randint(
+                    0, self.num_chunks, size=(1,), device=self.device)
+            else:
+                randint = torch.zeros(1, dtype=torch.int64, device=self.device)
+
+            torch.distributed.broadcast(randint, src=0)
+            self.random_size = randint.item() * self.chunk_size
 
 
 default_collate_err_msg_format = (
