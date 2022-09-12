@@ -25,12 +25,13 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
                            MemoryResourceType mem_resource_type,
                            std::size_t minium_block_size,
                            std::size_t blocks_to_preallocate,
-                           InsertionPolicy insertion_policy)
+                           InsertionPolicy insertion_policy, int device)
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
-                 mem_resource_type),
+                 mem_resource_type, device),
       insertion_policy_(insertion_policy),
       num_nodes_(0),
-      num_edges_(0) {
+      num_edges_(0),
+      device_(device) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
     cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -44,12 +45,12 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
           mem_res, sizeof(TemporalBlock), blocks_to_preallocate);
   mem_resources_for_metadata_.push(pool_res);
 
-#ifdef DGNN_DEBUG
-  auto logging_res = new rmm::mr::logging_resource_adaptor<
-      std::remove_reference_t<decltype(*pool_res)>>(pool_res, "rmm_log.txt",
-                                                    true);
-  mem_resources_for_metadata_.push(logging_res);
-#endif
+// #ifdef DGNN_DEBUG
+//   auto logging_res = new rmm::mr::logging_resource_adaptor<
+//       std::remove_reference_t<decltype(*pool_res)>>(pool_res, "rmm_log.txt",
+//                                                     true);
+//   mem_resources_for_metadata_.push(logging_res);
+// #endif
 
   rmm::mr::set_current_device_resource(mem_resources_for_metadata_.top());
 }
@@ -189,7 +190,8 @@ void DynamicGraph::AddEdgesForOneNode(
     const std::vector<EIDType>& eids, cudaStream_t stream) {
   std::size_t num_edges = dst_nodes.size();
 
-  // NB: reference is necessary here since the value is updated in `InsertBlock`
+  // NB: reference is necessary here since the value is updated in
+  // `InsertBlock`
   auto& h_tail_block = h_copy_of_d_node_table_[src_node].tail;
 
   std::size_t start_idx = 0;
@@ -219,8 +221,8 @@ void DynamicGraph::AddEdgesForOneNode(
       InsertBlock(src_node, new_block, stream);
     } else {
       // reallocate the block
-      // NB: the pointer to the block is not changed, only the content of the
-      // block (e.g., pointers, capcacity) is updated
+      // NB: the pointer to the block is not changed, only the content of
+      // the block (e.g., pointers, capcacity) is updated
       allocator_.Reallocate(h_tail_block, h_tail_block->size + num_edges,
                             stream);
     }

@@ -14,7 +14,7 @@ CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)
 string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
 string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
 string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
-SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
+set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
 message(STATUS "CUDA_ARCH_LIST: ${CUDA_ARCH_LIST}")
 
 # 3rd party
@@ -27,6 +27,7 @@ include_directories(/usr/local/cuda/include)
 include_directories(third_party/pybind11/include)
 include_directories(third_party/spdlog/include)
 include_directories(third_party/rmm/include)
+
 
 file(GLOB_RECURSE DGNN_SRC_FILES ${PROJECT_SOURCE_DIR}/dgnn/csrc/*.cc)
 set_source_files_properties(${PROJECT_SOURCE_DIR}/dgnn/csrc/api.cc PROPERTIES LANGUAGE CUDA)

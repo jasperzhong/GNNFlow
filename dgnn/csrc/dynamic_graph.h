@@ -38,12 +38,13 @@ class DynamicGraph {
    * @param minimum_block_size The minimum size of the temporal block.
    * @param blocks_to_preallocate The number of blocks to preallocate.
    * @param insertion_policy The insertion policy for the linked list.
+   * @param device The device id.
    */
 
   DynamicGraph(std::size_t initial_pool_size, std::size_t maximum_pool_size,
                MemoryResourceType mem_resource_type,
                std::size_t minium_block_size, std::size_t blocks_to_preallocate,
-               InsertionPolicy insertion_policy);
+               InsertionPolicy insertion_policy, int device);
   ~DynamicGraph();
 
   /**
@@ -97,6 +98,8 @@ class DynamicGraph {
   void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
  private:
+  TemporalBlockAllocator allocator_;
+
   // The device node table. Blocks are allocated in the device memory pool.
   DeviceNodeTable d_node_table_;
 
@@ -106,7 +109,6 @@ class DynamicGraph {
   // the host pointer to the block -> the device pointer to the block
   std::unordered_map<TemporalBlock*, TemporalBlock*> h2d_mapping_;
 
-  TemporalBlockAllocator allocator_;
   InsertionPolicy insertion_policy_;
 
   std::vector<cudaStream_t> streams_;
@@ -115,6 +117,8 @@ class DynamicGraph {
   std::size_t num_edges_;
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
+
+  int device_;
 };
 
 }  // namespace dgnn

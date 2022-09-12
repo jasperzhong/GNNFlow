@@ -28,11 +28,13 @@ class TemporalBlockAllocator {
    * @param maxmium_pool_size The maximum size of the memory pool
    * @param minimum_block_size The minimum size of the temporal block.
    * @param MemoryResourceType The type of memory resource.
+   * @param device The device id.
    */
   TemporalBlockAllocator(std::size_t initial_pool_size,
                          std::size_t maximum_pool_size,
                          std::size_t minimum_block_size,
-                         MemoryResourceType mem_resource_type);
+                         MemoryResourceType mem_resource_type,
+                         int device);
 
   /**
    * @brief Destructor.

@@ -34,14 +34,16 @@ PYBIND11_MODULE(libdgnn, m) {
   py::enum_<MemoryResourceType>(m, "MemoryResourceType")
       .value("CUDA", MemoryResourceType::kMemoryResourceTypeCUDA)
       .value("UNIFIED", MemoryResourceType::kMemoryResourceTypeUnified)
-      .value("PINNED", MemoryResourceType::kMemoryResourceTypePinned);
+      .value("PINNED", MemoryResourceType::kMemoryResourceTypePinned)
+      .value("SHARED", MemoryResourceType::kMemoryResourceTypeShared);
 
   py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
-                    std::size_t, InsertionPolicy>(),
+                    std::size_t, InsertionPolicy, int>(),
            py::arg("initial_pool_size"), py::arg("maximum_pool_size"),
            py::arg("mem_resource_type"), py::arg("minium_block_size"),
-           py::arg("blocks_to_preallocate"), py::arg("insertion_policy"))
+           py::arg("blocks_to_preallocate"), py::arg("insertion_policy"),
+           py::arg("device"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"),
            py::arg("add_reverse") = true)

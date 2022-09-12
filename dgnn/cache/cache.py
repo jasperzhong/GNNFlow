@@ -129,10 +129,14 @@ class Cache:
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
                 uncached_node_id = b.srcdata['ID'][uncached_mask]
-                torch.index_select(self.node_features, 0, uncached_node_id.to('cpu'),
-                                   out=self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]])
-                node_feature[uncached_mask] = self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]].to(
-                    self.device, non_blocking=True)
+                if self.pinned_nfeat_buffs is not None:
+                    torch.index_select(self.node_features, 0, uncached_node_id.to('cpu'),
+                                       out=self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]])
+                    node_feature[uncached_mask] = self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]].to(
+                        self.device, non_blocking=True)
+                else:
+                    node_feature[uncached_mask] = self.node_features[uncached_node_id].to(
+                        self.device, non_blocking=True)
                 i += 1
                 # save the node feature into the mfgs
                 b.srcdata['h'] = node_feature
@@ -179,11 +183,15 @@ class Cache:
                         # fetch the uncached features
                         uncached_mask = ~cache_mask
                         uncached_edge_id = b.edata['ID'][uncached_mask]
-                        torch.index_select(self.edge_features, 0, uncached_edge_id.to('cpu'),
-                                           out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
+                        if self.pinned_efeat_buffs is not None:
+                            torch.index_select(self.edge_features, 0, uncached_edge_id.to('cpu'),
+                                               out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
 
-                        edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].to(
-                            self.device, non_blocking=True)
+                            edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].to(
+                                self.device, non_blocking=True)
+                        else:
+                            edge_feature[uncached_mask] = self.edge_features[uncached_edge_id].to(
+                                self.device, non_blocking=True)
                         i += 1
 
                         b.edata['f'] = edge_feature

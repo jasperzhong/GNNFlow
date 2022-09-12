@@ -24,7 +24,8 @@ class DynamicGraph:
             source_vertices: Optional[np.ndarray] = None,
             target_vertices: Optional[np.ndarray] = None,
             timestamps: Optional[np.ndarray] = None,
-            add_reverse: bool = False):
+            add_reverse: bool = False,
+            device: int = 0):
         """
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
@@ -33,7 +34,7 @@ class DynamicGraph:
             initial_pool_size: optional, int, the initial pool size of the graph.
             maximum_pool_size: optional, int, the maximum pool size of the graph.
             mem_resource_type: optional, str, the memory resource type.
-                valid options: ("cuda", "unified", or "pinned") (case insensitive).
+                valid options: ("cuda", "unified", "pinned", or "shared") (case insensitive).
             minimum_block_size: optional, int, the minimum block size of the graph.
             blocks_to_preallocate: optional, int, the number of blocks to preallocate.
             insertion_policy: the insertion policy to use
@@ -50,6 +51,8 @@ class DynamicGraph:
             mem_resource_type = MemoryResourceType.UNIFIED
         elif mem_resource_type == "pinned":
             mem_resource_type = MemoryResourceType.PINNED
+        elif mem_resource_type == "shared":
+            mem_resource_type = MemoryResourceType.SHARED
         else:
             raise ValueError("Invalid memory resource type: {}".format(
                 mem_resource_type))
@@ -65,7 +68,8 @@ class DynamicGraph:
 
         self._dgraph = _DynamicGraph(
             initial_pool_size, maximum_pool_size, mem_resource_type,
-            minimum_block_size, blocks_to_preallocate, insertion_policy)
+            minimum_block_size, blocks_to_preallocate, insertion_policy,
+            device)
 
         # initialize the graph with edges
         if source_vertices is not None and target_vertices is not None \
