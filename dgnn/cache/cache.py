@@ -20,6 +20,7 @@ class Cache:
 
         Args:
             cache_ratio: The ratio of the cache size to the total number of nodes or edges
+                    range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
             device: The device to use 
@@ -45,6 +46,10 @@ class Cache:
                 'The number of edges in edge_feats {} does not match num_edges {}'.format(
                     edge_feats.shape[0], num_edges))
 
+        # NB: cache_ratio == 0 means no cache
+        assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
+
+        self.cache_ratio = cache_ratio
         self.node_capacity = int(cache_ratio * num_nodes)
         self.edge_capacity = int(cache_ratio * num_edges)
 
@@ -90,6 +95,27 @@ class Cache:
             self.cache_index_to_edge_id = torch.zeros(
                 self.edge_capacity, dtype=torch.int64, device=self.device) - 1
 
+    def get_mem_size(self) -> int:
+        """
+        Get the memory size of the cache in bytes
+        """
+        mem_size = 0
+        if self.dim_node_feat != 0:
+            mem_size += self.cache_node_buffer.element_size() * self.cache_node_buffer.nelement()
+            mem_size += self.cache_node_flag.element_size() * self.cache_node_flag.nelement()
+            mem_size += self.cache_node_map.element_size() * self.cache_node_map.nelement()
+            mem_size += self.cache_index_to_node_id.element_size() * \
+                self.cache_index_to_node_id.nelement()
+
+        if self.dim_edge_feat != 0:
+            mem_size += self.cache_edge_buffer.element_size() * self.cache_edge_buffer.nelement()
+            mem_size += self.cache_edge_flag.element_size() * self.cache_edge_flag.nelement()
+            mem_size += self.cache_edge_map.element_size() * self.cache_edge_map.nelement()
+            mem_size += self.cache_index_to_edge_id.element_size() * \
+                self.cache_index_to_edge_id.nelement()
+
+        return mem_size
+
     def init_cache(self, *args, **kwargs):
         """
         Init the cache with features
@@ -115,6 +141,38 @@ class Cache:
             self.cache_edge_flag[cache_edge_id] = True
             self.cache_index_to_edge_id = cache_edge_id
             self.cache_edge_map[cache_edge_id] = cache_edge_id
+
+    def resize(self, new_num_nodes: int, new_num_edges: int):
+        """
+        Resize the cache
+
+        Args:
+            new_num_nodes: The new number of nodes
+            new_num_edges: The new number of edges
+        """
+        if self.dim_node_feat != 0 and new_num_nodes > self.num_nodes:
+            self.num_nodes = new_num_nodes
+            self.node_capacity = int(self.cache_ratio * self.num_nodes)
+            self.cache_node_buffer.resize_(
+                self.node_capacity, self.dim_node_feat)
+            self.cache_node_flag.resize_(self.num_nodes)
+            self.cache_node_map.resize_(self.num_nodes)
+            self.cache_index_to_node_id.resize_(self.node_capacity)
+
+        if self.dim_edge_feat != 0 and new_num_edges > self.num_edges:
+            self.num_edges = new_num_edges
+            self.edge_capacity = int(self.cache_ratio * self.num_edges)
+            self.cache_edge_buffer.resize_(
+                self.edge_capacity, self.dim_edge_feat)
+            self.cache_edge_flag.resize_(self.num_edges)
+            self.cache_edge_map.resize_(self.num_edges)
+            self.cache_index_to_edge_id.resize_(self.edge_capacity)
+
+    def reset(self):
+        """
+        Reset the cache
+        """
+        raise NotImplementedError
 
     def update_node_cache(self, cached_node_index: torch.Tensor,
                           uncached_node_id: torch.Tensor,
@@ -155,7 +213,7 @@ class Cache:
         if self.node_feats is not None:
             i = 0
             hit_ratio_sum = 0
-            for b in mfgs[0]:  # not sure why
+            for b in mfgs[0]:
                 nodes = b.srcdata['ID']
                 assert isinstance(nodes, torch.Tensor)
                 cache_mask = self.cache_node_flag[nodes]
@@ -172,24 +230,24 @@ class Cache:
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
                 uncached_node_id = nodes[uncached_mask]
+                uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
+                    uncached_node_id, return_inverse=True)
+
                 if self.pinned_nfeat_buffs is not None:
-                    torch.index_select(self.node_feats, 0, uncached_node_id.to('cpu'),
-                                       out=self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]])
-                    node_feature[uncached_mask] = self.pinned_nfeat_buffs[i][:uncached_node_id.shape[0]].to(
+                    torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
+                                       out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
+                    uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
                         self.device, non_blocking=True)
                 else:
-                    node_feature[uncached_mask] = self.node_feats[uncached_node_id].to(
+                    uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
                         self.device, non_blocking=True)
+                node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
 
                 i += 1
                 b.srcdata['h'] = node_feature
 
                 if update_cache:
-                    cached_node_index_unique = cached_node_index.unique()
-                    uncached_node_id_unique = uncached_node_id.unique()
-                    uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
-                        self.device, non_blocking=True)
-                    self.update_node_cache(cached_node_index=cached_node_index_unique,
+                    self.update_node_cache(cached_node_index=cached_node_index,
                                            uncached_node_id=uncached_node_id_unique,
                                            uncached_node_feature=uncached_node_feature)
 
@@ -219,25 +277,24 @@ class Cache:
                     # fetch the uncached features
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
-                    if self.pinned_efeat_buffs is not None:
-                        torch.index_select(self.edge_feats, 0, uncached_edge_id.to('cpu'),
-                                           out=self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]])
+                    uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
+                        uncached_edge_id, return_inverse=True)
 
-                        edge_feature[uncached_mask] = self.pinned_efeat_buffs[i][:uncached_edge_id.shape[0]].to(
+                    if self.pinned_efeat_buffs is not None:
+                        torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
+                                           out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
+                        uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
                             self.device, non_blocking=True)
                     else:
-                        edge_feature[uncached_mask] = self.edge_feats[uncached_edge_id].to(
+                        uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
                             self.device, non_blocking=True)
+                    edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
 
                     i += 1
                     b.edata['f'] = edge_feature
 
                     if update_cache:
-                        cached_edge_index_unique = cached_edge_index.unique()
-                        uncached_edge_id_unique = uncached_edge_id.unique()
-                        uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
-                            self.device, non_blocking=True)
-                        self.update_edge_cache(cached_edge_index=cached_edge_index_unique,
+                        self.update_edge_cache(cached_edge_index=cached_edge_index,
                                                uncached_edge_id=uncached_edge_id_unique,
                                                uncached_edge_feature=uncached_edge_feature)
 

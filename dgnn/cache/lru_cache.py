@@ -1,74 +1,92 @@
-from typing import List, Optional, Union
+from typing import Optional, Union
 
-import numpy as np
 import torch
 
-from .cache import Cache
+from dgnn.cache.cache import Cache
 
 
 class LRUCache(Cache):
-    """The class for caching mechanism and feature fetching
-    Caching the node features in GPU
-    Fetching features from the caching, CPU mem or remote server automatically
+    """
+    Least-recently-used (LRU) cache 
     """
 
-    def __init__(self, capacity, num_nodes, num_edges, node_feats=None, edge_feats=None, device='cpu', pinned_nfeat_buffs=None, pinned_efeat_buffs=None):
+    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+                 device: Union[str, torch.device],
+                 node_feats: Optional[torch.Tensor] = None,
+                 edge_feats: Optional[torch.Tensor] = None,
+                 pinned_nfeat_buffs: Optional[torch.Tensor] = None,
+                 pinned_efeat_buffs: Optional[torch.Tensor] = None):
         """
+        Initialize the cache
+
         Args:
-            capacity: The capacity of the caching (# nodes cached at most)
-            num_nodes: number of nodes in the graph
-            feature_dim: feature dimensions
+            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            num_nodes: The number of nodes in the graph
+            num_edges: The number of edges in the graph
+            device: The device to use
+            node_feats: The node features
+            edge_feats: The edge features
+            pinned_nfeat_buffs: The pinned memory buffers for node features
+            pinned_efeat_buffs: The pinned memory buffers for edge features
         """
-        super(LRUCache, self).__init__(capacity, num_nodes,
-                                       num_edges, node_feats,
-                                       edge_feats, device,
-                                       pinned_nfeat_buffs,
+        super(LRUCache, self).__init__(cache_ratio, num_nodes,
+                                       num_edges, device, node_feats,
+                                       edge_feats, pinned_nfeat_buffs,
                                        pinned_efeat_buffs)
-        # name
         self.name = 'lru'
 
-    def init_cache(self, sampler=None, train_df=None, pre_sampling_rounds=2):
+        if self.dim_node_feat != 0:
+            self.cache_node_count = torch.zeros(
+                self.node_capacity, dtype=torch.int32, device=self.device)
+        if self.dim_edge_feat != 0:
+            self.cache_edge_count = torch.zeros(
+                self.edge_capacity, dtype=torch.int32, device=self.device)
+
+    def get_mem_size(self) -> int:
         """
-        Init the caching with node features
+        Get the memory size of the cache in bytes
         """
-        _, _ = super(LRUCache, self).init_cache(
-            sampler, train_df, pre_sampling_rounds=2)
+        mem_size = super(LRUCache, self).get_mem_size()
+        if self.dim_node_feat != 0:
+            mem_size += self.cache_node_count.element_size() * self.cache_node_count.nelement()
+        if self.dim_edge_feat != 0:
+            mem_size += self.cache_edge_count.element_size() * self.cache_edge_count.nelement()
+        return mem_size
 
-    def update_edge_cache(self, cached_edge_index, uncached_edge_id, uncached_edge_feature):
-        # If the number of edges to cache is larger than the cache capacity, we only cache the first
-        # self.capacity edges
-        if len(uncached_edge_id) > self.edge_capacity:
-            num_edge_to_cache = self.edge_capacity
-        else:
-            num_edge_to_cache = len(uncached_edge_id)
-        edge_id_to_cache = uncached_edge_id[:num_edge_to_cache]
-        edge_feature_to_cache = uncached_edge_feature[:num_edge_to_cache]
+    def reset(self):
+        """
+        Reset the cache
+        """
+        if self.dim_edge_feat != 0:
+            self.cache_edge_count.zero_()
 
-        # first all -1
-        self.cache_edge_count -= 1
-        # update cached edge index to 0 (0 is the highest priority)
-        self.cache_edge_count[cached_edge_index] = 0
+    def resize(self, new_num_nodes: int, new_num_edges: int):
+        """
+        Resize the cache
 
-        # get the k edge id with the least water level
-        removing_edge_index = torch.topk(
-            self.cache_edge_count, k=num_edge_to_cache, largest=False).indices
-        assert len(removing_edge_index) == len(
-            edge_id_to_cache) == len(edge_feature_to_cache)
-        removing_edge_id = self.cache_index_to_edge_id[removing_edge_index]
+        Args:
+            new_num_nodes: The new number of nodes
+            new_num_edges: The new number of edges
+        """
+        super(LRUCache, self).resize(new_num_nodes, new_num_edges)
+        if self.dim_node_feat != 0:
+            self.cache_node_count.resize_(self.node_capacity)
+        if self.dim_edge_feat != 0:
+            self.cache_edge_count.resize_(self.edge_capacity)
 
-        # update cache attributes
-        self.cache_edge_buffer[removing_edge_index] = edge_feature_to_cache
-        self.cache_edge_count[removing_edge_index] = 0
-        self.cache_edge_flag[removing_edge_id] = False
-        self.cache_edge_flag[edge_id_to_cache] = True
-        self.cache_edge_map[removing_edge_id] = -1
-        self.cache_edge_map[edge_id_to_cache] = removing_edge_index
-        self.cache_index_to_edge_id[removing_edge_index] = edge_id_to_cache.to(
-            self.device, non_blocking=True)
+    def update_node_cache(self, cached_node_index: torch.Tensor,
+                          uncached_node_id: torch.Tensor,
+                          uncached_node_feature: torch.Tensor):
+        """
+        Update the node cache
 
-    def update_node_cache(self, cached_node_index, uncached_node_id, uncached_node_feature):
-        # If the number of nodes to cache is larger than the cache capacity, we only cache the first
-        # self.capacity nodes
+        Args:
+            cached_node_index: The index of the cached nodes
+            uncached_node_id: The id of the uncached nodes
+            uncached_node_feature: The features of the uncached nodes
+        """
+        # If the number of nodes to cache is larger than the cache capacity,
+        # we only cache the first self.capacity nodes
         if len(uncached_node_id) > self.node_capacity:
             num_node_to_cache = self.node_capacity
         else:
@@ -82,18 +100,58 @@ class LRUCache(Cache):
         self.cache_node_count[cached_node_index] = 0
 
         # get the k node id with the least water level
-        removing_node_index = torch.topk(
+        removing_cache_index = torch.topk(
             self.cache_node_count, k=num_node_to_cache, largest=False).indices
-        assert len(removing_node_index) == len(
+        assert len(removing_cache_index) == len(
             node_id_to_cache) == len(node_feature_to_cache)
-        removing_node_id = self.cache_index_to_node_id[removing_node_index]
+        removing_node_id = self.cache_index_to_node_id[removing_cache_index]
 
         # update cache attributes
-        self.cache_node_buffer[removing_node_index] = node_feature_to_cache
-        self.cache_node_count[removing_node_index] = 0
+        self.cache_node_buffer[removing_cache_index] = node_feature_to_cache
+        self.cache_node_count[removing_cache_index] = 0
         self.cache_node_flag[removing_node_id] = False
         self.cache_node_flag[node_id_to_cache] = True
         self.cache_node_map[removing_node_id] = -1
-        self.cache_node_map[node_id_to_cache] = removing_node_index
-        self.cache_index_to_node_id[removing_node_index] = node_id_to_cache.to(
-            self.device, non_blocking=True)
+        self.cache_node_map[node_id_to_cache] = removing_cache_index
+        self.cache_index_to_node_id[removing_cache_index] = node_id_to_cache
+
+    def update_edge_cache(self, cached_edge_index: torch.Tensor,
+                          uncached_edge_id: torch.Tensor,
+                          uncached_edge_feature: torch.Tensor):
+        """
+        Update the edge cache
+
+        Args:
+            cached_edge_index: The index of the cached edges
+            uncached_edge_id: The id of the uncached edges
+            uncached_edge_feature: The features of the uncached edges
+        """
+        # If the number of edges to cache is larger than the cache capacity,
+        # we only cache the first self.capacity edges
+        if len(uncached_edge_id) > self.edge_capacity:
+            num_edge_to_cache = self.edge_capacity
+        else:
+            num_edge_to_cache = len(uncached_edge_id)
+        edge_id_to_cache = uncached_edge_id[:num_edge_to_cache]
+        edge_feature_to_cache = uncached_edge_feature[:num_edge_to_cache]
+
+        # first all -1
+        self.cache_edge_count -= 1
+        # update cached edge index to 0 (0 is the highest priority)
+        self.cache_edge_count[cached_edge_index] = 0
+
+        # get the k edge id with the least water level
+        removing_cache_index = torch.topk(
+            self.cache_edge_count, k=num_edge_to_cache, largest=False).indices
+        assert len(removing_cache_index) == len(
+            edge_id_to_cache) == len(edge_feature_to_cache)
+        removing_edge_id = self.cache_index_to_edge_id[removing_cache_index]
+
+        # update cache attributes
+        self.cache_edge_buffer[removing_cache_index] = edge_feature_to_cache
+        self.cache_edge_count[removing_cache_index] = 0
+        self.cache_edge_flag[removing_edge_id] = False
+        self.cache_edge_flag[edge_id_to_cache] = True
+        self.cache_edge_map[removing_edge_id] = -1
+        self.cache_edge_map[edge_id_to_cache] = removing_cache_index
+        self.cache_index_to_edge_id[removing_cache_index] = edge_id_to_cache
