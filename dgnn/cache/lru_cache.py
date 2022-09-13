@@ -57,7 +57,18 @@ class LRUCache(Cache):
         """
         Reset the cache
         """
-        if self.dim_edge_feat != 0:
+        # NB: only edge cache is reset
+        if self.edge_feats is not None:
+            cache_edge_id = torch.arange(
+                self.edge_capacity, dtype=torch.int64, device=self.device)
+
+            # Init parameters related to feature fetching
+            self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
+                self.device, non_blocking=True)
+            self.cache_edge_flag[cache_edge_id] = True
+            self.cache_index_to_edge_id = cache_edge_id
+            self.cache_edge_map[cache_edge_id] = cache_edge_id
+
             self.cache_edge_count.zero_()
 
     def resize(self, new_num_nodes: int, new_num_edges: int):

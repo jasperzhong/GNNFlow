@@ -212,7 +212,7 @@ def main():
     else:
         cache.init_cache()
 
-    logging.info("cache mem size: {} MB".format(
+    logging.info("cache mem size: {:.2f} MB".format(
         cache.get_mem_size() / 1000 / 1000))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
