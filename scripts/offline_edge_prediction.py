@@ -7,8 +7,8 @@ import time
 
 import numpy as np
 import torch
-import torch.nn
 import torch.distributed
+import torch.nn
 import torch.nn.parallel
 import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -16,8 +16,8 @@ from torch.utils.data import BatchSampler, SequentialSampler
 
 import dgnn.cache as caches
 from dgnn.config import get_default_config
-from dgnn.data import (RandomStartBatchSampler, DistributedBatchSampler,
-                       EdgePredictionDataset, default_collate_ndarray)
+from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
+                       RandomStartBatchSampler, default_collate_ndarray)
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
@@ -83,7 +83,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(mfgs)
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_features)
+                mfgs, eid=eid, edge_feats=cache.edge_feats)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -200,16 +200,20 @@ def main():
 
     # Cache
     cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
-                                        num_edges, node_feats,
-                                        edge_feats, device,
+                                        num_edges, device,
+                                        node_feats, edge_feats,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)
 
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
-        cache.init_cache(sampler, train_data, 2)
+        cache.init_cache(sampler=sampler, train_df=train_data,
+                         pre_sampling_rounds=2)
     else:
         cache.init_cache()
+
+    logging.info("cache mem size: {:.2f} MB".format(
+        cache.get_mem_size() / 1000 / 1000))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
@@ -237,14 +241,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
-
+        cache.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
         total_samples = 0
 
         epoch_time_start = time.time()
-
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
             mfgs = sampler.sample(target_nodes, ts)
@@ -256,7 +259,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_features)
+                mfgs, eid=eid, edge_feats=cache.edge_feats)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -289,6 +292,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_start = time.time()
         val_ap, val_auc = evaluate(
             val_loader, sampler, model, criterion, cache, device)
+
+        if args.distributed:
+            val_res = torch.tensor([val_ap, val_auc]).to(device)
+            torch.distributed.all_reduce(val_res)
+            val_res /= args.world_size
+            val_ap, val_auc = val_res[0].item(), val_res[1].item()
+
         val_end = time.time()
         val_time = val_end - val_start
 
