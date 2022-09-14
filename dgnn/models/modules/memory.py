@@ -1,9 +1,10 @@
 from typing import Dict, Optional, Union
 
 import torch
+import torch.distributed
 from dgl.heterograph import DGLBlock
 
-from dgnn.models.modules.layers import TimeEncode
+from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
 
 class Memory:
@@ -11,9 +12,9 @@ class Memory:
     Memory module proposed by TGN
     """
 
-    def __init__(self, num_nodes: int, dim_edge: int, dim_time: int,
-                 dim_memory: int, device: Union[torch.device, str] = 'cpu',
-                 pin_memory: bool = False, shared_memory: bool = False):
+    def __init__(self, num_nodes: int, dim_edge: int, dim_memory: int,
+                 device: Union[torch.device, str] = 'cpu',
+                 shared_memory: bool = False):
         """
         Args:
             num_nodes: number of nodes in the graph
@@ -21,35 +22,65 @@ class Memory:
             dim_time: dimension of the time encoding
             dim_memory: dimension of the output of the memory
             device: device to store the memory
-            pin_memory: whether to pin the memory
             shared_memory: whether to store in shared memory (for multi-GPU training)
         """
+        if shared_memory:
+            device = 'cpu'
+
         self.num_nodes = num_nodes
         self.dim_edge = dim_edge
         self.dim_memory = dim_memory
         # raw message: (src_memory, dst_memory, edge_feat)
         self.dim_raw_message = 2 * dim_memory + dim_edge
-
-        self.use_time_enc = dim_time > 0
-        if self.use_time_enc:
-            self.time_enc = TimeEncode(dim_time)
-            self.time_enc.to(device)
-
-        # memory data structure (default on CPU)
-        self.node_memory = torch.zeros(
-            (num_nodes, dim_memory), dtype=torch.float32, device=device)
-        self.node_memory_ts = torch.zeros(
-            num_nodes, dtype=torch.float32, device=device)
-        self.mailbox = torch.zeros(
-            (num_nodes, self.dim_raw_message),
-            dtype=torch.float32, device=device)
-        self.mailbox_ts = torch.zeros(
-            (num_nodes,), dtype=torch.float32, device=device)
         self.device = device
 
-        # TODO: implement this
-        self.pin_memory = pin_memory
-        self.shared_memory = shared_memory
+        if shared_memory:
+            local_world_size = torch.cuda.device_count()
+            local_rank = torch.distributed.get_rank() % local_world_size
+        else:
+            local_world_size = 1
+            local_rank = 0
+
+        if not shared_memory:
+            self.node_memory = torch.zeros(
+                (num_nodes, dim_memory), dtype=torch.float32, device=device)
+            self.node_memory_ts = torch.zeros(
+                num_nodes, dtype=torch.float32, device=device)
+            self.mailbox = torch.zeros(
+                (num_nodes, self.dim_raw_message),
+                dtype=torch.float32, device=device)
+            self.mailbox_ts = torch.zeros(
+                (num_nodes,), dtype=torch.float32, device=device)
+        else:
+            if local_rank == 0:
+                self.node_memory = create_shared_mem_array(
+                    'node_memory', (num_nodes, dim_memory), dtype=torch.float32)
+                self.node_memory_ts = create_shared_mem_array(
+                    'node_memory_ts', (num_nodes,), dtype=torch.float32)
+                self.mailbox = create_shared_mem_array(
+                    'mailbox', (num_nodes, self.dim_raw_message),
+                    dtype=torch.float32)
+                self.mailbox_ts = create_shared_mem_array(
+                    'mailbox_ts', (num_nodes,), dtype=torch.float32)
+
+                self.node_memory.zero_()
+                self.node_memory_ts.zero_()
+                self.mailbox.zero_()
+                self.mailbox_ts.zero_()
+
+            torch.distributed.barrier()
+
+            if local_rank != 0:
+                # NB: `num_nodes` should be same for all local processes because
+                # they share the same local graph
+                self.node_memory = get_shared_mem_array(
+                    'node_memory', (num_nodes, dim_memory), torch.float32)
+                self.node_memory_ts = get_shared_mem_array(
+                    'node_memory_ts', (num_nodes,), torch.float32)
+                self.mailbox = get_shared_mem_array(
+                    'mailbox', (num_nodes, self.dim_raw_message), torch.float32)
+                self.mailbox_ts = get_shared_mem_array(
+                    'mailbox_ts', (num_nodes,), torch.float32)
 
     def reset(self):
         """
@@ -125,16 +156,7 @@ class Memory:
         b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
         b.dstdata['mem_ts'] = self.node_memory_ts[target_nodes].to(device)
         b.dstdata['mail_ts'] = self.mailbox_ts[target_nodes].to(device)
-
-        if self.use_time_enc:
-            target_node_ts = b.srcdata['ts'][:num_dst_nodes]
-            time_feat = self.time_enc(target_node_ts - b.dstdata['mem_ts'])
-        else:
-            # dummy time features
-            time_feat = torch.zeros(num_dst_nodes, 0, device=device)
-
-        mem_input = self.mailbox[target_nodes].to(device)
-        b.dstdata['mem_input'] = torch.cat([mem_input, time_feat], dim=1)
+        b.dstdata['mem_input'] = self.mailbox[target_nodes].to(device)
 
     def update_memory(self, last_updated_nid: torch.Tensor,
                       last_updated_memory: torch.Tensor,

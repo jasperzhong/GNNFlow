@@ -1,6 +1,8 @@
 import torch
 from dgl.heterograph import DGLBlock
 
+from dgnn.models.modules.layers import TimeEncode
+
 
 class GRUMemeoryUpdater(torch.nn.Module):
     """
@@ -24,6 +26,10 @@ class GRUMemeoryUpdater(torch.nn.Module):
         self.updater = torch.nn.GRUCell(
             self.dim_message + self.dim_time, dim_memory)
 
+        self.use_time_enc = dim_time > 0
+        if self.use_time_enc:
+            self.time_enc = TimeEncode(dim_time)
+
         if dim_node > 0 and dim_node != dim_memory:
             self.node_feat_proj = torch.nn.Linear(dim_node, dim_memory)
 
@@ -46,6 +52,16 @@ class GRUMemeoryUpdater(torch.nn.Module):
         """
         num_dst_nodes = b.num_dst_nodes()
         device = b.device
+
+        if self.use_time_enc:
+            target_node_ts = b.srcdata['ts'][:num_dst_nodes]
+            time_feat = self.time_enc(target_node_ts - b.dstdata['mem_ts'])
+        else:
+            # dummy time features
+            time_feat = torch.zeros(num_dst_nodes, 0, device=device)
+
+        b.dstdata['mem_input'] = torch.cat(
+            [b.dstdata['mem_input'], time_feat], dim=1)
 
         target_node_memory_input = b.dstdata['mem_input']
         target_node_memory = b.srcdata['mem'][:num_dst_nodes]

@@ -185,7 +185,7 @@ def main():
     logging.debug("device: {}".format(device))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device)
+                 memory_device=device, memory_shared=args.distributed)
     model.to(device)
 
     sampler = TemporalSampler(dgraph, **model_config)
@@ -249,6 +249,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
+            logging.info("batch size: {}".format(target_nodes.shape[0]))
             # Sample
             mfgs = sampler.sample(target_nodes, ts)
 
@@ -333,7 +334,4 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
 
 if __name__ == '__main__':
-    if args.model == "TGN":
-        raise NotImplementedError("TGN is not supported yet")
-
     main()
