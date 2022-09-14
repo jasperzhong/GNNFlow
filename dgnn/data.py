@@ -103,7 +103,9 @@ class RandomStartBatchSampler(BatchSampler):
     def reset(self):
         self.reorder = self.num_chunks > 1
         l = self.batch_size // self.chunk_size
-        self.random_size = random.randint(0, l - 1) * self.chunk_size
+        self.random_size = int(random.randint(0, l - 1) * self.chunk_size)
+        if self.random_size == 0:
+            self.reorder = False
 
 
 class DistributedBatchSampler(BatchSampler):
