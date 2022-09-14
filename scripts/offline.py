@@ -13,8 +13,8 @@ import dgnn.models as models
 from dgnn.config import get_default_config
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, degree_based_sampling, get_project_root_dir,
-                        load_dataset, load_feat, mfgs_to_cuda, get_batch,
-                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input, update_degree)
+                        load_dataset, load_feat, loss_based_samping, mfgs_to_cuda, get_batch,
+                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input, update_degree, update_loss)
 import dgnn.cache as caches
 
 model_names = sorted(name for name in models.__dict__
@@ -94,7 +94,8 @@ set_seed(args.seed)
 def val(df, rand_sampler, sampler: TemporalSampler,
         model: torch.nn.Module, cache: Cache, node_feats: torch.Tensor,
         edge_feats: torch.Tensor, creterion: torch.nn.Module, neg_samples=1,
-        no_neg=False, identity=False, deliver_to_neighbors=False):
+        no_neg=False, identity=False, deliver_to_neighbors=False,
+        update_loss_flag=False, creterion_n_reduce=None, edge_loss_dict={}):
     model.eval()
     val_losses = list()
     aps = list()
@@ -127,6 +128,10 @@ def val(df, rand_sampler, sampler: TemporalSampler,
                     mfgs, node_feats, edge_feats, combine_first=False)
             pred_pos, pred_neg = model(mfgs, neg_samples)
 
+            if update_loss_flag:
+                loss = creterion_n_reduce(pred_pos, torch.ones_like(pred_pos))
+                update_loss(edge_list=eid[:len(loss)],
+                            loss=loss, edge_loss_dict=edge_loss_dict)
             total_loss += creterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += creterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -157,7 +162,8 @@ def val(df, rand_sampler, sampler: TemporalSampler,
 
 
 def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
-          sampler, model, cache, node_feats, edge_feats, creterion, optimizer, save_model, n):
+          sampler, model, cache, node_feats, edge_feats, creterion, optimizer, save_model, n,
+          update_loss_flag=False, creterion_n_reduce=None, edge_loss_dict={}):
 
     no_improvement_in_n = n
     epoch_time_sum = 0
@@ -215,6 +221,10 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
             neg_sample = 0 if args.no_neg else 1
             pred_pos, pred_neg = model(mfgs, neg_samples=neg_sample)
 
+            if update_loss_flag:
+                loss = creterion_n_reduce(pred_pos, torch.ones_like(pred_pos))
+                update_loss(edge_list=eid[:len(loss)],
+                            loss=loss, edge_loss_dict=edge_loss_dict)
             loss = creterion(pred_pos, torch.ones_like(pred_pos))
             loss += creterion(pred_neg, torch.zeros_like(pred_neg))
             total_loss += float(loss) * args.batch_size
@@ -254,7 +264,9 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
         ap, auc = val(val_df, val_rand_sampler, sampler, model, None, node_feats,
                       edge_feats, creterion, no_neg=args.no_neg,
                       identity=args.arch_identity,
-                      deliver_to_neighbors=args.deliver_to_neighbors)
+                      deliver_to_neighbors=args.deliver_to_neighbors,
+                      update_loss_flag=True, creterion_n_reduce=creterion_n_reduce,
+                      edge_loss_dict=edge_loss_dict)
         val_end = time.time()
         val_time = val_end - val_start
         print("epoch train time: {} ; val time: {}; val ap:{:4f}; val auc:{:4f}"
@@ -271,6 +283,8 @@ def train(args, path_saver, df, rand_sampler, val_df, val_rand_sampler,
         if counter < 0:
             print("early stop at epoch: {}".format(e))
             break
+
+        break
 
 
 path_saver = os.path.join(get_project_root_dir(),
@@ -326,19 +340,22 @@ if not args.no_sample:
                               seed=args.seed)
 
 creterion = torch.nn.BCEWithLogitsLoss()
-# for loss-based
+# for loss-based sample
+creterion_n_reduce = torch.nn.BCEWithLogitsLoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
-# train(args, path_saver, phase1_train_df, rand_sampler,
-#       phase1_val_df, val_rand_sampler, sampler, model, None,
-#       node_feats, edge_feats, creterion, optimizer, True, 5)
+edge_loss_dict = {}
+train(args, path_saver, phase1_train_df, rand_sampler,
+      phase1_val_df, val_rand_sampler, sampler, model, None,
+      node_feats, edge_feats, creterion, optimizer, False, 5,
+      True, creterion_n_reduce, edge_loss_dict)
 
 # # phase1 training done
 # # update rand_sampler
-# rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
-#                               phase1_val_df['dst'].to_numpy())
+rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
+                              phase1_val_df['dst'].to_numpy())
 model.load_state_dict(torch.load(path_saver))
-node_degree = update_degree(dgraph, df[:phase1])
+# node_degree = {}
+# update_degree(dgraph, df[:phase1], node_degree)
 
 print("phase2")
 with open("online_{}_ap_{}_{}.txt".format(args.model, args.retrain, args.replay_ratio), "a") as f_phase2:
@@ -378,14 +395,22 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
 
     # retrain by using previous data 50k
     if i % args.retrain == 0 and i != 0:
+        # USE WEIGHTED SAMPLING
         # retrain_count += 1
         # phase2_train_df, phase2_val_df, phase2_new_data_end, weights = weighted_sample(
         #     args.replay_ratio, df, weights, phase1,
         #     i, incremental_step, args.retrain, retrain_count)
         # reconstruct the rand_sampler again(may not be necessary)
-        # USE Degree Based Sampling
-        phase2_train_df, phase2_val_df, phase2_new_data_end, node_degree = degree_based_sampling(
-            dgraph, args.replay_ratio, df, phase1, i, incremental_step, args.retrain, 0.5, node_degree)
+
+        # USE DEGREE BASED SAMPLING
+        # phase2_train_df, phase2_val_df, phase2_new_data_end = degree_based_sampling(
+        #     dgraph, args.replay_ratio, df, phase1,
+        #     i, incremental_step, args.retrain, 0.5, node_degree)
+
+        # USE LOSS BASED SAMPLING
+        phase2_train_df, phase2_val_df, phase2_new_data_end = loss_based_samping(
+            args.replay_ratio, df, phase1,
+            i, incremental_step, args.retrain, edge_loss_dict)
         rand_sampler = RandEdgeSampler(
             phase2_train_df['src'].to_numpy(), phase2_train_df['dst'].to_numpy())
         val_rand_sampler = RandEdgeSampler(
@@ -397,9 +422,9 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
         # dgraph has been built, no need to build again
-        train(args, path_saver, phase2_train_df, rand_sampler,
-              phase2_val_df, val_rand_sampler, sampler, model, None,
-              node_feats, edge_feats, creterion, optimizer, False, 5)
+        # train(args, path_saver, phase2_train_df, rand_sampler,
+        #       phase2_val_df, val_rand_sampler, sampler, model, None,
+        #       node_feats, edge_feats, creterion, optimizer, False, 5)
 
 with open("online_{}_ap_{}_{}.txt".format(args.model, args.retrain, args.replay_ratio), "a") as f_phase2:
     f_phase2.write("********\n")

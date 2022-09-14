@@ -345,8 +345,6 @@ def update_degree(dgraph: DynamicGraph,
     for i in node_list:
         node_degree[i] = dgraph.out_degree(i)
 
-    return node_degree
-
 
 def degree_based_sampling(dgraph: DynamicGraph,
                           replay_ratio: float,
@@ -363,10 +361,10 @@ def degree_based_sampling(dgraph: DynamicGraph,
     if replay_ratio != 0:
         num_replay = int(replay_ratio * phase2_new_data_start)
 
-        node_degree = update_degree(dgraph,
-                                    df[phase2_new_data_start:
-                                       phase2_new_data_end],
-                                    node_degree)
+        update_degree(dgraph,
+                      df[phase2_new_data_start:
+                         phase2_new_data_end],
+                      node_degree)
         # # sort the by values
         src_nodes = df['src'][:phase2_new_data_start].to_numpy()
         # get all the source node degree (have duplication)
@@ -388,8 +386,41 @@ def degree_based_sampling(dgraph: DynamicGraph,
     phase2_train_df = df.iloc[train_index.numpy()]
     phase2_val_df = df.iloc[val_index.numpy()]
 
-    return phase2_train_df, phase2_val_df, phase2_new_data_end, node_degree
+    return phase2_train_df, phase2_val_df, phase2_new_data_end
 
 
-def loss_based_samping():
-    pass
+def update_loss(edge_list: np.ndarray,
+                loss: torch.Tensor,
+                edge_loss_dict: Dict = {}) -> Dict:
+    loss = loss.cpu().detach().numpy()
+    for i, eid in enumerate(edge_list):
+        edge_loss_dict[eid] = loss[i][0]
+
+
+def loss_based_samping(replay_ratio: float,
+                       df: pd.DataFrame,
+                       phase1: int, i: int,
+                       incremental_step: int,
+                       retrain_interval: int,
+                       edge_loss_dict: Dict = {}):
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
+    phase2_new_data_end = phase1 + incremental_step * i
+    new_data_index = torch.arange(
+        phase2_new_data_start, phase2_new_data_end)
+    if replay_ratio != 0:
+        num_replay = int(replay_ratio * phase2_new_data_start)
+        eid = df['Unnamed: 0'][:phase2_new_data_start].to_numpy(dtype=np.int64)
+        eid_loss = itemgetter(*eid)(edge_loss_dict)
+        index_select = torch.multinomial(
+            torch.tensor(eid_loss), num_replay).sort().values
+        all_index = torch.cat((index_select, new_data_index))
+    else:
+        all_index = new_data_index
+
+    train_length = int(len(all_index) * 0.9) + 1
+    train_index = all_index[:train_length]
+    val_index = all_index[train_length:]
+    phase2_train_df = df.iloc[train_index.numpy()]
+    phase2_val_df = df.iloc[val_index.numpy()]
+
+    return phase2_train_df, phase2_val_df, phase2_new_data_end
