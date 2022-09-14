@@ -103,7 +103,9 @@ class RandomStartBatchSampler(BatchSampler):
     def reset(self):
         self.reorder = self.num_chunks > 1
         l = self.batch_size // self.chunk_size
-        self.random_size = random.randint(0, l - 1) * self.chunk_size
+        self.random_size = int(random.randint(0, l - 1) * self.chunk_size)
+        if self.random_size == 0:
+            self.reorder = False
 
 
 class DistributedBatchSampler(BatchSampler):
@@ -169,7 +171,9 @@ class DistributedBatchSampler(BatchSampler):
                 randint = torch.zeros(1, dtype=torch.int64, device=self.device)
 
             torch.distributed.broadcast(randint, src=0)
-            self.random_size = randint.item() * self.chunk_size
+            self.random_size = int(randint.item() * self.chunk_size)
+            if self.random_size == 0:
+                self.reorder = False
 
 
 default_collate_err_msg_format = (
