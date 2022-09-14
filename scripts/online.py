@@ -4,7 +4,6 @@ import random
 import time
 import numpy as np
 import pandas as pd
-from pyrsistent import inc
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
 from dgnn.cache.cache import Cache
@@ -357,7 +356,7 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     src = target_nodes[:incremental_step]
     dst = target_nodes[incremental_step:incremental_step * 2]
     # add edges here
-    dgraph.add_edges(src, dst, ts[:incremental_step], args.graph_reverse)
+    dgraph.add_edges(src, dst, ts[:len(src)], args.graph_reverse)
     rand_sampler.add_src_dst_list(src, dst)
     ap, auc = val(phase2_df[i * incremental_step: (i + 1) * incremental_step],
                   rand_sampler, sampler, model, None, node_feats, edge_feats, creterion)

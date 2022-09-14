@@ -4,7 +4,6 @@ import random
 import time
 import numpy as np
 import pandas as pd
-from pyrsistent import inc
 import torch
 from sklearn.metrics import average_precision_score, roc_auc_score
 from dgnn.cache.cache import Cache
