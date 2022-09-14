@@ -249,7 +249,6 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
-            logging.info("batch size: {}".format(target_nodes.shape[0]))
             # Sample
             mfgs = sampler.sample(target_nodes, ts)
 
@@ -316,7 +315,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
-            best_e = e
+            best_e = e + 1
             best_ap = val_ap
             torch.save(model.state_dict(), checkpoint_path)
             logging.info(
