@@ -6,14 +6,14 @@ RATIO=$4
 
 # TGAT
 if [ $MODEL == "tgat" ] || [ $MODEL == "TGAT" ];then
-    cmd="python offline.py --model TGAT --dropout 0.1 --attn-dropout 0.1 \
+    cmd="python online_loss.py --model TGAT --dropout 0.1 --attn-dropout 0.1 \
                     --sample-layer 2 --sample-neighbor 10 10 \
                     --data $DATA --sample-strategy uniform --replay_ratio $RATIO"
 fi
 
 # TGN
 if [ $MODEL == "tgn" ] || [ $MODEL == "TGN" ];then
-    cmd="python offline.py --dataset REDDIT --model TGN"
+    cmd="python online_loss.py --dataset REDDIT --model TGN"
 fi
 
 if [ -n "$RETRAIN" ]; then
