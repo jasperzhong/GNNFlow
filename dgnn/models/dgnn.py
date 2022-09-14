@@ -18,7 +18,8 @@ class DGNN(torch.nn.Module):
                  att_head: int, dropout: float, att_dropout: float,
                  use_memory: bool, dim_memory: Optional[int] = None,
                  num_nodes: Optional[int] = None,
-                 memory_device: Union[torch.device, str] = 'cpu', *args, **kwargs):
+                 memory_device: Union[torch.device, str] = 'cpu',
+                 memory_shared: bool = False, *args, **kwargs):
         """
         Args:
             dim_node: dimension of node features/embeddings
@@ -34,6 +35,7 @@ class DGNN(torch.nn.Module):
             dim_memory: dimension of memory
             num_nodes: number of nodes in the graph
             memory_device: device of the memory
+            memory_shared: whether to share memory across local workers
         """
         super(DGNN, self).__init__()
         self.dim_node = dim_node
@@ -52,8 +54,9 @@ class DGNN(torch.nn.Module):
             assert num_snapshots == 1, 'memory is not supported for multiple snapshots'
             assert dim_memory is not None, 'dim_memory should be specified'
             assert num_nodes is not None, 'num_nodes is required when using memory'
-            self.memory = Memory(num_nodes, dim_edge, dim_time, dim_memory,
-                                 memory_device)
+
+            self.memory = Memory(num_nodes, dim_edge, dim_memory,
+                                 memory_device, memory_shared)
 
             self.memory_updater = GRUMemeoryUpdater(
                 dim_node, dim_edge, dim_time, dim_memory)
