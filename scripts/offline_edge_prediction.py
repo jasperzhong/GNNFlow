@@ -135,8 +135,7 @@ def main():
 
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
-    args.lr = args.lr * math.sqrt(args.world_size) * \
-        math.sqrt(math.sqrt(args.world_size))
+    args.lr = args.lr * math.sqrt(args.world_size) 
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
     if args.distributed:
@@ -229,7 +228,8 @@ def main():
                            criterion, cache, device)
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
-    torch.distributed.barrier()
+    if args.distributed:
+        torch.distributed.barrier()
 
 
 def train(train_loader, val_loader, sampler, model, optimizer, criterion,
@@ -328,7 +328,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
 
-    torch.distributed.barrier()
+    if args.distributed:
+        torch.distributed.barrier()
+
     return best_e
 
 
