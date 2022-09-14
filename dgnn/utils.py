@@ -1,7 +1,7 @@
 import os
 import random
-from typing import Optional, Tuple
-
+from typing import Dict, Optional, Tuple
+from operator import itemgetter
 import dgl
 import numpy as np
 import pandas as pd
@@ -90,7 +90,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None, rand_de=0, rand_dn=0
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, rand_sampler = None, batch_size: int = 600):
+def get_batch(df: pd.DataFrame, rand_sampler=None, batch_size: int = 600):
     group_indexes = list()
 
     group_indexes.append(np.array(np.arange(len(df)) // batch_size))
@@ -307,3 +307,89 @@ class RandEdgeSampler(object):
     def add_src_dst_list(self, src, dst):
         self.src_list = np.unique(np.concatenate((self.src_list, src)))
         self.dst_list = np.unique(np.concatenate((self.dst_list, dst)))
+
+
+def weighted_sample(replay_ratio, df, weights, phase1,
+                    i, incremental_step, retrain_interval, retrain_count):
+
+    weights = torch.cat(
+        (weights, torch.tensor([retrain_count] * (retrain_interval * incremental_step))))
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
+    phase2_new_data_end = phase1 + incremental_step * i
+    new_data_index = torch.arange(
+        phase2_new_data_start, phase2_new_data_end)
+    # first fetch replay samples in old data
+    # new data will all be selected to the replay samples
+    if replay_ratio != 0:
+        num_replay = int(replay_ratio * phase2_new_data_start)
+        index_select = torch.multinomial(weights[:phase2_new_data_start],
+                                         num_replay).sort().values
+        all_index = torch.cat((index_select, new_data_index))
+    else:
+        all_index = new_data_index
+    train_length = int(len(all_index) * 0.9) + 1
+    train_index = all_index[:train_length]
+    val_index = all_index[train_length:]
+    phase2_train_df = df.iloc[train_index.numpy()]
+    phase2_val_df = df.iloc[val_index.numpy()]
+
+    return phase2_train_df, phase2_val_df, phase2_new_data_end, weights
+
+
+def update_degree(dgraph: DynamicGraph,
+                  df: pd.DataFrame,
+                  node_degree: Dict = {}) -> Dict:
+    node_list = np.unique(np.concatenate(
+        (df['src'].to_numpy(dtype=np.int64),
+         df['dst'].to_numpy(dtype=np.int64))))
+    for i in node_list:
+        node_degree[i] = dgraph.out_degree(i)
+
+    return node_degree
+
+
+def degree_based_sampling(dgraph: DynamicGraph,
+                          replay_ratio: float,
+                          df: pd.DataFrame,
+                          phase1: int, i: int,
+                          incremental_step: int,
+                          retrain_interval: int,
+                          temperature: int,
+                          node_degree: Dict = {}):
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
+    phase2_new_data_end = phase1 + incremental_step * i
+    new_data_index = torch.arange(
+        phase2_new_data_start, phase2_new_data_end)
+    if replay_ratio != 0:
+        num_replay = int(replay_ratio * phase2_new_data_start)
+
+        node_degree = update_degree(dgraph,
+                                    df[phase2_new_data_start:
+                                       phase2_new_data_end],
+                                    node_degree)
+        # # sort the by values
+        src_nodes = df['src'][:phase2_new_data_start].to_numpy()
+        # get all the source node degree (have duplication)
+        src_degree = itemgetter(*src_nodes)(node_degree)
+        # get the sum
+        p_sum = (1 / np.power(src_degree, temperature)).sum()
+        # get the possibility (or weights)
+        src_p = (1 / np.power(src_degree, temperature)) / p_sum
+        # TODO: directly use argsort or just use multinomial?
+        index_select = torch.multinomial(
+            torch.tensor(src_p), num_replay).sort().values
+        all_index = torch.cat((index_select, new_data_index))
+    else:
+        all_index = new_data_index
+
+    train_length = int(len(all_index) * 0.9) + 1
+    train_index = all_index[:train_length]
+    val_index = all_index[train_length:]
+    phase2_train_df = df.iloc[train_index.numpy()]
+    phase2_val_df = df.iloc[val_index.numpy()]
+
+    return phase2_train_df, phase2_val_df, phase2_new_data_end, node_degree
+
+
+def loss_based_samping():
+    pass
