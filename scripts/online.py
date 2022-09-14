@@ -302,7 +302,7 @@ node_feats, edge_feats = load_feat(
     edge_count=edge_count, node_count=node_count)
 # for test
 node_feats = None
-edge_feats.cuda()
+edge_feats = edge_feats.cuda()
 
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
