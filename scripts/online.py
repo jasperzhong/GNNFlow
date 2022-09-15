@@ -13,7 +13,7 @@ from dgnn.config import get_default_config
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (build_dynamic_graph, degree_based_sampling, get_project_root_dir,
                         load_dataset, load_feat, loss_based_samping, mfgs_to_cuda, get_batch,
-                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input, update_degree, update_loss)
+                        node_to_dgl_blocks, RandEdgeSampler, get_pinned_buffers, prepare_input, update_degree, update_loss, weighted_sample)
 import dgnn.cache as caches
 
 model_names = sorted(name for name in models.__dict__
@@ -330,17 +330,17 @@ creterion = torch.nn.BCEWithLogitsLoss()
 creterion_n_reduce = torch.nn.BCEWithLogitsLoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-# train(args, path_saver, phase1_train_df, rand_sampler,
-#       phase1_val_df, val_rand_sampler, sampler, model, None,
-#       node_feats, edge_feats, creterion, optimizer, True, 5)
+train(args, path_saver, phase1_train_df, rand_sampler,
+      phase1_val_df, val_rand_sampler, sampler, model, None,
+      node_feats, edge_feats, creterion, optimizer, True, 5)
 
 # # phase1 training done
 # # update rand_sampler
 rand_sampler.add_src_dst_list(phase1_val_df['src'].to_numpy(),
                               phase1_val_df['dst'].to_numpy())
 model.load_state_dict(torch.load(path_saver))
-node_degree = {}
-update_degree(dgraph, df[:phase1], node_degree)
+# node_degree = {}
+# update_degree(dgraph, df[:phase1], node_degree)
 
 print("phase2")
 with open("online_{}_ap_{}_{}.txt".format(args.model, args.retrain, args.replay_ratio), "a") as f_phase2:
@@ -353,8 +353,8 @@ retrain_count = 1.0
 weights = torch.tensor([1.0] * phase1)
 for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, incremental_step)):
     # add to rand_sampler
-    src = target_nodes[:incremental_step]
-    dst = target_nodes[incremental_step:incremental_step * 2]
+    src = target_nodes[:len(target_nodes) // 2]
+    dst = target_nodes[len(target_nodes) // 2:]
     # add edges here
     dgraph.add_edges(src, dst, ts[:len(src)], args.graph_reverse)
     rand_sampler.add_src_dst_list(src, dst)
@@ -373,16 +373,16 @@ for i, (target_nodes, ts, eid) in enumerate(get_batch(phase2_df, None, increment
     # retrain by using previous data 50k
     if i % args.retrain == 0 and i != 0:
         # USE WEIGHTED SAMPLING
-        # retrain_count += 1
-        # phase2_train_df, phase2_val_df, phase2_new_data_end, weights = weighted_sample(
-        #     args.replay_ratio, df, weights, phase1,
-        #     i, incremental_step, args.retrain, retrain_count)
+        retrain_count += 1
+        phase2_train_df, phase2_val_df, phase2_new_data_end, weights = weighted_sample(
+            args.replay_ratio, df, weights, phase1,
+            i, incremental_step, args.retrain, retrain_count)
         # reconstruct the rand_sampler again(may not be necessary)
 
         # USE DEGREE BASED SAMPLING
-        phase2_train_df, phase2_val_df, phase2_new_data_end = degree_based_sampling(
-            dgraph, args.replay_ratio, df, phase1,
-            i, incremental_step, args.retrain, 0.5, node_degree)
+        # phase2_train_df, phase2_val_df, phase2_new_data_end = degree_based_sampling(
+        #     dgraph, args.replay_ratio, df, phase1,
+        #     i, incremental_step, args.retrain, 0.5, node_degree)
 
         rand_sampler = RandEdgeSampler(
             phase2_train_df['src'].to_numpy(), phase2_train_df['dst'].to_numpy())

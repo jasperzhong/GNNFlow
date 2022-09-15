@@ -13,7 +13,7 @@ fi
 
 # TGN
 if [ $MODEL == "tgn" ] || [ $MODEL == "TGN" ];then
-    cmd="python online.py --dataset REDDIT --model TGN"
+    cmd="python online.py --model TGN --data $DATA --sample-strategy recent --replay_ratio $RATIO"
 fi
 
 if [ -n "$RETRAIN" ]; then
