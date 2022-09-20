@@ -1,23 +1,24 @@
 #!/bin/bash
+INTERFACE="eth2"
 
 MODEL=$1
 DATA=$2
 CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
 
-HOST_NODE_ADDR=10.28.1.30
+HOST_NODE_ADDR=10.28.1.16
 HOST_NODE_PORT=29400
 NNODES=2
 NPROC_PER_NODE=4
 
-CURRENT_NODE_IP=$(ip -4 a show dev enp225s0 | grep inet | cut -d " " -f6 | cut -d "/" -f1)
+CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
     IS_HOST=true
 else
     IS_HOST=false
 fi
 
-export NCCL_SOCKET_IFNAME=enp225s0
+export NCCL_SOCKET_IFNAME=${INTERFACE}
 
 cmd="torchrun \
     --nnodes=$NNODES --nproc_per_node=$NPROC_PER_NODE \
