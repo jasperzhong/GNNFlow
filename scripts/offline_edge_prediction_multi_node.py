@@ -14,6 +14,7 @@ import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 
+import dgnn
 import dgnn.cache as caches
 from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
@@ -51,6 +52,12 @@ parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
                     '|'.join(cache_names))
 parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
+
+# distributed
+parser.add_argument("--ingestion-batch-size", type=int, default=1000,
+                    help="ingestion batch size")
+parser.add_argument("--partition-strategy", type=str, default="roundrobin",
+                    help="partition strategy for distributed training")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
@@ -101,8 +108,12 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
 
 
 def main():
-    args.distributed = int(os.environ.get('WORLD_SIZE', 0)) > 1
-    if args.distributed:
+    world_size = int(os.environ.get('WORLD_SIZE', 0))
+    local_world_size = int(os.environ.get('LOCAL_WORLD_SIZE', 0))
+    args.num_nodes = world_size // local_world_size
+    args.multi_gpu = world_size > 1
+    args.distributed = args.num_nodes > 1
+    if args.multi_gpu:
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
@@ -117,7 +128,7 @@ def main():
 
     model_config, data_config = get_default_config(args.model, args.data)
 
-    if args.distributed:
+    if args.multi_gpu:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
@@ -129,16 +140,21 @@ def main():
     test_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
 
+    if args.distributed:
+        dgnn.distributed.initialize(args.rank, args.world_size, full_data,
+                                    args.ingestion_batch_size, args.partition_strategy,
+                                    args.num_nodes)
+
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
 
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
-    args.lr = args.lr * math.sqrt(args.world_size) 
+    args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed:
+    if args.multi_gpu:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -174,7 +190,7 @@ def main():
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.distributed,
+        args.data, shared_memory=args.multi_gpu,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
@@ -184,12 +200,12 @@ def main():
     logging.debug("device: {}".format(device))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.distributed)
+                 memory_device=device, memory_shared=args.multi_gpu)
     model.to(device)
 
     sampler = TemporalSampler(dgraph, **model_config)
 
-    if args.distributed:
+    if args.multi_gpu:
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank])
 
@@ -228,7 +244,7 @@ def main():
                            criterion, cache, device)
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
-    if args.distributed:
+    if args.multi_gpu:
         torch.distributed.barrier()
 
 
@@ -272,7 +288,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             total_samples += len(target_nodes)
 
             if (i+1) % args.print_freq == 0:
-                if args.distributed:
+                if args.multi_gpu:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
                                             cache_node_ratio_sum, total_samples],
                                            device=device)
@@ -293,7 +309,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_ap, val_auc = evaluate(
             val_loader, sampler, model, criterion, cache, device)
 
-        if args.distributed:
+        if args.multi_gpu:
             val_res = torch.tensor([val_ap, val_auc]).to(device)
             torch.distributed.all_reduce(val_res)
             val_res /= args.world_size
@@ -302,7 +318,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_end = time.time()
         val_time = val_end - val_start
 
-        if args.distributed:
+        if args.multi_gpu:
             metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
                                     cache_node_ratio_sum, total_samples], device=device)
             torch.distributed.all_reduce(metrics)
@@ -328,7 +344,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
 
-    if args.distributed:
+    if args.multi_gpu:
         torch.distributed.barrier()
 
     return best_e
