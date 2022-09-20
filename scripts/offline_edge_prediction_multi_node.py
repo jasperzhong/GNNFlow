@@ -55,7 +55,7 @@ parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
 
 # distributed
-parser.add_argument("--partition", type=bool, action="store_true",
+parser.add_argument("--partition", action="store_true", 
                     help="whether to partition the graph")
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")

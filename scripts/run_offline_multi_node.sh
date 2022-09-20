@@ -26,7 +26,8 @@ cmd="torchrun \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
     --rdzv_conf is_host=$IS_HOST \
     offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
-    --cache $CACHE --cache-ratio $CACHE_RATIO"
+    --cache $CACHE --cache-ratio $CACHE_RATIO \
+    --partition "
 
 echo $cmd
 LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
