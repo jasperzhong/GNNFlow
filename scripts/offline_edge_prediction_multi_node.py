@@ -16,6 +16,7 @@ from torch.utils.data import BatchSampler, SequentialSampler
 
 import dgnn.cache as caches
 import dgnn.distributed
+import dgnn.distributed.graph_services as graph_services
 from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
@@ -54,6 +55,8 @@ parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
 
 # distributed
+parser.add_argument("--partition", type=bool, action="store_true",
+                    help="whether to partition the graph")
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
@@ -108,18 +111,16 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
 
 
 def main():
-    world_size = int(os.environ.get('WORLD_SIZE', 0))
-    local_world_size = int(os.environ.get('LOCAL_WORLD_SIZE', 0))
-    args.num_nodes = world_size // local_world_size
-    args.multi_gpu = world_size > 1
-    args.distributed = args.num_nodes > 1
-    if args.multi_gpu:
+    args.distributed = int(os.environ.get('WORLD_SIZE', 0)) > 1
+    if args.distributed:
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group('nccl')
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
+        args.num_nodes = args.world_size // args.local_world_size
+        args.partition &= args.num_nodes > 1
     else:
         args.local_rank = args.rank = 0
         args.local_world_size = args.world_size = 1
@@ -128,7 +129,7 @@ def main():
 
     model_config, data_config = get_default_config(args.model, args.data)
 
-    if args.multi_gpu:
+    if args.distributed:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
@@ -140,11 +141,6 @@ def main():
     test_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
 
-    if args.distributed:
-        dgnn.distributed.initialize(args.rank, args.world_size, full_data,
-                                    args.ingestion_batch_size, args.partition_strategy,
-                                    args.num_nodes)
-
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
@@ -154,7 +150,7 @@ def main():
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.multi_gpu:
+    if args.distributed:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -183,14 +179,22 @@ def main():
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
-    dgraph = build_dynamic_graph(
-        full_data, **data_config, device=args.local_rank)
+    if args.partition:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank)
+        graph_services.set_dgraph(dgraph)
+        dgnn.distributed.initialize(args.rank, args.world_size, full_data,
+                                    args.ingestion_batch_size, args.partition_strategy,
+                                    args.num_nodes, data_config["undirected"])
+    else:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank, dataset_df=full_data)
 
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.multi_gpu,
+        args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
@@ -200,12 +204,12 @@ def main():
     logging.debug("device: {}".format(device))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.multi_gpu)
+                 memory_device=device, memory_shared=args.distributed)
     model.to(device)
 
     sampler = TemporalSampler(dgraph, **model_config)
 
-    if args.multi_gpu:
+    if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank])
 
@@ -244,7 +248,7 @@ def main():
                            criterion, cache, device)
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
-    if args.multi_gpu:
+    if args.distributed:
         torch.distributed.barrier()
 
 
@@ -288,7 +292,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             total_samples += len(target_nodes)
 
             if (i+1) % args.print_freq == 0:
-                if args.multi_gpu:
+                if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
                                             cache_node_ratio_sum, total_samples],
                                            device=device)
@@ -309,7 +313,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_ap, val_auc = evaluate(
             val_loader, sampler, model, criterion, cache, device)
 
-        if args.multi_gpu:
+        if args.distributed:
             val_res = torch.tensor([val_ap, val_auc]).to(device)
             torch.distributed.all_reduce(val_res)
             val_res /= args.world_size
@@ -318,7 +322,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_end = time.time()
         val_time = val_end - val_start
 
-        if args.multi_gpu:
+        if args.distributed:
             metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
                                     cache_node_ratio_sum, total_samples], device=device)
             torch.distributed.all_reduce(metrics)
@@ -344,7 +348,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
 
-    if args.multi_gpu:
+    if args.distributed:
         torch.distributed.barrier()
 
     return best_e

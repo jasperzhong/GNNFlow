@@ -168,7 +168,7 @@ def main():
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
     dgraph = build_dynamic_graph(
-        full_data, **data_config, device=args.local_rank)
+        **data_config, device=args.local_rank, dataset_df=full_data)
 
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
