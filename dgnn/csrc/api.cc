@@ -88,5 +88,6 @@ PYBIND11_MODULE(libdgnn, m) {
            py::arg("dgraph"), py::arg("fanouts"), py::arg("sampling_policy"),
            py::arg("num_snapshots"), py::arg("snapshot_time_window"),
            py::arg("prop_time"), py::arg("seed"))
-      .def("sample", &TemporalSampler::Sample);
+      .def("sample", &TemporalSampler::Sample)
+      .def("sample_layer", &TemporalSampler::SampleLayer);
 }

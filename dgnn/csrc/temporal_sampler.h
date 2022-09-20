@@ -18,14 +18,21 @@ class TemporalSampler {
                   uint64_t seed = 1234);
   ~TemporalSampler();
 
+  // TODO: re-implement this using the new `SampleLayer` API
   std::vector<std::vector<SamplingResult>> Sample(
       const std::vector<NIDType>& dst_nodes,
       const std::vector<TimestampType>& dst_timestamps);
 
- private:
-  std::vector<SamplingResult> SampleLayer(
-      uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results);
+  // TODO: implement this (refer to old `SampleLayer` implementation)
+  SamplingResult SampleLayer(const std::vector<NIDType>& dst_nodes,
+                             const std::vector<TimestampType>& dst_timestamps,
+                             uint32_t layer, uint32_t snapshot);
 
+  // the old `SampleLayer` implementation (remove this function)
+  // std::vector<SamplingResult> SampleLayer(
+  //     uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results);
+
+ private:
   std::vector<SamplingResult> RootInputToSamplingResult(
       const std::vector<NIDType>& dst_nodes,
       const std::vector<TimestampType>& dst_timestamps);

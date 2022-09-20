@@ -63,6 +63,23 @@ class TemporalSampler:
             target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
 
+    def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray, layer: int, snapshot: int) -> DGLBlock:
+        """
+        Sample neighbors of given vertices in a specific layer and snapshot.
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+            layer: layer to sample.
+            snapshot: snapshot to sample.
+
+        Returns:
+            message flow graph for the specific layer and snapshot.
+        """
+        sampling_results = self._sampler.sample_layer(
+            target_vertices, timestamps, layer, snapshot)
+        return self._to_dgl_block_layer(sampling_results)
+
     def _to_dgl_block(self, sampling_results: SamplingResult) -> List[List[DGLBlock]]:
         mfgs = list()
         for sampling_results_layer in sampling_results:
