@@ -156,6 +156,13 @@ SamplingResult TemporalSampler::SampleLayer(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps, uint32_t layer,
     uint32_t snapshot) {
+  // update buffer
+  if (dst_nodes.size() > init_num_root_nodes_) {
+    FreeBuffer();
+    init_num_root_nodes_ = dst_nodes.size();
+    InitBuffer(init_num_root_nodes_);
+  }
+
   // prepare input
   std::vector<std::size_t> num_root_nodes_list(num_snapshots_);
   std::size_t num_root_nodes = dst_nodes.size();
@@ -555,12 +562,6 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
     const std::vector<TimestampType>& dst_timestamps) {
   CHECK_EQ(dst_nodes.size(), dst_timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
-
-  if (dst_nodes.size() > init_num_root_nodes_) {
-    FreeBuffer();
-    init_num_root_nodes_ = dst_nodes.size();
-    InitBuffer(init_num_root_nodes_);
-  }
 
   for (int layer = 0; layer < num_layers_; ++layer) {
     std::vector<SamplingResult> layer_results;

@@ -76,9 +76,9 @@ class TemporalSampler:
         Returns:
             message flow graph for the specific layer and snapshot.
         """
-        sampling_results = self._sampler.sample_layer(
+        sampling_result = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot)
-        return self._to_dgl_block_layer(sampling_results)
+        return self._to_dgl_block_layer_snapshot(sampling_result)
 
     def _to_dgl_block(self, sampling_results: SamplingResult) -> List[List[DGLBlock]]:
         mfgs = list()
@@ -97,3 +97,15 @@ class TemporalSampler:
         mfgs = list(map(list, zip(*[iter(mfgs)] * self._num_snapshots)))
         mfgs.reverse()
         return mfgs
+    
+    def _to_dgl_block_layer_snapshot(self, sampling_result: SamplingResult) -> List[List[DGLBlock]]:
+        mfg = dgl.create_block(
+            (sampling_result.col(),
+            sampling_result.row()),
+            num_src_nodes=sampling_result.num_src_nodes(),
+            num_dst_nodes=sampling_result.num_dst_nodes())
+        mfg.srcdata['ID'] = torch.from_numpy(sampling_result.all_nodes())
+        mfg.edata['dt'] = torch.from_numpy(sampling_result.delta_timestamps())
+        mfg.srcdata['ts'] = torch.from_numpy(sampling_result.all_timestamps())
+        mfg.edata['ID'] = torch.from_numpy(sampling_result.eids())
+        return mfg
