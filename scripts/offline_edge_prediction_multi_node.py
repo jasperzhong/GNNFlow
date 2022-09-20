@@ -14,8 +14,8 @@ import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 
-import dgnn
 import dgnn.cache as caches
+import dgnn.distributed
 from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
