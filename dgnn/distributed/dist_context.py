@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 import torch
@@ -23,12 +25,17 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         undirected (bool): Whether the graph is undirected.
     """
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size)
+    logging.info("Rank %d: Initialized RPC.", rank)
 
     if rank == 0:
         dispatch(dataset, ingestion_batch_size,
                  partition_strategy, num_partition, undirected)
 
     torch.distributed.barrier()
+
+    # check
+    logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
+                 rank, graph_services.num_vertices(), graph_services.num_edges())
 
 
 def dispatch(dataset: pd.DataFrame, ingestion_batch_size: int,

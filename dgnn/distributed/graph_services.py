@@ -47,3 +47,25 @@ def add_edges(source_vertices: np.ndarray, target_vertices: np.ndarray,
     rank = torch.distributed.get_rank()
     logging.info("Rank %d: Adding %d edges.", rank, len(source_vertices))
     dgraph.add_edges(source_vertices, target_vertices, timestamps)
+
+
+def num_vertices() -> int:
+    """
+    Get the number of vertices in the dynamic graph.
+
+    Returns:
+        int: The number of vertices.
+    """
+    dgraph = get_dgraph()
+    return dgraph.num_vertices()
+
+
+def num_edges() -> int:
+    """
+    Get the number of edges in the dynamic graph.
+
+    Returns:
+        int: The number of edges.
+    """
+    dgraph = get_dgraph()
+    return dgraph.num_edges()
