@@ -44,8 +44,7 @@ def add_edges(source_vertices: np.ndarray, target_vertices: np.ndarray,
         timestamps (np.ndarray): The timestamps of the edges.
     """
     dgraph = get_dgraph()
-    rank = torch.distributed.get_rank()
-    logging.info("Rank %d: Adding %d edges.", rank, len(source_vertices))
+    logging.debug("Rank %d: Adding %d edges.", torch.distributed.get_rank(), len(source_vertices))
     dgraph.add_edges(source_vertices, target_vertices, timestamps)
 
 
