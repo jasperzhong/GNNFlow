@@ -38,13 +38,11 @@ def dispatch(dataset: pd.DataFrame, ingestion_batch_size: int, partition_strateg
     """
     # Partition the dataset.
     partitioner = get_partitioner(partition_strategy, num_partition)
-    for batch in range(0, len(dataset), ingestion_batch_size):
-        src_nodes = dataset["src"][batch:batch +
-                                   ingestion_batch_size].values
-        dst_nodes = dataset["dst"][batch:batch +
-                                   ingestion_batch_size].values
-        timestamps = dataset["timestamp"][batch:batch +
-                                          ingestion_batch_size].values
+    for i in range(0, len(dataset), ingestion_batch_size):
+        batch = dataset[i:i + ingestion_batch_size]
+        src_nodes = batch["src"].values
+        dst_nodes = batch["dst"].values
+        timestamps = batch["time"].values
         partitions = partitioner.partition(
             src_nodes, dst_nodes, timestamps)
 
