@@ -34,9 +34,9 @@ class TemporalSampler {
                              uint32_t layer, uint32_t snapshot);
 
   // the old `SampleLayer` implementation (remove this function)
-  // std::vector<SamplingResult> SampleLayer(
-  //     uint32_t layer, const std::vector<SamplingResult>&
-  //     prev_sampling_results);
+  //   std::vector<SamplingResult> SampleLayer(
+  //       uint32_t layer, const std::vector<SamplingResult>&
+  //       prev_sampling_results);
 
  private:
   std::vector<SamplingResult> RootInputToSamplingResult(

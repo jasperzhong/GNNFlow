@@ -12,7 +12,7 @@ GB = 1 << 30
 
 default_config = {
     "initial_pool_size": 1 * GB,
-    "maximum_pool_size": 1 * GB,
+    "maximum_pool_size": 12 * GB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 64,
     "blocks_to_preallocate": 128,
