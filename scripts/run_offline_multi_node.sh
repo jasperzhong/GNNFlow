@@ -10,7 +10,7 @@ HOST_NODE_PORT=29400
 NNODES=2
 NPROC_PER_NODE=4
 
-CURRENT_NODE_IP=$(hostname -I | awk '{print $1}')
+CURRENT_NODE_IP=$(ip -4 a show dev enp225s0 | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
     IS_HOST=true
 else
@@ -28,6 +28,6 @@ cmd="torchrun \
     --cache $CACHE --cache-ratio $CACHE_RATIO"
 
 echo $cmd
-LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd 
+LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
 
 
