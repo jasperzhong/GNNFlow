@@ -1,10 +1,10 @@
+import itertools
 import unittest
 
 import numpy as np
+from parameterized import parameterized
 
 from dgnn import DynamicGraph
-from parameterized import parameterized
-import itertools
 
 MB = 1 << 20
 GB = 1 << 30
@@ -133,7 +133,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([2, 1, 0, 2, 1, 0, 2, 1, 0])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(0), 3)
@@ -180,7 +180,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(0), 3)
@@ -216,7 +216,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(0), 6)
@@ -264,7 +264,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(0), 3)
@@ -300,7 +300,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
         self.assertEqual(dgraph.out_degree(0), 6)
@@ -345,7 +345,7 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 1, 2])
         target_vertices = np.array([1, 2, 3])
         timestamps = np.array([0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
 
         source_vertices = np.array([0])
         target_vertices = np.array([1])
@@ -369,12 +369,12 @@ class TestDynamicGraph(unittest.TestCase):
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
 
         source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
         target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
         timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
-        dgraph.add_edges(source_vertices, target_vertices, timestamps, False)
+        dgraph.add_edges(source_vertices, target_vertices, timestamps, add_reverse=False)
 
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)

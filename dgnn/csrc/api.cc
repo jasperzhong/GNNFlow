@@ -46,7 +46,7 @@ PYBIND11_MODULE(libdgnn, m) {
            py::arg("device"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"),
-           py::arg("add_reverse") = true)
+           py::arg("eids"))
       .def("num_vertices", &DynamicGraph::num_nodes)
       .def("num_edges", &DynamicGraph::num_edges)
       .def("out_degree", &DynamicGraph::out_degree)

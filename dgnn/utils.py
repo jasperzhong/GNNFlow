@@ -189,6 +189,7 @@ def build_dynamic_graph(
     src = dataset_df['src'].values.astype(np.int64)
     dst = dataset_df['dst'].values.astype(np.int64)
     ts = dataset_df['time'].values.astype(np.float32)
+    eids = dataset_df['eid'].values.astype(np.int64)
 
     dgraph = DynamicGraph(
         initial_pool_size,
@@ -197,7 +198,7 @@ def build_dynamic_graph(
         minimum_block_size,
         blocks_to_preallocate,
         insertion_policy,
-        src, dst, ts,
+        src, dst, ts, eids,
         undirected,
         device)
 
