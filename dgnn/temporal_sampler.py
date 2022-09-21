@@ -63,6 +63,23 @@ class TemporalSampler:
             target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
 
+    def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray, layer: int, snapshot: int) -> DGLBlock:
+        """
+        Sample neighbors of given vertices in a specific layer and snapshot.
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+            layer: layer to sample.
+            snapshot: snapshot to sample.
+
+        Returns:
+            message flow graph for the specific layer and snapshot.
+        """
+        sampling_result = self._sampler.sample_layer(
+            target_vertices, timestamps, layer, snapshot)
+        return self._to_dgl_block_layer_snapshot(sampling_result)
+
     def _to_dgl_block(self, sampling_results: SamplingResult) -> List[List[DGLBlock]]:
         mfgs = list()
         for sampling_results_layer in sampling_results:
@@ -80,3 +97,15 @@ class TemporalSampler:
         mfgs = list(map(list, zip(*[iter(mfgs)] * self._num_snapshots)))
         mfgs.reverse()
         return mfgs
+
+    def _to_dgl_block_layer_snapshot(self, sampling_result: SamplingResult) -> DGLBlock:
+        mfg = dgl.create_block(
+            (sampling_result.col(),
+            sampling_result.row()),
+            num_src_nodes=sampling_result.num_src_nodes(),
+            num_dst_nodes=sampling_result.num_dst_nodes())
+        mfg.srcdata['ID'] = torch.from_numpy(sampling_result.all_nodes())
+        mfg.edata['dt'] = torch.from_numpy(sampling_result.delta_timestamps())
+        mfg.srcdata['ts'] = torch.from_numpy(sampling_result.all_timestamps())
+        mfg.edata['ID'] = torch.from_numpy(sampling_result.eids())
+        return mfg
