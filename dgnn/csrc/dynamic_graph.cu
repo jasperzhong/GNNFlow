@@ -45,13 +45,6 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
           mem_res, sizeof(TemporalBlock), blocks_to_preallocate);
   mem_resources_for_metadata_.push(pool_res);
 
-// #ifdef DGNN_DEBUG
-//   auto logging_res = new rmm::mr::logging_resource_adaptor<
-//       std::remove_reference_t<decltype(*pool_res)>>(pool_res, "rmm_log.txt",
-//                                                     true);
-//   mem_resources_for_metadata_.push(logging_res);
-// #endif
-
   rmm::mr::set_current_device_resource(mem_resources_for_metadata_.top());
 }
 
@@ -79,27 +72,18 @@ DynamicGraph::~DynamicGraph() {
   }
 }
 
-void DynamicGraph::AddEdges(std::vector<NIDType>& src_nodes,
-                            std::vector<NIDType>& dst_nodes,
-                            std::vector<TimestampType>& timestamps,
-                            bool add_reverse_edges) {
+void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
+                            const std::vector<NIDType>& dst_nodes,
+                            const std::vector<TimestampType>& timestamps,
+                            const std::vector<EIDType>& eids) {
   CHECK_GT(src_nodes.size(), 0);
   CHECK_EQ(src_nodes.size(), dst_nodes.size());
   CHECK_EQ(src_nodes.size(), timestamps.size());
+  CHECK_EQ(src_nodes.size(), eids.size());
 
-  std::vector<EIDType> eids(src_nodes.size());
-  std::iota(eids.begin(), eids.end(), num_edges_);
-  // NB: num_edges_ does not count the reverse edges
-  num_edges_ += eids.size();
-
-  // for undirected graphs, we need to add the reverse edges
-  if (add_reverse_edges) {
-    src_nodes.insert(src_nodes.end(), dst_nodes.begin(), dst_nodes.end());
-    dst_nodes.insert(dst_nodes.end(), src_nodes.begin(),
-                     src_nodes.begin() + dst_nodes.size());
-    timestamps.insert(timestamps.end(), timestamps.begin(), timestamps.end());
-    eids.insert(eids.end(), eids.begin(), eids.end());
-  }
+  // unique eids
+  std::set<int> s(eids.begin(), eids.end());
+  num_edges_ += s.size();
 
   // add nodes
   NIDType max_node =

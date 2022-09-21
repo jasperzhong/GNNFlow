@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "common.h"
 #include "doubly_linked_list.h"
 #include "temporal_block_allocator.h"
 
@@ -56,12 +57,13 @@ class DynamicGraph {
    * @params src_nodes The source nodes of the edges.
    * @params dst_nodes The destination nodes of the edges.
    * @params timestamps The timestamps of the edges.
-   * @params add_reverse_edges If true, add the reverse edges (undirected
-   * graph).
+   * @params eids The edge ids of the edges.
+   *
    */
-  void AddEdges(std::vector<NIDType>& src_nodes,
-                std::vector<NIDType>& dst_nodes,
-                std::vector<TimestampType>& timestamps, bool add_reverse_edges);
+  void AddEdges(const std::vector<NIDType>& src_nodes,
+                const std::vector<NIDType>& dst_nodes,
+                const std::vector<TimestampType>& timestamps,
+                const std::vector<EIDType>& eids);
 
   /**
    * @brief Add nodes to the graph.

@@ -24,6 +24,7 @@ class DynamicGraph:
             source_vertices: Optional[np.ndarray] = None,
             target_vertices: Optional[np.ndarray] = None,
             timestamps: Optional[np.ndarray] = None,
+            eids: Optional[np.ndarray] = None,
             add_reverse: bool = False,
             device: int = 0):
         """
@@ -42,7 +43,9 @@ class DynamicGraph:
             source_vertices: optional, 1D tensor, the source vertices of the edges.
             target_vertices: optional, 1D tensor, the target vertices of the edges.
             timestamps: optional, 1D tensor, the timestamps of the edges.
+            eids: optional, 1D tensor, the edge ids of the edges.
             add_reverse: optional, bool, whether to add reverse edges.
+            device: optional, int, the device to use.
         """
         mem_resource_type = mem_resource_type.lower()
         if mem_resource_type == "cuda":
@@ -75,11 +78,11 @@ class DynamicGraph:
         if source_vertices is not None and target_vertices is not None \
                 and timestamps is not None:
             self.add_edges(source_vertices, target_vertices,
-                           timestamps, add_reverse)
+                           timestamps, eids, add_reverse)
 
     def add_edges(
             self, source_vertices: np.ndarray, target_vertices: np.ndarray,
-            timestamps: np.ndarray, add_reverse: bool = False):
+            timestamps: np.ndarray, eids: Optional[np.ndarray] = None, add_reverse: bool = False):
         """
         Add edges to the graph. Note that we do not assume that the incoming
         edges are sorted by timestamps. The function will sort the incoming
@@ -89,20 +92,34 @@ class DynamicGraph:
             source_vertices: 1D tensor, the source vertices of the edges.
             target_vertices: 1D tensor, the target vertices of the edges.
             timestamps: 1D tensor, the timestamps of the edges.
+            eids: 1D tensor, the edge ids of the edges.
             add_reverse: optional, bool, whether to add reverse edges.
 
         Raises:
             ValueError: if the timestamps are older than the existing edges in
                         the graph.
         """
-        assert source_vertices.shape[0] == target_vertices.shape[0] == \
-            timestamps.shape[0], "Number of edges must match"
         assert len(source_vertices.shape) == 1 and len(
-            target_vertices.shape) == 1 and len(timestamps.shape) == 1, \
-            "Source vertices, target vertices and timestamps must be 1D"
+            target_vertices.shape) == 1 and len(timestamps.shape) == 1, "Edges must be 1D tensors"
+
+        assert source_vertices.shape[0] == target_vertices.shape[0] == \
+            timestamps.shape[0], "The number of source vertices, target vertices, timestamps, " \
+            "and edge ids must be the same."
+
+        if eids is None:
+            num_edges = self.num_edges()
+            eids = np.arange(num_edges, num_edges + len(source_vertices))
+
+        if add_reverse:
+            source_vertices_ext = np.concatenate([source_vertices, target_vertices])
+            target_vertices_ext = np.concatenate([target_vertices, source_vertices])
+            source_vertices = source_vertices_ext
+            target_vertices = target_vertices_ext
+            timestamps = np.concatenate([timestamps, timestamps])
+            eids = np.concatenate([eids, eids])
 
         self._dgraph.add_edges(
-            source_vertices, target_vertices, timestamps, add_reverse)
+            source_vertices, target_vertices, timestamps, eids)
 
     def num_vertices(self) -> int:
         return self._dgraph.num_vertices()
