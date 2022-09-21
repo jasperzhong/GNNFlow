@@ -1,6 +1,6 @@
 from typing import List, Tuple
 
-import numpy as np
+import torch
 
 
 class Partitioner:
@@ -11,16 +11,17 @@ class Partitioner:
     def __init__(self, num_partition: int):
         self.num_partition = num_partition
 
-    def partition(self, src_nodes: np.ndarray, dst_nodes: np.ndarray,
-                  timestamps: np.ndarray, eids: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
+                  timestamps: torch.Tensor, eids: torch.Tensor) \
+            -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
         Partition the dataset into multiple partitions.
 
         Args:
-            src_nodes (np.ndarray): The source nodes of the edges.
-            dst_nodes (np.ndarray): The destination nodes of the edges.
-            timestamps (np.ndarray): The timestamps of the edges.
-            eids (np.ndarray): The edge IDs of the edges.
+            src_nodes (torch.Tensor): The source nodes of the edges.
+            dst_nodes (torch.Tensor): The destination nodes of the edges.
+            timestamps (torch.Tensor): The timestamps of the edges.
+            eids (torch.Tensor): The edge IDs of the edges.
 
         Returns:
             A list of partitions.
@@ -37,16 +38,17 @@ class RoundRobinPartitioner(Partitioner):
         super().__init__(num_partition)
         self.partition_id = 0
 
-    def partition(self, src_nodes: np.ndarray, dst_nodes: np.ndarray,
-                  timestamps: np.ndarray, eids: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
+                  timestamps: torch.Tensor, eids: torch.Tensor) \
+            -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
         Partition the dataset into multiple partitions.
 
         Args:
-            src_nodes (np.ndarray): The source nodes of the edges.
-            dst_nodes (np.ndarray): The destination nodes of the edges.
-            timestamps (np.ndarray): The timestamps of the edges.
-            eids (np.ndarray): The edge IDs of the edges.
+            src_nodes (torch.Tensor): The source nodes of the edges.
+            dst_nodes (torch.Tensor): The destination nodes of the edges.
+            timestamps (torch.Tensor): The timestamps of the edges.
+            eids (torch.Tensor): The edge IDs of the edges.
 
         Returns:
             A list of partitions.
@@ -59,8 +61,10 @@ class RoundRobinPartitioner(Partitioner):
 
         for i in range(self.num_partition):
             partitions[i] = list(zip(*partitions[i]))
-            partitions[i] = (np.array(partitions[i][0]), np.array(partitions[i][1]),
-                             np.array(partitions[i][2]), np.array(partitions[i][3]))
+            partitions[i] = (torch.tensor(partitions[i][0], dtype=torch.long),
+                             torch.tensor(partitions[i][1], dtype=torch.long),
+                             torch.tensor(partitions[i][2], dtype=torch.float),
+                             torch.tensor(partitions[i][3], dtype=torch.long))
 
         return partitions
 
@@ -73,15 +77,16 @@ class SpatialTemporalPartitioner(Partitioner):
     def __init__(self, num_partition: int):
         super().__init__(num_partition)
 
-    def partition(self, src_nodes: np.ndarray, dst_nodes: np.ndarray,
-                  timestamps: np.ndarray, eids: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
+                  timestamps: torch.Tensor, eids: torch.Tensor) \
+            -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
         Partition the dataset into multiple partitions.
 
         Args:
-            src_nodes (np.ndarray): The source nodes of the edges.
-            dst_nodes (np.ndarray): The destination nodes of the edges.
-            timestamps (np.ndarray): The timestamps of the edges.
+            src_nodes (torch.Tensor): The source nodes of the edges.
+            dst_nodes (torch.Tensor): The destination nodes of the edges.
+            timestamps (torch.Tensor): The timestamps of the edges.
 
         Returns:
             A list of partitions.

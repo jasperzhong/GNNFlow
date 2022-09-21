@@ -68,6 +68,11 @@ def dispatch(dataset: pd.DataFrame, ingestion_batch_size: int,
             timestamps = np.concatenate([timestamps, timestamps])
             eids = np.concatenate([eids, eids])
 
+        src_nodes = torch.from_numpy(src_nodes)
+        dst_nodes = torch.from_numpy(dst_nodes)
+        timestamps = torch.from_numpy(timestamps)
+        eids = torch.from_numpy(eids)
+
         partitions = partitioner.partition(
             src_nodes, dst_nodes, timestamps, eids)
 
