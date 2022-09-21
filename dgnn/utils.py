@@ -187,7 +187,7 @@ def build_dynamic_graph(
         device: the device to use.
     """
     if dataset_df is None:
-        src = dst = ts = None
+        src = dst = ts = eids = None
     else:
         src = dataset_df['src'].values.astype(np.int64)
         dst = dataset_df['dst'].values.astype(np.int64)
