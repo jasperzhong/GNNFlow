@@ -34,18 +34,15 @@ class TemporalSampler {
                              uint32_t layer, uint32_t snapshot);
 
  private:
-  std::vector<SamplingResult> RootInputToSamplingResult(
-      const std::vector<NIDType>& dst_nodes,
-      const std::vector<TimestampType>& dst_timestamps);
-
-  void InitBufferOneLayerSnapshot(std::size_t num_root_nodes, uint32_t layer,
-                                  uint32_t snapshot);
-
-  void InitBuffer(std::size_t num_root_nodes);
+  void InitBuffer(std::size_t maximum_sampled_nodes);
 
   void FreeBuffer();
 
  private:
+  constexpr static std::size_t per_node_size =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
+      sizeof(uint32_t);
+
   const DynamicGraph& graph_;
   std::vector<uint32_t> fanouts_;
   SamplingPolicy sampling_policy_;
@@ -57,15 +54,12 @@ class TemporalSampler {
   std::size_t shared_memory_size_;
 
   cudaStream_t* streams_;
-  uint32_t max_buffer_size_;
   char* cpu_buffer_;
   char* gpu_input_buffer_;
   char* gpu_output_buffer_;
   curandState_t* rand_states_;
-  std::size_t init_num_root_nodes_;
-  constexpr static std::size_t per_node_size =
-      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
-      sizeof(uint32_t);
+
+  std::size_t maximum_sampled_nodes_;
 };
 
 }  // namespace dgnn
