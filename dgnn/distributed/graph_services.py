@@ -5,11 +5,12 @@ import torch
 import torch.distributed
 
 from dgnn import DynamicGraph
+from dgnn.distributed.dist_graph import DistributedGraph
 
 global DGRAPH
 
 
-def get_dgraph() -> DynamicGraph:
+def get_dgraph() -> DistributedGraph:
     """
     Get the dynamic graph instance.
 
@@ -30,7 +31,7 @@ def set_dgraph(dgraph: DynamicGraph):
         dgraph (DynamicGraph): The dynamic graph instance.
     """
     global DGRAPH
-    DGRAPH = dgraph
+    DGRAPH = DistributedGraph(dgraph)
 
 
 def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
@@ -49,6 +50,19 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                   torch.distributed.get_rank(), len(source_vertices))
     dgraph.add_edges(source_vertices.numpy(),
                      target_vertices.numpy(), timestamps.numpy(), eids.numpy())
+
+
+def set_graph_metadata(num_vertices: int, num_edges: int):
+    """
+    Set the graph metadata.
+
+    Args:
+        num_vertices (int): The number of vertices.
+        num_edges (int): The number of edges.
+    """
+    dgraph = get_dgraph()
+    dgraph.num_vertices = num_vertices
+    dgraph.num_edges = num_edges
 
 
 def num_vertices() -> int:
@@ -83,8 +97,8 @@ def out_degree(vertex: int) -> int:
     Returns:
         int: The out-degree of the vertex.
     """
-    dgraph = get_dgraph()
-    return dgraph.out_degree(vertex)
+    # TODO: rpc call
+    pass
 
 
 def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -97,6 +111,5 @@ def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, tor
     Returns:
         torch.Tensor: The temporal neighbors of the vertex.
     """
-    dgraph = get_dgraph()
-    target_vertices, timestamps, eids = dgraph.get_temporal_neighbors(vertex)
-    return torch.from_numpy(target_vertices), torch.from_numpy(timestamps), torch.from_numpy(eids)
+    # TODO: rpc call
+    pass
