@@ -97,8 +97,8 @@ class TemporalSampler:
         mfgs = list(map(list, zip(*[iter(mfgs)] * self._num_snapshots)))
         mfgs.reverse()
         return mfgs
-    
-    def _to_dgl_block_layer_snapshot(self, sampling_result: SamplingResult) -> List[List[DGLBlock]]:
+
+    def _to_dgl_block_layer_snapshot(self, sampling_result: SamplingResult) -> DGLBlock:
         mfg = dgl.create_block(
             (sampling_result.col(),
             sampling_result.row()),

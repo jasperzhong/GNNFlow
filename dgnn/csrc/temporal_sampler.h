@@ -4,6 +4,9 @@
 #include <cuda_runtime_api.h>
 #include <curand_kernel.h>
 
+#include <cstddef>
+#include <cstdint>
+
 #include "common.h"
 #include "dynamic_graph.h"
 
@@ -35,6 +38,9 @@ class TemporalSampler {
       const std::vector<NIDType>& dst_nodes,
       const std::vector<TimestampType>& dst_timestamps);
 
+  void InitBufferOneLayerSnapshot(std::size_t num_root_nodes, uint32_t layer,
+                                  uint32_t snapshot);
+
   void InitBuffer(std::size_t num_root_nodes);
 
   void FreeBuffer();
@@ -51,11 +57,15 @@ class TemporalSampler {
   std::size_t shared_memory_size_;
 
   cudaStream_t* streams_;
-  char** cpu_buffer_;
-  char** gpu_input_buffer_;
-  char** gpu_output_buffer_;
-  curandState_t** rand_states_;
+  uint32_t max_buffer_size_;
+  char* cpu_buffer_;
+  char* gpu_input_buffer_;
+  char* gpu_output_buffer_;
+  curandState_t* rand_states_;
   std::size_t init_num_root_nodes_;
+  constexpr static std::size_t per_node_size =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
+      sizeof(uint32_t);
 };
 
 }  // namespace dgnn

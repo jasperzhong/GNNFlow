@@ -45,7 +45,8 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       gpu_input_buffer_(nullptr),
       gpu_output_buffer_(nullptr),
       rand_states_(nullptr),
-      init_num_root_nodes_(0) {
+      init_num_root_nodes_(0),
+      max_buffer_size_(0) {
   if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
@@ -57,46 +58,66 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
     CUDA_CALL(
         cudaStreamCreateWithPriority(&streams_[i], cudaStreamNonBlocking, -1));
   }
-
-  cpu_buffer_ = new char*[num_snapshots_];
-  gpu_input_buffer_ = new char*[num_snapshots_];
-  gpu_output_buffer_ = new char*[num_snapshots_];
-  rand_states_ = new curandState_t*[num_snapshots_];
 }
 
 void TemporalSampler::FreeBuffer() {
   if (init_num_root_nodes_ == 0) return;
 
-  for (uint32_t i = 0; i < num_snapshots_; ++i) {
-    if (cpu_buffer_[i] != nullptr) {
-      cudaFreeHost(cpu_buffer_[i]);
-    }
+  if (cpu_buffer_ != nullptr) {
+    cudaFreeHost(cpu_buffer_);
+  }
 
-    if (gpu_input_buffer_[i] != nullptr) {
-      cudaFree(gpu_input_buffer_[i]);
-    }
+  if (gpu_input_buffer_ != nullptr) {
+    cudaFree(gpu_input_buffer_);
+  }
 
-    if (gpu_output_buffer_[i] != nullptr) {
-      cudaFree(gpu_output_buffer_[i]);
-    }
+  if (gpu_output_buffer_ != nullptr) {
+    cudaFree(gpu_output_buffer_);
+  }
 
-    if (rand_states_[i] != nullptr) {
-      cudaFree(rand_states_[i]);
-    }
+  if (rand_states_ != nullptr) {
+    cudaFree(rand_states_);
   }
 }
 
 TemporalSampler::~TemporalSampler() {
   FreeBuffer();
-  delete[] cpu_buffer_;
-  delete[] gpu_input_buffer_;
-  delete[] gpu_output_buffer_;
-  delete[] rand_states_;
 
   for (uint32_t i = 0; i < num_snapshots_; ++i) {
     cudaStreamDestroy(streams_[i]);
   }
   delete[] streams_;
+}
+
+void TemporalSampler::InitBufferOneLayerSnapshot(std::size_t num_root_nodes,
+                                                 uint32_t layer,
+                                                 uint32_t snapshot) {
+  std::size_t maximum_sampled_nodes = num_root_nodes;
+  maximum_sampled_nodes += maximum_sampled_nodes * fanouts_[layer];
+
+  LOG(DEBUG) << "Maximum sampled nodes: " << maximum_sampled_nodes;
+
+  CUDA_CALL(
+      cudaMallocHost(&cpu_buffer_, per_node_size * maximum_sampled_nodes));
+
+  CUDA_CALL(
+      cudaMalloc(&gpu_input_buffer_, per_node_size * maximum_sampled_nodes));
+  CUDA_CALL(
+      cudaMalloc(&gpu_output_buffer_, per_node_size * maximum_sampled_nodes));
+
+  LOG(DEBUG) << "Allocated CPU & GPU buffer: "
+             << maximum_sampled_nodes * per_node_size << " bytes";
+
+  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+    CUDA_CALL(cudaMalloc((void**)&rand_states_,
+                         maximum_sampled_nodes * sizeof(curandState)));
+    uint32_t num_threads_per_block = 256;
+    uint32_t num_blocks = (maximum_sampled_nodes + num_threads_per_block - 1) /
+                          num_threads_per_block;
+
+    InitCuRandStates<<<num_blocks, num_threads_per_block>>>(rand_states_,
+                                                            seed_);
+  }
 }
 
 void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
@@ -111,45 +132,27 @@ void TemporalSampler::InitBuffer(std::size_t num_root_nodes) {
       sizeof(NIDType) + sizeof(TimestampType) + sizeof(TimestampType) +
       sizeof(EIDType) + sizeof(uint32_t);
 
-  for (uint32_t i = 0; i < num_snapshots_; ++i) {
-    CUDA_CALL(
-        cudaMallocHost(&cpu_buffer_[i], per_node_size * maximum_sampled_nodes));
+  CUDA_CALL(
+      cudaMallocHost(&cpu_buffer_, per_node_size * maximum_sampled_nodes));
 
-    CUDA_CALL(cudaMalloc(&gpu_input_buffer_[i],
-                         per_node_size * maximum_sampled_nodes));
-    CUDA_CALL(cudaMalloc(&gpu_output_buffer_[i],
-                         per_node_size * maximum_sampled_nodes));
+  CUDA_CALL(
+      cudaMalloc(&gpu_input_buffer_, per_node_size * maximum_sampled_nodes));
+  CUDA_CALL(
+      cudaMalloc(&gpu_output_buffer_, per_node_size * maximum_sampled_nodes));
 
-    LOG(DEBUG) << "Allocated CPU & GPU buffer: "
-               << maximum_sampled_nodes * per_node_size << " bytes";
+  LOG(DEBUG) << "Allocated CPU & GPU buffer: "
+             << maximum_sampled_nodes * per_node_size << " bytes";
 
-    if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-      CUDA_CALL(cudaMalloc((void**)&rand_states_[i],
-                           maximum_sampled_nodes * sizeof(curandState)));
-      uint32_t num_threads_per_block = 256;
-      uint32_t num_blocks =
-          (maximum_sampled_nodes + num_threads_per_block - 1) /
-          num_threads_per_block;
+  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+    CUDA_CALL(cudaMalloc((void**)&rand_states_,
+                         maximum_sampled_nodes * sizeof(curandState)));
+    uint32_t num_threads_per_block = 256;
+    uint32_t num_blocks = (maximum_sampled_nodes + num_threads_per_block - 1) /
+                          num_threads_per_block;
 
-      InitCuRandStates<<<num_blocks, num_threads_per_block>>>(rand_states_[i],
-                                                              seed_);
-    }
+    InitCuRandStates<<<num_blocks, num_threads_per_block>>>(rand_states_,
+                                                            seed_);
   }
-}
-
-std::vector<SamplingResult> TemporalSampler::RootInputToSamplingResult(
-    const std::vector<NIDType>& dst_nodes,
-    const std::vector<TimestampType>& dst_timestamps) {
-  std::vector<SamplingResult> sampling_results(num_snapshots_);
-  for (int snapshot = 0; snapshot < num_snapshots_; ++snapshot) {
-    auto& sampling_result = sampling_results[snapshot];
-    sampling_result.all_nodes.insert(sampling_result.all_nodes.end(),
-                                     dst_nodes.begin(), dst_nodes.end());
-    sampling_result.all_timestamps.insert(sampling_result.all_timestamps.end(),
-                                          dst_timestamps.begin(),
-                                          dst_timestamps.end());
-  }
-  return sampling_results;
 }
 
 SamplingResult TemporalSampler::SampleLayer(
@@ -157,34 +160,36 @@ SamplingResult TemporalSampler::SampleLayer(
     const std::vector<TimestampType>& dst_timestamps, uint32_t layer,
     uint32_t snapshot) {
   // update buffer
-  if (dst_nodes.size() > init_num_root_nodes_) {
+  // +1 means adding itself
+  std::size_t current_buffer_size =
+      per_node_size * (fanouts_[layer] + 1) * dst_nodes.size();
+  if (current_buffer_size > max_buffer_size_) {
     FreeBuffer();
-    init_num_root_nodes_ = dst_nodes.size();
-    InitBuffer(init_num_root_nodes_);
+    max_buffer_size_ = current_buffer_size;
+    // InitBuffer(init_num_root_nodes_);
+    InitBufferOneLayerSnapshot(dst_nodes.size(), layer, snapshot);
   }
 
   // prepare input
   std::vector<std::size_t> num_root_nodes_list(num_snapshots_);
   std::size_t num_root_nodes = dst_nodes.size();
-  char* root_nodes_dst = cpu_buffer_[snapshot];
-  char* root_timestamps_dst =
-      cpu_buffer_[snapshot] + num_root_nodes * sizeof(NIDType);
+  char* root_nodes_dst = cpu_buffer_;
+  char* root_timestamps_dst = cpu_buffer_ + num_root_nodes * sizeof(NIDType);
   // copy dst_nodes and dst_timestamps to cpu_buffer_
   Copy(root_nodes_dst, dst_nodes.data(), dst_nodes.size() * sizeof(NIDType));
   Copy(root_timestamps_dst, dst_timestamps.data(),
        dst_timestamps.size() * sizeof(TimestampType));
 
   CUDA_CALL(cudaMemcpyAsync(
-      gpu_input_buffer_[snapshot], cpu_buffer_[snapshot],
+      gpu_input_buffer_, cpu_buffer_,
       num_root_nodes * (sizeof(NIDType) + sizeof(TimestampType)),
       cudaMemcpyHostToDevice, streams_[snapshot]));
 
   // launch kernel for current snapshot
   std::size_t max_sampled_nodes = num_root_nodes * fanouts_[layer];
-  NIDType* d_root_nodes =
-      reinterpret_cast<NIDType*>(gpu_input_buffer_[snapshot]);
+  NIDType* d_root_nodes = reinterpret_cast<NIDType*>(gpu_input_buffer_);
   TimestampType* d_root_timestamps = reinterpret_cast<TimestampType*>(
-      gpu_input_buffer_[snapshot] + num_root_nodes * sizeof(NIDType));
+      gpu_input_buffer_ + num_root_nodes * sizeof(NIDType));
 
   // device output
   std::size_t offset1 = max_sampled_nodes * sizeof(NIDType);
@@ -196,16 +201,14 @@ SamplingResult TemporalSampler::SampleLayer(
 
   LOG(DEBUG) << "Total output size: " << total_output_size;
 
-  NIDType* d_src_nodes =
-      reinterpret_cast<NIDType*>(gpu_output_buffer_[snapshot]);
-  EIDType* d_eids =
-      reinterpret_cast<EIDType*>(gpu_output_buffer_[snapshot] + offset1);
+  NIDType* d_src_nodes = reinterpret_cast<NIDType*>(gpu_output_buffer_);
+  EIDType* d_eids = reinterpret_cast<EIDType*>(gpu_output_buffer_ + offset1);
   TimestampType* d_timestamps =
-      reinterpret_cast<TimestampType*>(gpu_output_buffer_[snapshot] + offset2);
+      reinterpret_cast<TimestampType*>(gpu_output_buffer_ + offset2);
   TimestampType* d_delta_timestamps =
-      reinterpret_cast<TimestampType*>(gpu_output_buffer_[snapshot] + offset3);
+      reinterpret_cast<TimestampType*>(gpu_output_buffer_ + offset3);
   uint32_t* d_num_sampled =
-      reinterpret_cast<uint32_t*>(gpu_output_buffer_[snapshot] + offset4);
+      reinterpret_cast<uint32_t*>(gpu_output_buffer_ + offset4);
 
   uint32_t num_threads_per_block = 256;
   uint32_t num_blocks =
@@ -230,10 +233,10 @@ SamplingResult TemporalSampler::SampleLayer(
                                    sizeof(SamplingRange),
                                streams_[snapshot]>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        rand_states_[snapshot], seed_, offset_per_thread, d_root_nodes,
-        d_root_timestamps, snapshot, num_snapshots_, snapshot_time_window_,
-        num_root_nodes, fanouts_[layer], d_src_nodes, d_eids, d_timestamps,
-        d_delta_timestamps, d_num_sampled);
+        rand_states_, seed_, offset_per_thread, d_root_nodes, d_root_timestamps,
+        snapshot, num_snapshots_, snapshot_time_window_, num_root_nodes,
+        fanouts_[layer], d_src_nodes, d_eids, d_timestamps, d_delta_timestamps,
+        d_num_sampled);
   }
 
   // combine
@@ -255,14 +258,13 @@ SamplingResult TemporalSampler::SampleLayer(
 
   LOG(DEBUG) << "Number of sampled nodes: " << num_sampled_nodes;
 
-  NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_[snapshot]);
-  EIDType* eids = reinterpret_cast<EIDType*>(cpu_buffer_[snapshot] + offset1);
+  NIDType* src_nodes = reinterpret_cast<NIDType*>(cpu_buffer_);
+  EIDType* eids = reinterpret_cast<EIDType*>(cpu_buffer_ + offset1);
   TimestampType* timestamps =
-      reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset2);
+      reinterpret_cast<TimestampType*>(cpu_buffer_ + offset2);
   TimestampType* delta_timestamps =
-      reinterpret_cast<TimestampType*>(cpu_buffer_[snapshot] + offset3);
-  uint32_t* num_sampled =
-      reinterpret_cast<uint32_t*>(cpu_buffer_[snapshot] + offset4);
+      reinterpret_cast<TimestampType*>(cpu_buffer_ + offset3);
+  uint32_t* num_sampled = reinterpret_cast<uint32_t*>(cpu_buffer_ + offset4);
 
   CUDA_CALL(cudaMemcpyAsync(src_nodes, d_src_nodes,
                             sizeof(NIDType) * num_sampled_nodes,
