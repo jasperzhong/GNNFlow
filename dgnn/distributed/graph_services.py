@@ -1,4 +1,5 @@
 import logging
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -34,7 +35,7 @@ def set_dgraph(dgraph: DynamicGraph):
 
 
 def add_edges(source_vertices: np.ndarray, target_vertices: np.ndarray,
-              timestamps: np.ndarray):
+              timestamps: np.ndarray, eids: np.ndarray):
     """
     Add edges to the dynamic graph.
 
@@ -42,10 +43,12 @@ def add_edges(source_vertices: np.ndarray, target_vertices: np.ndarray,
         source_vertices (np.ndarray): The source vertices of the edges.
         target_vertices (np.ndarray): The target vertices of the edges.
         timestamps (np.ndarray): The timestamps of the edges.
+        eids (np.ndarray): The edge IDs of the edges.
     """
     dgraph = get_dgraph()
-    logging.debug("Rank %d: Adding %d edges.", torch.distributed.get_rank(), len(source_vertices))
-    dgraph.add_edges(source_vertices, target_vertices, timestamps)
+    logging.debug("Rank %d: Adding %d edges.",
+                  torch.distributed.get_rank(), len(source_vertices))
+    dgraph.add_edges(source_vertices, target_vertices, timestamps, eids)
 
 
 def num_vertices() -> int:
@@ -68,3 +71,31 @@ def num_edges() -> int:
     """
     dgraph = get_dgraph()
     return dgraph.num_edges()
+
+
+def out_degree(vertex: int) -> int:
+    """
+    Get the out-degree of a vertex.
+
+    Args:
+        vertex (int): The vertex.
+
+    Returns:
+        int: The out-degree of the vertex.
+    """
+    dgraph = get_dgraph()
+    return dgraph.out_degree(vertex)
+
+
+def get_temporal_neighbors(vertex: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Get the temporal neighbors of a vertex at a given timestamp.
+
+    Args:
+        vertex (int): The vertex.
+
+    Returns:
+        np.ndarray: The temporal neighbors of the vertex.
+    """
+    dgraph = get_dgraph()
+    return dgraph.get_temporal_neighbors(vertex)

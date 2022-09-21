@@ -58,14 +58,18 @@ def dispatch(dataset: pd.DataFrame, ingestion_batch_size: int,
         src_nodes = batch["src"].values.astype(np.int64)
         dst_nodes = batch["dst"].values.astype(np.int64)
         timestamps = batch["time"].values.astype(np.float32)
+        eids = batch["eid"].values.astype(np.int64)
 
         if undirected:
-            src_nodes = np.concatenate([src_nodes, dst_nodes])
-            dst_nodes = np.concatenate([dst_nodes, src_nodes])
+            src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
+            dst_nodes_ext = np.concatenate([dst_nodes, src_nodes])
+            src_nodes = src_nodes_ext
+            dst_nodes = dst_nodes_ext
             timestamps = np.concatenate([timestamps, timestamps])
+            eids = np.concatenate([eids, eids])
 
         partitions = partitioner.partition(
-            src_nodes, dst_nodes, timestamps)
+            src_nodes, dst_nodes, timestamps, eids)
 
         # Dispatch the partitions to the workers.
         futures = []
@@ -76,5 +80,6 @@ def dispatch(dataset: pd.DataFrame, ingestion_batch_size: int,
                                        args=(edges))
                 futures.append(future)
 
+        # Wait for the workers to finish.
         for future in futures:
             future.wait()
