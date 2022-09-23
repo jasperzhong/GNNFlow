@@ -1,11 +1,9 @@
-from dataclasses import dataclass
-from typing import List
+from typing import List, NamedTuple
 
 import torch
 
 
-@dataclass
-class Partition:
+class Partition(NamedTuple):
     """
     Partition of the graph.
     """
