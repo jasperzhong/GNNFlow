@@ -3,9 +3,6 @@ from typing import List
 
 import torch
 
-global PARTITIONER
-PARTITIONER = None
-
 
 @dataclass
 class Partition:
@@ -28,16 +25,16 @@ class Partitioner:
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partition: int, assign_with_dst_node: bool = False):
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
         """
         Initialize the partitioner.
 
         Args:
-            num_partition (int): The number of partitions.
+            num_partitions (int): The number of partitions.
             assign_with_dst_node (bool): Whether to assign the edges to the partition of the
                 asigned destination node. Default: False.
         """
-        self._num_partition = num_partition
+        self._num_partitions = num_partitions
         self._assign_with_dst_node = assign_with_dst_node
 
         self._num_nodes = 0
@@ -45,14 +42,14 @@ class Partitioner:
         self._partition_table = torch.empty(self._num_nodes, dtype=torch.int8)
         self._partition_table[:] = self.UNASSIGNED
 
-    def get_num_partition(self) -> int:
+    def get_num_partitions(self) -> int:
         """
         Get the number of partitions.
 
         Returns:
             int: The number of partitions.
         """
-        return self._num_partition
+        return self._num_partitions
 
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
@@ -77,7 +74,7 @@ class Partitioner:
 
         # dispatch edges to already assigned source nodes
         partitions = []
-        for i in range(self._num_partition):
+        for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
@@ -87,7 +84,7 @@ class Partitioner:
 
         if self._assign_with_dst_node:
             # assign the edges to the partition of the assined destination node
-            for i in range(self._num_partition):
+            for i in range(self._num_partitions):
                 mask = self._partition_table[dst_nodes[unassigned_mask]] == i
                 partitions[i].src_nodes = torch.cat(
                     [partitions[i].src_nodes, src_nodes[unassigned_mask][mask]])
@@ -109,7 +106,7 @@ class Partitioner:
         )
 
         # merge the partitions
-        for i in range(self._num_partition):
+        for i in range(self._num_partitions):
             mask = partition_table_for_unseen_nodes == i
 
             # update the partition table
@@ -163,7 +160,7 @@ class HashPartitioner(Partitioner):
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                                        timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
         partition_table = src_nodes.clone().detach()
-        partition_table.apply_(lambda x: hash(str(x)) % self._num_partition)
+        partition_table.apply_(lambda x: hash(str(x)) % self._num_partitions)
         return partition_table.to(torch.int8)
 
 
@@ -176,7 +173,7 @@ class RoundRobinPartitioner(Partitioner):
 
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                                        timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
-        return (torch.arange(0, len(src_nodes)) % self._num_partition).to(torch.int8)
+        return (torch.arange(0, len(src_nodes)) % self._num_partitions).to(torch.int8)
 
 
 class LeastLoadedPartitioner(Partitioner):
@@ -187,9 +184,9 @@ class LeastLoadedPartitioner(Partitioner):
     Different least-loaded algorithms differ in how to compute the load of a partition.
     """
 
-    def __init__(self, num_partition: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partition, assign_with_dst_node)
-        self._metrics = torch.zeros(num_partition, dtype=torch.float32)
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, assign_with_dst_node)
+        self._metrics = torch.zeros(num_partitions, dtype=torch.float32)
 
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
@@ -242,7 +239,7 @@ class LeastLoadedPartitionerByEdgeCount(LeastLoadedPartitioner):
     """
 
     def update_metrics(self, partitions: List[Partition]):
-        for i in range(self._num_partition):
+        for i in range(self._num_partitions):
             self._metrics[i] += len(partitions[i].src_nodes)
 
     def update_metrics_for_one_edge(self, current_partition: int, src_node: int,
@@ -258,7 +255,7 @@ class LeastLoadedPartitionerByTimestampSum(LeastLoadedPartitioner):
     """
 
     def update_metrics(self, partitions: List[Partition]):
-        for i in range(self._num_partition):
+        for i in range(self._num_partitions):
             self._metrics[i] += partitions[i].timestamps.sum().item()
 
     def update_metrics_for_one_edge(self, current_partition: int, src_node: int,
@@ -277,12 +274,12 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
     average += (a1 + a2 + ... + ak - average * k) / (count + k)
     """
 
-    def __init__(self, num_partition: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partition, assign_with_dst_node)
-        self._num_edges = torch.zeros(num_partition, dtype=torch.int64)
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, assign_with_dst_node)
+        self._num_edges = torch.zeros(num_partitions, dtype=torch.int64)
 
     def update_metrics(self, partitions: List[Partition]):
-        for i in range(self._num_partition):
+        for i in range(self._num_partitions):
             k = len(partitions[i].src_nodes)
             self._num_edges[i] += k
             self._metrics[i] += (partitions[i].timestamps.sum().item() -
@@ -295,44 +292,31 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
             timestamp - self._metrics[current_partition]) / self._num_edges[current_partition]
 
 
-def get_partitioner() -> Partitioner:
-    """
-    Get the partitioner.
-
-    Returns:
-        Partitioner: The partitioner.
-    """
-    global PARTITIONER
-    if PARTITIONER is None:
-        raise ValueError("Partitioner is not set.")
-    return PARTITIONER
-
-
-def set_partitioner(partition_strategy: str, num_partition: int, assign_with_dst_node: bool = False):
+def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
     Get the partitioner.
 
     Args:
         partition_strategy (str): The partitioning strategy.
-        num_partition (int): The number of partitions to split the dataset into.
+        num_partitions (int): The number of partitions to split the dataset into.
         assign_with_dst_node (bool): Whether to assign the edges to the partition of the destination node.
 
     Returns:
         Partitioner: The partitioner.
     """
-    global PARTITIONER
     if partition_strategy == "hash":
-        PARTITIONER = HashPartitioner(num_partition, assign_with_dst_node)
+        return HashPartitioner(num_partitions, assign_with_dst_node)
     elif partition_strategy == "roundrobin":
-        PARTITIONER = RoundRobinPartitioner(num_partition, assign_with_dst_node)
+        return RoundRobinPartitioner(
+            num_partitions, assign_with_dst_node)
     elif partition_strategy == "edgecount":
-        PARTITIONER = LeastLoadedPartitionerByEdgeCount(
-            num_partition, assign_with_dst_node)
+        return LeastLoadedPartitionerByEdgeCount(
+            num_partitions, assign_with_dst_node)
     elif partition_strategy == "timestampsum":
-        PARTITIONER = LeastLoadedPartitionerByTimestampSum(
-            num_partition, assign_with_dst_node)
+        return LeastLoadedPartitionerByTimestampSum(
+            num_partitions, assign_with_dst_node)
     elif partition_strategy == "timestampavg":
-        PARTITIONER = LeastLoadedPartitionerByTimestampAvg(
-            num_partition, assign_with_dst_node)
+        return LeastLoadedPartitionerByTimestampAvg(
+            num_partitions, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)

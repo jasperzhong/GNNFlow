@@ -1,21 +1,20 @@
-import logging
 from typing import Tuple
 
 import torch
 import torch.distributed
 
 from dgnn import DynamicGraph
-from dgnn.distributed.dist_graph import DistributedGraph
+from dgnn.distributed.dist_graph import DistributedDynamicGraph
 
 global DGRAPH
 
 
-def get_dgraph() -> DistributedGraph:
+def get_dgraph() -> DistributedDynamicGraph:
     """
     Get the dynamic graph instance.
 
     Returns:
-        DynamicGraph: The dynamic graph instance.
+        DistributedDynamicGraph: The dynamic graph instance.
     """
     global DGRAPH
     if DGRAPH is None:
@@ -28,10 +27,10 @@ def set_dgraph(dgraph: DynamicGraph):
     Set the dynamic graph instance.
 
     Args:
-        dgraph (DynamicGraph): The dynamic graph instance.
+        dgraph(DynamicGraph): The local partition of dynamic graph.
     """
     global DGRAPH
-    DGRAPH = DistributedGraph(dgraph)
+    DGRAPH = DistributedDynamicGraph(dgraph)
 
 
 def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
@@ -46,8 +45,6 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
         eids (torch.Tensor): The edge IDs of the edges.
     """
     dgraph = get_dgraph()
-    logging.debug("Rank %d: Adding %d edges.",
-                  torch.distributed.get_rank(), len(source_vertices))
     dgraph.add_edges(source_vertices.numpy(),
                      target_vertices.numpy(), timestamps.numpy(), eids.numpy())
 
@@ -73,7 +70,7 @@ def num_vertices() -> int:
         int: The number of vertices.
     """
     dgraph = get_dgraph()
-    return dgraph.num_vertices()
+    return dgraph.num_vertices
 
 
 def num_edges() -> int:
@@ -84,7 +81,7 @@ def num_edges() -> int:
         int: The number of edges.
     """
     dgraph = get_dgraph()
-    return dgraph.num_edges()
+    return dgraph.num_edges
 
 
 def out_degree(vertex: int) -> int:
