@@ -12,6 +12,7 @@
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <type_traits>
+#include <vector>
 
 #include "common.h"
 #include "dynamic_graph.h"
@@ -218,18 +219,22 @@ void DynamicGraph::AddEdgesForOneNode(
   SyncBlock(h_tail_block, stream);
 }
 
-std::size_t DynamicGraph::out_degree(NIDType node) const {
-  size_t out_degree = 0;
-  {
-    auto& list = h_copy_of_d_node_table_[node];
-    auto block = list.head;
-    while (block != nullptr) {
-      out_degree += block->size;
-      block = block->next;
+std::vector<std::size_t> DynamicGraph::out_degree(
+    const std::vector<NIDType>& nodes) const {
+  std::vector<size_t> out_degrees;
+  for (auto& node : nodes) {
+    size_t out_degree = 0;
+    {
+      auto& list = h_copy_of_d_node_table_[node];
+      auto block = list.head;
+      while (block != nullptr) {
+        out_degree += block->size;
+        block = block->next;
+      }
     }
+    out_degrees.push_back(out_degree);
   }
-
-  return out_degree;
+  return out_degrees;
 }
 
 DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
