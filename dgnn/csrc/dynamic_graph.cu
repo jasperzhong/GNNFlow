@@ -220,7 +220,7 @@ void DynamicGraph::AddEdgesForOneNode(
 }
 
 std::vector<std::size_t> DynamicGraph::out_degree(
-    std::vector<NIDType>& nodes) const {
+    const std::vector<NIDType>& nodes) const {
   std::vector<size_t> out_degrees;
   for (auto& node : nodes) {
     size_t out_degree = 0;

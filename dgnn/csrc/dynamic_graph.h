@@ -76,7 +76,7 @@ class DynamicGraph {
 
   std::size_t num_edges() const;
 
-  std::vector<std::size_t> out_degree(std::vector<NIDType>& nodes) const;
+  std::vector<std::size_t> out_degree(const std::vector<NIDType>& nodes) const;
 
   // NB: it is inefficient to call this function every time for each node. Debug
   // only.
