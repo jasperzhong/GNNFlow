@@ -4,10 +4,12 @@ from typing import Tuple
 import torch
 import torch.distributed
 
-from dgnn import DynamicGraph
+from dgnn import DynamicGraph, TemporalSampler
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
+from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 
 global DGRAPH
+global DSAMPLER
 
 
 def get_dgraph() -> DistributedDynamicGraph:
@@ -32,6 +34,32 @@ def set_dgraph(dgraph: DynamicGraph):
     """
     global DGRAPH
     DGRAPH = DistributedDynamicGraph(dgraph)
+
+
+def get_dsampler() -> DistributedTemporalSampler:
+    """
+    Get the distributed temporal sampler.
+
+    Returns:
+        DistributedTemporalSampler: The distributed temporal sampler.
+    """
+    global DSAMPLER
+    if DSAMPLER is None:
+        raise RuntimeError(
+            "The distributed temporal sampler has not been initialized.")
+    return DSAMPLER
+
+
+def set_dsampler(sampler: TemporalSampler):
+    """
+    Set the distributed temporal sampler.
+
+    Args:
+        dsampler (DistributedTemporalSampler): The distributed temporal sampler.
+    """
+    global DSAMPLER
+    dgraph = get_dgraph()
+    DSAMPLER = DistributedTemporalSampler(sampler, dgraph)
 
 
 def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
@@ -74,6 +102,7 @@ def set_partition_table(partition_table: torch.Tensor):
     """
     dgraph = get_dgraph()
     dgraph.set_partition_table(partition_table)
+
 
 def get_partition_table() -> torch.Tensor:
     """
@@ -134,3 +163,20 @@ def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, tor
     """
     # TODO: rpc call
     pass
+
+
+def sampler_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, layer: int, snapshot: int):
+    """
+    Sample neighbors of given vertices in a specific layer and snapshot locally.
+
+    Args:
+        target_vertices (torch.Tensor): The target vertices.
+        timestamps (torch.Tensor): The timestamps.
+        layer (int): The layer.
+        snapshot (int): The snapshot.
+
+    Returns:
+        torch.Tensor: The temporal neighbors of the vertex.
+    """
+    dsampler = get_dsampler()
+    return dsampler.sampler_layer_local(target_vertices, timestamps, layer, snapshot)
