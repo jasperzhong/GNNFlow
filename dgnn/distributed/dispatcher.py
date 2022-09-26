@@ -43,7 +43,7 @@ class Dispatcher:
                 # We can optimize it by sending the data to one of the worker and let it
                 # broadcast the data to the other workers.
                 future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
-                                       args=(edges))
+                                       args=(edges, ))
                 futures.append(future)
 
         if not defer_sync:
@@ -113,7 +113,7 @@ class Dispatcher:
             for worker_id in range(self._num_workers_per_machine):
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args=(self._num_nodes, self._num_edges))
+                             args=(self._num_nodes, self._num_edges, ))
     
     def broadcast_partition_table(self):
         """
@@ -124,7 +124,7 @@ class Dispatcher:
             for worker_id in range(self._num_workers_per_machine):
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_partition_table,
-                             args=(self._partitioner.get_partition_table()))
+                             args=(self._partitioner.get_partition_table(), ))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):
