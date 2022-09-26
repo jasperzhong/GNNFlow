@@ -1,4 +1,5 @@
 import itertools
+from re import T
 import unittest
 
 import numpy as np
@@ -12,7 +13,7 @@ GB = 1 << 30
 
 default_config = {
     "initial_pool_size": 1 * GB,
-    "maximum_pool_size": 1 * GB,
+    "maximum_pool_size": 5 * GB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 64,
     "blocks_to_preallocate": 128,
@@ -57,6 +58,24 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[0].tolist(), [3, 4, 5, 6, 7, 8])
         self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
 
+        # add test sample_layer function here
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([1.5, 1.5, 1.5]), 0, 0)
+
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            2, 1, 2, 1, 2, 1])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            1.5, 1.5, 1.5,
+            1, 0, 1, 0, 1, 0])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            0.5, 1.5, 0.5, 1.5, 0.5, 1.5])
+        self.assertEqual(block.edata['ID'].tolist(), [1, 0, 4, 3, 7, 6])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [3, 4, 5, 6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
+
         print("Test sample_layer passed")
 
     @parameterized.expand(
@@ -80,6 +99,12 @@ class TestTemporalSampler(unittest.TestCase):
         blocks = blocks[0]
 
         block = blocks[0]
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 3)
+
+        # add test sample_layer function here
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([3, 3, 3]), 0, 0)
         self.assertEqual(block.num_src_nodes(), 9)
         self.assertEqual(block.num_dst_nodes(), 3)
 
@@ -128,6 +153,23 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[0].tolist(), [3, 4, 5, 6, 7, 8])
         self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
 
+        # add sample_layer function here
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([1.5, 1.5, 1.5]), 0, 0)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            2, 1, 2, 1, 2, 1])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            1.5, 1.5, 1.5,
+            1, 0, 1, 0, 1, 0])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            0.5, 1.5, 0.5, 1.5, 0.5, 1.5])
+        self.assertEqual(block.edata['ID'].tolist(), [1, 0, 4, 3, 7, 6])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [3, 4, 5, 6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
+
         print("Test sample_layer passed")
 
     @parameterized.expand(
@@ -151,6 +193,24 @@ class TestTemporalSampler(unittest.TestCase):
         blocks = blocks[0]
 
         block = blocks[0]
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2, 0,
+            2, 1, 2, 1, 2, 1, 2, 1])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            1.5, 1.5, 1.5, 1.5,
+            1, 0, 1, 0, 1, 0, 1, 0])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5])
+        self.assertEqual(block.edata['ID'].tolist(), [1, 0, 4, 3, 7, 6, 1, 0])
+        self.assertEqual(block.num_src_nodes(), 12)
+        self.assertEqual(block.num_dst_nodes(), 4)
+        self.assertEqual(block.edges()[0].tolist(), [4, 5, 6, 7, 8, 9, 10, 11])
+        self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2, 3, 3])
+
+        # add sample_layer function here
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([1.5, 1.5, 1.5, 1.5]), 0, 0)
+
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2, 0,
             2, 1, 2, 1, 2, 1, 2, 1])
@@ -219,6 +279,45 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[1].tolist(), [
             0, 0, 1, 1, 2, 2, 3, 5, 7])
 
+        # add sample_layer function here
+        # test first layer
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([1.5, 1.5, 1.5]), 0, 0)
+
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            2, 1, 2, 1, 2, 1])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            1.5, 1.5, 1.5,
+            1, 0, 1, 0, 1, 0])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            0.5, 1.5, 0.5, 1.5, 0.5, 1.5])
+        self.assertEqual(block.edata['ID'].tolist(), [1, 0, 4, 3, 7, 6])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [3, 4, 5, 6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
+
+        # test second layer
+        block = sampler.sample_layer(
+            block.srcdata['ID'].numpy(), block.srcdata['ts'].numpy(), 1, 0)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2, 2, 1, 2, 1, 2, 1,
+            2, 1, 2, 1, 2, 1, 1, 1, 1])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            1.5, 1.5, 1.5, 1, 0, 1, 0, 1, 0,
+            1, 0, 1, 0, 1, 0, 0, 0, 0])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 1, 1, 1])
+        self.assertEqual(block.edata['ID'].tolist(), [
+            1, 0, 4, 3, 7, 6, 6, 6, 6])
+        self.assertEqual(block.num_src_nodes(), 18)
+        self.assertEqual(block.num_dst_nodes(), 9)
+        self.assertEqual(block.edges()[0].tolist(), [
+            9, 10, 11, 12, 13, 14, 15, 16, 17])
+        self.assertEqual(block.edges()[1].tolist(), [
+            0, 0, 1, 1, 2, 2, 3, 5, 7])
+
         print("Test sample_multi_layers passed")
 
     @parameterized.expand(
@@ -264,6 +363,47 @@ class TestTemporalSampler(unittest.TestCase):
             0, 1, 2])
 
         block = blocks[0]  # timestamp range: [3, 4)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            4, 4, 4])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            5, 5, 5,
+            3, 3, 3])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            2, 2, 2])
+        self.assertEqual(block.edata['ID'].tolist(), [
+            3, 9, 15])
+        self.assertEqual(block.num_src_nodes(), 6)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [
+            3, 4, 5])
+        self.assertEqual(block.edges()[1].tolist(), [
+            0, 1, 2])
+
+        # add sample_layer function here
+        # test second snapshot range [4, 5)
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([5, 5, 5]), 0, 1)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            5, 5, 5])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            5, 5, 5,
+            4, 4, 4])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            1, 1, 1])
+        self.assertEqual(block.edata['ID'].tolist(), [
+            4, 10, 16])
+        self.assertEqual(block.num_src_nodes(), 6)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [
+            3, 4, 5])
+        self.assertEqual(block.edges()[1].tolist(), [
+            0, 1, 2])
+
+        # test second snapshot range [3, 4)
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([5, 5, 5]), 0, 0)
         self.assertEqual(block.srcdata['ID'].tolist(), [
             0, 1, 2,
             4, 4, 4])
@@ -374,6 +514,80 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[0].tolist(), [6, 7, 8])
         self.assertEqual(block.edges()[1].tolist(), [0, 1, 2])
 
+        # add sample_layer function here
+        # root -> layer 0, timestamp range: [4, 5)
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([5, 5, 5]), 0, 1)
+
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            5, 5, 5])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            5, 5, 5,
+            4, 4, 4])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            1, 1, 1])
+        self.assertEqual(block.edata['ID'].tolist(), [
+            4, 10, 16])
+        self.assertEqual(block.num_src_nodes(), 6)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [
+            3, 4, 5])
+        self.assertEqual(block.edges()[1].tolist(), [
+            0, 1, 2])
+
+        # layer 0 -> layer 1, timestamp range: [4, 5)
+        block = sampler.sample_layer(block.srcdata['ID'].numpy(),
+                                     block.srcdata['ts'].numpy(), 1, 1)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2, 5, 5, 5,
+            5, 5, 5])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            5, 5, 5, 4, 4, 4,
+            4, 4, 4])
+        self.assertEqual(block.edata['dt'].tolist(), [1, 1, 1])
+        self.assertEqual(block.edata['ID'].tolist(), [4, 10, 16])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 6)
+        self.assertEqual(block.edges()[0].tolist(), [6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 1, 2])
+
+        # root -> layer 0, timestamp range: [3, 4)
+        block = sampler.sample_layer(target_vertices,
+                                     np.array([5, 5, 5]), 0, 0)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            4, 4, 4])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            5, 5, 5,
+            3, 3, 3])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            2, 2, 2])
+        self.assertEqual(block.edata['ID'].tolist(), [
+            3, 9, 15])
+        self.assertEqual(block.num_src_nodes(), 6)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [
+            3, 4, 5])
+        self.assertEqual(block.edges()[1].tolist(), [
+            0, 1, 2])
+
+        # layer 0 -> layer 1, timestamp range: [3, 4)
+        block = sampler.sample_layer(block.srcdata['ID'].numpy(),
+                                     block.srcdata['ts'].numpy(), 1, 0)
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2, 4, 4, 4,
+            4, 4, 4])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            5, 5, 5, 3, 3, 3,
+            3, 3, 3])
+        self.assertEqual(block.edata['dt'].tolist(), [2, 2, 2])
+        self.assertEqual(block.edata['ID'].tolist(), [3, 9, 15])
+        self.assertEqual(block.num_src_nodes(), 9)
+        self.assertEqual(block.num_dst_nodes(), 6)
+        self.assertEqual(block.edges()[0].tolist(), [6, 7, 8])
+        self.assertEqual(block.edges()[1].tolist(), [0, 1, 2])
+
         print("Test sample_multi_layers_multi_snapshots passed")
 
     @parameterized.expand(
@@ -396,6 +610,9 @@ class TestTemporalSampler(unittest.TestCase):
             timestamps = np.random.randint(0, 3, bs)
             sampler.sample(target_vertices,
                            timestamps)
+            # add sample_layer here
+            sampler.sample_layer(target_vertices,
+                                 timestamps, 0, 0)
 
         print("Test sample_layer_with_different_batch_size passed")
 

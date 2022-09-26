@@ -4,6 +4,9 @@
 #include <cuda_runtime_api.h>
 #include <curand_kernel.h>
 
+#include <cstddef>
+#include <cstdint>
+
 #include "common.h"
 #include "dynamic_graph.h"
 
@@ -22,19 +25,24 @@ class TemporalSampler {
       const std::vector<NIDType>& dst_nodes,
       const std::vector<TimestampType>& dst_timestamps);
 
+  // NB: this function should handle input with dynamic length (i.e.,
+  // `dst_nodes` and `dst_timestamps` can have dynamic lengths every time). Make
+  // sure to re-allocate the buffer if the input size is larger than the current
+  // buffer size.
+  SamplingResult SampleLayer(const std::vector<NIDType>& dst_nodes,
+                             const std::vector<TimestampType>& dst_timestamps,
+                             uint32_t layer, uint32_t snapshot);
+
  private:
-  std::vector<SamplingResult> SampleLayer(
-      uint32_t layer, const std::vector<SamplingResult>& prev_sampling_results);
-
-  std::vector<SamplingResult> RootInputToSamplingResult(
-      const std::vector<NIDType>& dst_nodes,
-      const std::vector<TimestampType>& dst_timestamps);
-
-  void InitBuffer(std::size_t num_root_nodes);
+  void InitBuffer(std::size_t maximum_sampled_nodes);
 
   void FreeBuffer();
 
  private:
+  constexpr static std::size_t per_node_size =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
+      sizeof(uint32_t);
+
   const DynamicGraph& graph_;
   std::vector<uint32_t> fanouts_;
   SamplingPolicy sampling_policy_;
@@ -46,11 +54,12 @@ class TemporalSampler {
   std::size_t shared_memory_size_;
 
   cudaStream_t* streams_;
-  char** cpu_buffer_;
-  char** gpu_input_buffer_;
-  char** gpu_output_buffer_;
-  curandState_t** rand_states_;
-  std::size_t init_num_root_nodes_;
+  char* cpu_buffer_;
+  char* gpu_input_buffer_;
+  char* gpu_output_buffer_;
+  curandState_t* rand_states_;
+
+  std::size_t maximum_sampled_nodes_;
 };
 
 }  // namespace dgnn
