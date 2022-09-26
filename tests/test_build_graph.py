@@ -25,7 +25,7 @@ class TestBuildGraph(unittest.TestCase):
         config = default_config.copy()
         config["mem_resource_type"] = mem_resource_type
         config["undirected"] = False
-        dgraph = build_dynamic_graph(train_df, **config)
+        dgraph = build_dynamic_graph(**config, dataset_df=train_df)
 
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)
@@ -59,7 +59,7 @@ class TestBuildGraph(unittest.TestCase):
         config = default_config.copy()
         config["mem_resource_type"] = mem_resource_type
         config["undirected"] = True
-        dgraph = build_dynamic_graph(train_df, **config)
+        dgraph = build_dynamic_graph(**config, dataset_df=train_df)
 
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
         srcs = np.array(df['src'][:train_edge_end], dtype=int)
