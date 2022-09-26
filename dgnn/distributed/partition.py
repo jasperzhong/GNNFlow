@@ -223,9 +223,12 @@ class LeastLoadedPartitioner(Partitioner):
 
         partition_table = torch.zeros(len(src_nodes), dtype=torch.int8)
         for i in range(len(src_nodes)):
-            partition_table[i] = torch.argmin(metrics)
-            self.update_metrics_for_one_edge(
-                i, int(src_nodes[i]), int(dst_nodes[i]), float(timestamps[i]), int(eids[i]))
+            partition_id = int(torch.argmin(metrics).item())
+            partition_table[i] = partition_id
+            self.update_metrics_for_one_edge(partition_id,
+                                             int(src_nodes[i]),
+                                             int(dst_nodes[i]),
+                                             float(timestamps[i]), int(eids[i]))
         return partition_table
 
 
