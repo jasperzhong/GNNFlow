@@ -25,6 +25,9 @@ class Dispatcher:
         self._num_workers_per_machine = torch.cuda.device_count()
         self._partitioner = get_partitioner(partition_strategy, num_partitions)
 
+        self._num_nodes = 0
+        self._num_edges = 0
+
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor, defer_sync: bool = False):
         partitions = self._partitioner.partition(
@@ -36,6 +39,9 @@ class Dispatcher:
             edges = list(edges)
             for worker_id in range(self._num_workers_per_machine):
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
+                # TODO: the communication is duplicated for each worker in the remote machine.
+                # We can optimize it by sending the data to one of the worker and let it
+                # broadcast the data to the other workers.
                 future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
                                        args=(edges))
                 futures.append(future)
@@ -69,6 +75,10 @@ class Dispatcher:
             timestamps = batch["time"].values.astype(np.float32)
             eids = batch["eid"].values.astype(np.int64)
 
+            self._num_nodes = len(
+                np.unique(np.concatenate([src_nodes, dst_nodes])))
+            self._num_edges += len(eids)
+
             if undirected:
                 src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
                 dst_nodes_ext = np.concatenate([dst_nodes, src_nodes])
@@ -88,22 +98,20 @@ class Dispatcher:
             # Wait for the workers to finish.
             for future in futures:
                 future.wait()
-
             futures = []
         self.broadcast_graph_metadata()
 
     def broadcast_graph_metadata(self):
         """
-        Broadcast the graph metadata to all the workers.
+        Broadcast the graph metadata (i.e., num_nodes, num_edges )to all 
+        the workers.
         """
-        metadata = torch.tensor(
-            [graph_services.num_vertices(), graph_services.num_edges()])
         # Broadcast the graph metadata to all the workers.
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._num_workers_per_machine):
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args=(metadata))
+                             args=(self._num_nodes, self._num_edges))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):
