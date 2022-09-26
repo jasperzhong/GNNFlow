@@ -78,7 +78,7 @@ class DistributedTemporalSampler:
         """
         # dispatch target vertices and timestamps to different partitions
         partition_table = self._partition_table
-        num_partitions = partition_table.shape[0]
+        num_partitions = partition_table.shape[1]
         partition_ids = partition_table[target_vertices]
 
         futures = []
