@@ -179,4 +179,4 @@ def sampler_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
         torch.Tensor: The temporal neighbors of the vertex.
     """
     dsampler = get_dsampler()
-    return dsampler.sampler_layer_local(target_vertices, timestamps, layer, snapshot)
+    return dsampler.sample_layer_local(target_vertices, timestamps, layer, snapshot)
