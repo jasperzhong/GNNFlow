@@ -65,6 +65,27 @@ def set_graph_metadata(num_vertices: int, num_edges: int):
     dgraph.set_num_edges(num_edges)
 
 
+def set_partition_table(partition_table: torch.Tensor):
+    """
+    Set the partition table.
+
+    Args:
+        partition_table (torch.Tensor): The partition table.
+    """
+    dgraph = get_dgraph()
+    dgraph.set_partition_table(partition_table)
+
+def get_partition_table() -> torch.Tensor:
+    """
+    Get the partition table.
+
+    Returns:
+        torch.Tensor: The partition table.
+    """
+    dgraph = get_dgraph()
+    return dgraph.get_partition_table()
+
+
 def num_vertices() -> int:
     """
     Get the number of vertices in the dynamic graph.

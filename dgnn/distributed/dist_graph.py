@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from dgnn import DynamicGraph
 
@@ -31,6 +32,7 @@ class DistributedDynamicGraph:
     def num_edges(self) -> int:
         """
         Get the number of edges in the dynamic graph.
+
         Returns:
             int: The number of edges.
         """
@@ -39,6 +41,7 @@ class DistributedDynamicGraph:
     def set_num_vertices(self, num_vertices: int):
         """
         Set the number of vertices in the dynamic graph.
+
         Args:
             num_vertices (int): The number of vertices.
         """
@@ -47,10 +50,31 @@ class DistributedDynamicGraph:
     def set_num_edges(self, num_edges: int):
         """
         Set the number of edges in the dynamic graph.
+
         Args:
             num_edges (int): The number of edges.
         """
         self._num_edges = num_edges
+
+    def set_partition_table(self, partition_table: torch.Tensor):
+        """
+        Set the partition table.
+
+        Args:
+            partition_table (torch.Tensor): The partition table.
+        """
+        self._partition_table = partition_table
+
+    def get_partition_table(self) -> torch.Tensor:
+        """
+        Get the partition table.
+
+        Returns:
+            torch.Tensor: The partition table.
+        """
+        if self._partition_table is None:
+            raise RuntimeError('Partition table is not set.')
+        return self._partition_table
 
     def add_edges(self, source_vertices: np.ndarray, target_vertices: np.ndarray,
                   timestamps: np.ndarray, eids: np.ndarray):

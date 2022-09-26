@@ -35,3 +35,5 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     torch.distributed.barrier()
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
                  rank, graph_services.num_vertices(), graph_services.num_edges())
+    logging.info("Rank %d: partition table shape: %s",
+                 rank, str(graph_services.get_partition_table().shape))

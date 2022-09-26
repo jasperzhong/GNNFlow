@@ -100,6 +100,7 @@ class Dispatcher:
                 future.wait()
             futures = []
         self.broadcast_graph_metadata()
+        # pass the partition table to other workers
 
     def broadcast_graph_metadata(self):
         """
@@ -112,6 +113,17 @@ class Dispatcher:
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
                              args=(self._num_nodes, self._num_edges))
+    
+    def broadcast_partition_table(self):
+        """
+        Broadcast the partition table to all the workers.
+        """
+        # Broadcast the partition table to all the workers.
+        for partition_id in range(self._num_partitions):
+            for worker_id in range(self._num_workers_per_machine):
+                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+                rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_partition_table,
+                             args=(self._partitioner.partition_table))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):
