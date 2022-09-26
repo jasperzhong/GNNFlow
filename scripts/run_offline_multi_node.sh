@@ -5,6 +5,7 @@ MODEL=$1
 DATA=$2
 CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
+PARTITION_STRATEGY="${5:-hash}"
 
 HOST_NODE_ADDR=10.28.1.16
 HOST_NODE_PORT=29400
@@ -29,7 +30,8 @@ cmd="torchrun \
     --rdzv_conf is_host=$IS_HOST \
     offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
-    --partition --ingestion-batch-size 100000"
+    --partition --ingestion-batch-size 100000 \
+    --partition-strategy $PARTITION_STRATEGY"
 
 echo $cmd
 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
