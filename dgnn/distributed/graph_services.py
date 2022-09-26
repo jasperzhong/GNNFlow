@@ -46,11 +46,8 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
         eids (torch.Tensor): The edge IDs of the edges.
     """
     dgraph = get_dgraph()
-    rank = torch.distributed.get_rank()
-    logging.info("Rank %d: Adding %d %d %d %d edges.", rank,
-                 source_vertices.size(0), target_vertices.size(0),
-                 timestamps.size(0), eids.size(0))
-
+    logging.debug("Rank %d: Adding %d edges to the dynamic graph.",
+                  torch.distributed.get_rank(), source_vertices.size(0))
     dgraph.add_edges(source_vertices.numpy(),
                      target_vertices.numpy(), timestamps.numpy(), eids.numpy())
 

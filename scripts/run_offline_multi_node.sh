@@ -29,9 +29,9 @@ cmd="torchrun \
     --rdzv_conf is_host=$IS_HOST \
     offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
-    --partition "
+    --partition --ingestion-batch-size 100000"
 
 echo $cmd
-LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
+LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
 
 
