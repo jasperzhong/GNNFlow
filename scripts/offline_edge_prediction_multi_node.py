@@ -214,7 +214,8 @@ def main():
     if args.distributed:
         assert isinstance(dgraph, DistributedDynamicGraph)
         sampler = TemporalSampler(dgraph._dgraph, **model_config)
-        sampler = DistributedTemporalSampler(sampler, dgraph)
+        graph_services.set_dsampler(sampler)
+        sampler = graph_services.get_dsampler()
     else:
         assert isinstance(dgraph, DynamicGraph)
         sampler = TemporalSampler(dgraph, **model_config)
