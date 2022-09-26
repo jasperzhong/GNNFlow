@@ -43,7 +43,7 @@ class Dispatcher:
                 # We can optimize it by sending the data to one of the worker and let it
                 # broadcast the data to the other workers.
                 future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
-                                       args=(edges, ))
+                                       args=(*edges, ))
                 futures.append(future)
 
         if not defer_sync:
