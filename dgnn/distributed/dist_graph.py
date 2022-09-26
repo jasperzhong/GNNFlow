@@ -17,6 +17,7 @@ class DistributedDynamicGraph:
             dgraph (DynamicGraph): The dynamic graph instance.
         """
         self._dgraph = dgraph
+        self._num_partitions = None
         self._partition_table = None
         self._num_vertices = 0
         self._num_edges = 0
@@ -75,6 +76,26 @@ class DistributedDynamicGraph:
         if self._partition_table is None:
             raise RuntimeError('Partition table is not set.')
         return self._partition_table
+
+    def set_num_partitions(self, num_partitions: int):
+        """
+        Set the number of partitions.
+
+        Args:
+            num_partitions (int): The number of partitions.
+        """
+        self._num_partitions = num_partitions
+
+    def num_partitions(self) -> int:
+        """
+        Get the number of partitions.
+
+        Returns:
+            int: The number of partitions.
+        """
+        if self._num_partitions is None:
+            raise RuntimeError('Number of partitions is not set.')
+        return self._num_partitions
 
     def add_edges(self, source_vertices: np.ndarray, target_vertices: np.ndarray,
                   timestamps: np.ndarray, eids: np.ndarray):

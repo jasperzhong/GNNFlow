@@ -31,6 +31,7 @@ class DistributedTemporalSampler:
         self._num_layers = self._sampler._num_layers
         self._num_snapshots = self._sampler._num_snapshots
         self._partition_table = self._dgraph.get_partition_table()
+        self._num_partitions = self._dgraph.num_partitions()
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -78,11 +79,10 @@ class DistributedTemporalSampler:
         """
         # dispatch target vertices and timestamps to different partitions
         partition_table = self._partition_table
-        num_partitions = partition_table.shape[1]
         partition_ids = partition_table[target_vertices]
 
         futures = []
-        for partition_id in range(num_partitions):
+        for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue

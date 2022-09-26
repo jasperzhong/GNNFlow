@@ -80,7 +80,7 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                      target_vertices.numpy(), timestamps.numpy(), eids.numpy())
 
 
-def set_graph_metadata(num_vertices: int, num_edges: int):
+def set_graph_metadata(num_vertices: int, num_edges: int, num_partitions: int):
     """
     Set the graph metadata.
 
@@ -91,6 +91,7 @@ def set_graph_metadata(num_vertices: int, num_edges: int):
     dgraph = get_dgraph()
     dgraph.set_num_vertices(num_vertices)
     dgraph.set_num_edges(num_edges)
+    dgraph.set_num_partitions(num_partitions)
 
 
 def set_partition_table(partition_table: torch.Tensor):
