@@ -17,9 +17,12 @@ from torch.utils.data import BatchSampler, SequentialSampler
 import dgnn.cache as caches
 import dgnn.distributed
 import dgnn.distributed.graph_services as graph_services
+from dgnn import DynamicGraph
 from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
+from dgnn.distributed.dist_graph import DistributedDynamicGraph
+from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
@@ -208,7 +211,13 @@ def main():
                  memory_device=device, memory_shared=args.distributed)
     model.to(device)
 
-    sampler = TemporalSampler(dgraph, **model_config)
+    if args.distributed:
+        assert isinstance(dgraph, DistributedDynamicGraph)
+        sampler = TemporalSampler(dgraph._dgraph, **model_config)
+        sampler = DistributedTemporalSampler(sampler, dgraph)
+    else:
+        assert isinstance(dgraph, DynamicGraph)
+        sampler = TemporalSampler(dgraph, **model_config)
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
