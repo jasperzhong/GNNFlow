@@ -46,7 +46,7 @@ class TestBuildGraph(unittest.TestCase):
 
             graph_out_edges, graph_ts, _ = dgraph.get_temporal_neighbors(src)
             self.assertEqual(len(out_edges), len(graph_out_edges))
-            self.assertEqual(len(graph_out_edges), dgraph.out_degree(src))
+            self.assertEqual(len(graph_out_edges), dgraph.out_degree([src]))
             self.assertTrue(np.allclose(ts, graph_ts))
 
     @parameterized.expand(itertools.product(["cuda", "unified", "pinned", "shared"]))
@@ -77,7 +77,8 @@ class TestBuildGraph(unittest.TestCase):
         for src in srcs:
             df = df[:train_edge_end]
             out_edges = np.array(df[df['src'] == src]['dst'], dtype=int)
-            out_edges_reverse = np.array(df[df['dst'] == src]['src'], dtype=int)
+            out_edges_reverse = np.array(
+                df[df['dst'] == src]['src'], dtype=int)
             out_edges = np.concatenate((out_edges, out_edges_reverse))
             ts = np.array(df[df['src'] == src]['time'])
             ts_reverse = np.array(df[df['dst'] == src]['time'])
@@ -86,5 +87,5 @@ class TestBuildGraph(unittest.TestCase):
 
             graph_out_edges, graph_ts, _ = dgraph.get_temporal_neighbors(src)
             self.assertEqual(len(out_edges), len(graph_out_edges))
-            self.assertEqual(len(graph_out_edges), dgraph.out_degree(src))
+            self.assertEqual(len(graph_out_edges), dgraph.out_degree([src]))
             self.assertTrue(np.allclose(ts, graph_ts))
