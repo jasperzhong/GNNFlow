@@ -33,6 +33,7 @@ class Dispatcher:
         # Dispatch the partitions to the workers.
         futures = []
         for partition_id, edges in enumerate(partitions):
+            edges = list(edges)
             for worker_id in range(self._num_workers_per_machine):
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
