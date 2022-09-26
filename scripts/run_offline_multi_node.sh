@@ -19,6 +19,7 @@ else
 fi
 
 export NCCL_SOCKET_IFNAME=${INTERFACE}
+export GLOO_SOCKET_IFNAME=${INTERFACE}
 export TP_SOCKET_IFNAME=${INTERFACE}
 
 cmd="torchrun \
