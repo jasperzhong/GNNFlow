@@ -85,9 +85,11 @@ class Dispatcher:
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
                            timestamps, eids, defer_sync=True))
 
-        # Wait for the workers to finish.
-        for future in futures:
-            future.wait()
+            # Wait for the workers to finish.
+            for future in futures:
+                future.wait()
+
+            futures = []
         self.broadcast_graph_metadata()
 
     def broadcast_graph_metadata(self):
