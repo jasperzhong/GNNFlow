@@ -61,8 +61,8 @@ def set_graph_metadata(num_vertices: int, num_edges: int):
         num_edges (int): The number of edges.
     """
     dgraph = get_dgraph()
-    dgraph.num_vertices = num_vertices
-    dgraph.num_edges = num_edges
+    dgraph.set_num_vertices(num_vertices)
+    dgraph.set_num_edges(num_edges)
 
 
 def num_vertices() -> int:
@@ -73,7 +73,7 @@ def num_vertices() -> int:
         int: The number of vertices.
     """
     dgraph = get_dgraph()
-    return dgraph.num_vertices
+    return dgraph.num_vertices()
 
 
 def num_edges() -> int:
@@ -84,7 +84,7 @@ def num_edges() -> int:
         int: The number of edges.
     """
     dgraph = get_dgraph()
-    return dgraph.num_edges
+    return dgraph.num_edges()
 
 
 def out_degree(vertex: int) -> int:

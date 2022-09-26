@@ -20,7 +20,6 @@ class DistributedDynamicGraph:
         self._num_vertices = 0
         self._num_edges = 0
 
-    @property
     def num_vertices(self) -> int:
         """
         Get the number of vertices in the dynamic graph.
@@ -29,7 +28,6 @@ class DistributedDynamicGraph:
         """
         return self._num_vertices
 
-    @property
     def num_edges(self) -> int:
         """
         Get the number of edges in the dynamic graph.
@@ -38,8 +36,7 @@ class DistributedDynamicGraph:
         """
         return self._num_edges
 
-    @num_vertices.setter
-    def num_vertices(self, num_vertices: int):
+    def set_num_vertices(self, num_vertices: int):
         """
         Set the number of vertices in the dynamic graph.
         Args:
@@ -47,8 +44,7 @@ class DistributedDynamicGraph:
         """
         self._num_vertices = num_vertices
 
-    @num_edges.setter
-    def num_edges(self, num_edges: int):
+    def set_num_edges(self, num_edges: int):
         """
         Set the number of edges in the dynamic graph.
         Args:

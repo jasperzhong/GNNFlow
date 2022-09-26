@@ -183,6 +183,7 @@ def main():
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank)
         graph_services.set_dgraph(dgraph)
+        dgraph = graph_services.get_dgraph()
         dgnn.distributed.initialize(args.rank, args.world_size, full_data,
                                     args.ingestion_batch_size, args.partition_strategy,
                                     args.num_nodes, data_config["undirected"])
