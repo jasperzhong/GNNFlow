@@ -28,7 +28,8 @@ class KVStoreServer:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
         """
-        pass
+        for key, tensor in zip(keys, tensors):
+            self._map[key] = tensor
 
     def pull(self, keys: torch.Tensor) -> List[torch.Tensor]:
         """
@@ -40,7 +41,7 @@ class KVStoreServer:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        pass
+        return [self._map[key] for key in keys]
 
 
 class KVStoreClient:

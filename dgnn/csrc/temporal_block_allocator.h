@@ -89,6 +89,8 @@ class TemporalBlockAllocator {
   std::stack<rmm::mr::device_memory_resource*> mem_resources_;
 
   std::mutex mutex_;
+
+  int device_;
 };
 
 }  // namespace dgnn

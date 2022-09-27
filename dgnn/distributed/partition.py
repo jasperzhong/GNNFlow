@@ -186,28 +186,13 @@ class LeastLoadedPartitioner(Partitioner):
         super().__init__(num_partitions, assign_with_dst_node)
         self._metrics = torch.zeros(num_partitions, dtype=torch.float32)
 
-    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                  timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
-        partitions = super().partition(src_nodes, dst_nodes, timestamps, eids)
-        self.update_metrics(partitions)
-        return partitions
-
-    def update_metrics(self, partitions: List[Partition]):
-        """
-        Update the metrics of the partitions.
-
-        Args:
-            partitions (List[Partition]): The partitions.
-        """
-        raise NotImplementedError
-
-    def update_metrics_for_one_edge(self, current_partition: int, src_node: int,
+    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
                                     dst_node: int, timestamp: float, eid: int):
         """
         Update the metrics of the partition for one edge.
 
         Args:
-            current_partition (int): The current partition of the edge.
+            partition_id (int): The current partition of the edge.
             src_node (int): The source node of the edge.
             dst_node (int): The destination node of the edge.
             timestamp (float): The timestamp of the edge.
@@ -217,13 +202,9 @@ class LeastLoadedPartitioner(Partitioner):
 
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                                        timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
-        # NB: we update the number of edges for each partition later in the partition() function.
-        # Therefore, we make a copy of the number of edges here.
-        metrics = self._metrics.clone().detach()
-
         partition_table = torch.zeros(len(src_nodes), dtype=torch.int8)
         for i in range(len(src_nodes)):
-            partition_id = int(torch.argmin(metrics).item())
+            partition_id = int(torch.argmin(self._metrics).item())
             partition_table[i] = partition_id
             self.update_metrics_for_one_edge(partition_id,
                                              int(src_nodes[i]),
@@ -243,9 +224,9 @@ class LeastLoadedPartitionerByEdgeCount(LeastLoadedPartitioner):
         for i in range(self._num_partitions):
             self._metrics[i] += len(partitions[i].src_nodes)
 
-    def update_metrics_for_one_edge(self, current_partition: int, src_node: int,
+    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
                                     dst_node: int, timestamp: float, eid: int) -> float:
-        self._metrics[current_partition] += 1
+        self._metrics[partition_id] += 1
 
 
 class LeastLoadedPartitionerByTimestampSum(LeastLoadedPartitioner):
@@ -255,13 +236,9 @@ class LeastLoadedPartitionerByTimestampSum(LeastLoadedPartitioner):
     It assigns the source vertex to a partition with the least sum of timestamps.
     """
 
-    def update_metrics(self, partitions: List[Partition]):
-        for i in range(self._num_partitions):
-            self._metrics[i] += partitions[i].timestamps.sum().item()
-
-    def update_metrics_for_one_edge(self, current_partition: int, src_node: int,
+    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
                                     dst_node: int, timestamp: float, eid: int) -> float:
-        self._metrics[current_partition] += timestamp
+        self._metrics[partition_id] += timestamp
 
 
 class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
@@ -279,18 +256,11 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
         super().__init__(num_partitions, assign_with_dst_node)
         self._num_edges = torch.zeros(num_partitions, dtype=torch.int64)
 
-    def update_metrics(self, partitions: List[Partition]):
-        for i in range(self._num_partitions):
-            k = len(partitions[i].src_nodes)
-            self._num_edges[i] += k
-            self._metrics[i] += (partitions[i].timestamps.sum().item() -
-                                 self._metrics[i] * k) / self._num_edges[i]
-
-    def update_metrics_for_one_edge(self, current_partition: int, src_node: int,
+    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
                                     dst_node: int, timestamp: float, eid: int) -> float:
-        self._num_edges[current_partition] += 1
-        self._metrics[current_partition] += (
-            timestamp - self._metrics[current_partition]) / self._num_edges[current_partition]
+        self._num_edges[partition_id] += 1
+        self._metrics[partition_id] += (
+            timestamp - self._metrics[partition_id]) / self._num_edges[partition_id]
 
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):

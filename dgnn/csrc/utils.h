@@ -46,8 +46,10 @@ std::vector<T> sort_vector(const std::vector<T>& v,
  *
  * @param dst The destination temporal block.
  * @param src The source temporal block.
+ * @param device The device where the destination block is.
+ * @param stream The CUDA stream.
  */
-void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst,
+void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst, int device,
                        cudaStream_t stream = nullptr);
 
 /**
@@ -62,12 +64,15 @@ void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst,
  * @param eids The ids of the incoming edges.
  * @param start_idx The start index of the incoming edges.
  * @param num_edges The number of incoming edges.
+ * @param device The device where the destination block is.
+ * @param stream The CUDA stream.
  */
 void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<NIDType>& dst_nodes,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
-                      std::size_t num_edges, cudaStream_t stream = nullptr);
+                      std::size_t num_edges, int device,
+                      cudaStream_t stream = nullptr);
 
 std::size_t GetSharedMemoryMaxSize();
 

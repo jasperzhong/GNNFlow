@@ -191,7 +191,7 @@ void DynamicGraph::AddEdgesForOneNode(
           h_tail_block->capacity - h_tail_block->size;
       if (num_edges_to_current_block > 0) {
         CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, 0,
-                         num_edges_to_current_block, stream);
+                         num_edges_to_current_block, device_, stream);
         // NB: sync is necessary here since the value is updated in
         // `InsertBlock` right after the copy
         SyncBlock(h_tail_block, stream);
@@ -214,7 +214,7 @@ void DynamicGraph::AddEdgesForOneNode(
 
   // copy data to block
   CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, start_idx,
-                   num_edges, stream);
+                   num_edges, device_, stream);
   SyncBlock(h_tail_block, stream);
 }
 

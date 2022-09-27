@@ -107,7 +107,7 @@ class DistributedTemporalSampler:
 
             futures.append(rpc.rpc_async(
                 'worker{}'.format(worker_rank),
-                graph_services.sampler_layer_local,
+                graph_services.sample_layer_local,
                 args=(partition_vertices, partition_timestamps, layer, snapshot)))
 
         # collect sampling results

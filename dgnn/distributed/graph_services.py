@@ -166,7 +166,7 @@ def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, tor
     pass
 
 
-def sampler_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, layer: int, snapshot: int):
+def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, layer: int, snapshot: int):
     """
     Sample neighbors of given vertices in a specific layer and snapshot locally.
 
