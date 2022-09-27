@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pandas as pd
 import torch
@@ -26,10 +27,17 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size)
     logging.info("Rank %d: Initialized RPC.", rank)
 
+    local_rank = int(os.environ["LOCAL_RANK"])
+
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected)
+
+    if local_rank == 0:
+        # TODO(guangming): create KVStore server
+        pass
+
 
     # check
     torch.distributed.barrier()

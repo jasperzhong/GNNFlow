@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple
+from typing import List, Tuple
 
 import torch
 import torch.distributed
@@ -7,9 +7,11 @@ import torch.distributed
 from dgnn import DynamicGraph, TemporalSampler
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from dgnn.distributed.dist_sampler import DistributedTemporalSampler
+from dgnn.distributed.kvstore import KVStoreServer
 
 global DGRAPH
 global DSAMPLER
+global KVSTORE_SERVER
 
 
 def get_dgraph() -> DistributedDynamicGraph:
@@ -60,6 +62,30 @@ def set_dsampler(sampler: TemporalSampler):
     global DSAMPLER
     dgraph = get_dgraph()
     DSAMPLER = DistributedTemporalSampler(sampler, dgraph)
+
+
+def get_kvstore_server() -> KVStoreServer:
+    """
+    Get the kvstore server
+
+    Returns:
+        KVStoreServer: The kvstore server.
+    """
+    global KVSTORE_SERVER
+    if KVSTORE_SERVER is None:
+        raise RuntimeError("The kvstore client has not been initialized.")
+    return KVSTORE_SERVER
+
+
+def set_kvstore_server(kvstore_server: KVStoreServer):
+    """
+    Set the kvstore client.
+
+    Args:
+        kvstore_server (KVStoreServer): The kvstore server.
+    """
+    global KVSTORE_SERVER
+    KVSTORE_SERVER = kvstore_server
 
 
 def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
@@ -180,4 +206,28 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
         torch.Tensor: The temporal neighbors of the vertex.
     """
     dsampler = get_dsampler()
-    return dsampler.sample_layer_local(target_vertices, timestamps, layer, snapshot)
+    return dsampler.sample_layer_local(target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
+
+
+def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor]):
+    """
+    Push tensors to the remote workers for KVStore servers.
+
+    Args:
+        keys (torch.Tensor): The key of the tensors.
+        tensors (List[torch.Tensor]): The tensors.
+    """
+    # TODO(guangming)
+
+
+def pull_tensors(keys: torch.Tensor) -> List[torch.Tensor]:
+    """
+    Pull tensors from the remote workers for KVStore servers.
+
+    Args:
+        keys (torch.Tensor): The key of the tensors.
+
+    Returns:
+        List[torch.Tensor]: The tensors.
+    """
+    # TODO(guangming)

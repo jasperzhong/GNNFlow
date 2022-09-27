@@ -29,7 +29,20 @@ class Dispatcher:
         self._num_edges = 0
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                       timestamps: torch.Tensor, eids: torch.Tensor, defer_sync: bool = False):
+                       timestamps: torch.Tensor, eids: torch.Tensor, node_feats: Optional[torch.Tensor] = None,
+                       edge_feats: Optional[torch.Tensor] = None, defer_sync: bool = False):
+        """
+        Dispatch the edges to the workers.
+
+        Args:
+            src_nodes (torch.Tensor): The source nodes of the edges.
+            dst_nodes (torch.Tensor): The destination nodes of the edges.
+            timestamps (torch.Tensor): The timestamps of the edges.
+            eids (torch.Tensor): The edge IDs of the edges.
+            node_feats (torch.Tensor): The node features of the edges.
+            edge_feats (torch.Tensor): The edge features of the edges.
+            defer_sync (bool): Whether to defer the synchronization.
+        """
         partitions = self._partitioner.partition(
             src_nodes, dst_nodes, timestamps, eids)
 
@@ -46,6 +59,13 @@ class Dispatcher:
                                        args=(*edges, ))
                 futures.append(future)
 
+        # TODO: push features to the KVStore server on the partition.
+        for partition_id, edges in enumerate(partitions):
+            edges = list(edges)
+            for worker_id in range(self._num_workers_per_machine):
+                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+
+
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:
@@ -56,16 +76,17 @@ class Dispatcher:
         return futures
 
     def partition_graph(self, dataset: pd.DataFrame, ingestion_batch_size: int,
-                        undirected: bool):
+                        undirected: bool, node_feats: Optional[torch.Tensor] = None,
+                        edge_feats: Optional[torch.Tensor] = None):
         """
         partition the dataset to the workers.
 
         Args:
             dataset (df.DataFrame): The dataset to ingest.
             ingestion_batch_size (int): The number of samples to ingest in each iteration.
-            partition_strategy (str): The partitioning strategy.
-            num_partitions (int): The number of partitions to split the dataset into.
             undirected (bool): Whether the graph is undirected.
+            node_feats (torch.Tensor): The node features of the dataset.
+            edge_feats (torch.Tensor): The edge features of the dataset.
         """
         # Partition the dataset.
         futures = []

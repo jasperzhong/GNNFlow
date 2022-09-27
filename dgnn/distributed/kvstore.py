@@ -17,7 +17,6 @@ class KVStoreServer:
 
     def __init__(self):
         # keys -> tensors
-        # map is a possible choice
         self._map = {}
 
     def push(self, keys: torch.Tensor, tensors: List[torch.Tensor]):
@@ -28,6 +27,9 @@ class KVStoreServer:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
         """
+        assert len(keys) == len(
+            tensors), "The number of keys and tensors must be the same."
+
         for key, tensor in zip(keys, tensors):
             self._map[key] = tensor
 
@@ -51,8 +53,8 @@ class KVStoreClient:
     It is used by the trainer to push/pull tensors to/from the KVStore servers.
     """
 
-    def __init__(self):
-        self._partition_table = None
+    def __init__(self, partition_table: torch.Tensor):
+        self._partition_table = partition_table
 
     def push(self, keys: torch.Tensor, tensors: List[torch.Tensor]):
         """
@@ -62,7 +64,7 @@ class KVStoreClient:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
         """
-        pass
+        # TODO(guangming)
 
     def pull(self, keys: torch.Tensor) -> List[torch.Tensor]:
         """
@@ -74,4 +76,4 @@ class KVStoreClient:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        pass
+        # TODO(guangming)
