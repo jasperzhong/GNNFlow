@@ -217,7 +217,8 @@ def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor]):
         keys (torch.Tensor): The key of the tensors.
         tensors (List[torch.Tensor]): The tensors.
     """
-    # TODO(guangming)
+    kvstore_server = get_kvstore_server()
+    kvstore_server.push(keys, tensors)
 
 
 def pull_tensors(keys: torch.Tensor) -> List[torch.Tensor]:
@@ -230,4 +231,5 @@ def pull_tensors(keys: torch.Tensor) -> List[torch.Tensor]:
     Returns:
         List[torch.Tensor]: The tensors.
     """
-    # TODO(guangming)
+    kvstore_server = get_kvstore_server()
+    return kvstore_server.pull(keys)

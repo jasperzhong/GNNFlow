@@ -8,6 +8,7 @@ import torch.distributed.rpc as rpc
 
 import dgnn.distributed.graph_services as graph_services
 from dgnn.distributed.dispatcher import get_dispatcher
+from dgnn.distributed.kvstore import KVStoreServer
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
@@ -29,15 +30,14 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     local_rank = int(os.environ["LOCAL_RANK"])
 
+    # Initialize the KVStore.
+    if local_rank == 0:
+        graph_services.set_kvstore_server(KVStoreServer())
+
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected)
-
-    if local_rank == 0:
-        # TODO(guangming): create KVStore server
-        pass
-
 
     # check
     torch.distributed.barrier()

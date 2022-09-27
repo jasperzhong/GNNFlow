@@ -64,7 +64,7 @@ class KVStoreClient:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
         """
-        # TODO(guangming)
+        # TODO(guangming): rpc call to the corresponding KVStore servers (call graph_services.push_tensors)
 
     def pull(self, keys: torch.Tensor) -> List[torch.Tensor]:
         """
@@ -76,4 +76,4 @@ class KVStoreClient:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        # TODO(guangming)
+        # TODO(guangming): rpc call to the corresponding KVStore servers (call graph_services.pull_tensors)

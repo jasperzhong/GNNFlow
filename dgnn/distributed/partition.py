@@ -275,6 +275,7 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
     Returns:
         Partitioner: The partitioner.
     """
+    # TODO(tianzuo): add a test for existing partitioners in tests/
     if partition_strategy == "hash":
         return HashPartitioner(num_partitions, assign_with_dst_node)
     elif partition_strategy == "roundrobin":
@@ -289,5 +290,6 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
     elif partition_strategy == "timestampavg":
         return LeastLoadedPartitionerByTimestampAvg(
             num_partitions, assign_with_dst_node)
+    # TODO(tianzuo): SOTA partitioners.
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
