@@ -111,8 +111,10 @@ class DynamicGraph:
             eids = np.arange(num_edges, num_edges + len(source_vertices))
 
         if add_reverse:
-            source_vertices_ext = np.concatenate([source_vertices, target_vertices])
-            target_vertices_ext = np.concatenate([target_vertices, source_vertices])
+            source_vertices_ext = np.concatenate(
+                [source_vertices, target_vertices])
+            target_vertices_ext = np.concatenate(
+                [target_vertices, source_vertices])
             source_vertices = source_vertices_ext
             target_vertices = target_vertices_ext
             timestamps = np.concatenate([timestamps, timestamps])
@@ -127,8 +129,8 @@ class DynamicGraph:
     def num_edges(self) -> int:
         return self._dgraph.num_edges()
 
-    def out_degree(self, vertex: int) -> int:
-        return self._dgraph.out_degree(vertex)
+    def out_degree(self, vertexs: np.ndarray) -> np.ndarray:
+        return self._dgraph.out_degree(vertexs)
 
     def get_temporal_neighbors(self, vertex: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """

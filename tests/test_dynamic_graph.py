@@ -40,10 +40,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 3)
-        self.assertEqual(dgraph.out_degree(1), 3)
-        self.assertEqual(dgraph.out_degree(2), 3)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [3, 3, 3, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -71,7 +69,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges sorted by timestamps passed. (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @parameterized.expand(
+    @ parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_sorted_by_timestamps_add_reverse(
             self, mem_resource_type):
@@ -90,10 +88,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=True)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 3)
-        self.assertEqual(dgraph.out_degree(1), 6)
-        self.assertEqual(dgraph.out_degree(2), 6)
-        self.assertEqual(dgraph.out_degree(3), 3)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [3, 6, 6, 3])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -121,7 +117,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges sorted by timestamps passed (add reverse) (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @parameterized.expand(
+    @ parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_unsorted(self, mem_resource_type):
         """
@@ -137,10 +133,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 3)
-        self.assertEqual(dgraph.out_degree(1), 3)
-        self.assertEqual(dgraph.out_degree(2), 3)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [3, 3, 3, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -168,7 +162,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges unsorted passed (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @parameterized.expand(
+    @ parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_multiple_times_insert(self, mem_resource_type):
         """
@@ -185,10 +179,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 3)
-        self.assertEqual(dgraph.out_degree(1), 3)
-        self.assertEqual(dgraph.out_degree(2), 3)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [3, 3, 3, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -222,10 +214,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 6)
-        self.assertEqual(dgraph.out_degree(1), 6)
-        self.assertEqual(dgraph.out_degree(2), 6)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [6, 6, 6, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -253,7 +243,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges multiple times passed. (insert policy) (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @parameterized.expand(
+    @ parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_multiple_times_replace(self, mem_resource_type):
         """
@@ -271,10 +261,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 3)
-        self.assertEqual(dgraph.out_degree(1), 3)
-        self.assertEqual(dgraph.out_degree(2), 3)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [3, 3, 3, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -308,10 +296,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 6)
-        self.assertEqual(dgraph.out_degree(1), 6)
-        self.assertEqual(dgraph.out_degree(2), 6)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [6, 6, 6, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -386,10 +372,8 @@ class TestDynamicGraph(unittest.TestCase):
 
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 6)
-        self.assertEqual(dgraph.out_degree(1), 6)
-        self.assertEqual(dgraph.out_degree(2), 6)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [6, 6, 6, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -444,10 +428,8 @@ class TestDynamicGraph(unittest.TestCase):
 
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 6)
-        self.assertEqual(dgraph.out_degree(1), 6)
-        self.assertEqual(dgraph.out_degree(2), 6)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [6, 6, 6, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -502,10 +484,8 @@ class TestDynamicGraph(unittest.TestCase):
 
         self.assertEqual(dgraph.num_edges(), 18)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.out_degree(0), 6)
-        self.assertEqual(dgraph.out_degree(1), 6)
-        self.assertEqual(dgraph.out_degree(2), 6)
-        self.assertEqual(dgraph.out_degree(3), 0)
+        self.assertEqual(dgraph.out_degree(
+            [0, 1, 2, 3]).tolist(), [6, 6, 6, 0])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -533,3 +513,7 @@ class TestDynamicGraph(unittest.TestCase):
 
         print("Test add edges with non-continous eids passed. (mem_resource_type: {})".format(
             mem_resource_type))
+
+
+if __name__ == '__main__':
+    unittest.main()

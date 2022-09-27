@@ -45,11 +45,14 @@ PYBIND11_MODULE(libdgnn, m) {
            py::arg("blocks_to_preallocate"), py::arg("insertion_policy"),
            py::arg("device"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
-           py::arg("target_vertices"), py::arg("timestamps"),
-           py::arg("eids"))
+           py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"))
       .def("num_vertices", &DynamicGraph::num_nodes)
       .def("num_edges", &DynamicGraph::num_edges)
-      .def("out_degree", &DynamicGraph::out_degree)
+      //  .def("out_degree", &DynamicGraph::out_degree)
+      .def("out_degree",
+           [](const DynamicGraph &dgraph, std::vector<NIDType> nodes) {
+             return vec2npy(dgraph.out_degree(nodes));
+           })
       .def("get_temporal_neighbors",
            [](const DynamicGraph &dgraph, NIDType node) {
              auto neighbors = dgraph.get_temporal_neighbors(node);
