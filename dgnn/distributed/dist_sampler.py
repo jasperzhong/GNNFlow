@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, NamedTuple
 
 import dgl
 import numpy as np
@@ -11,6 +11,17 @@ import dgnn.distributed.graph_services as graph_services
 from dgnn import TemporalSampler
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from libdgnn import SamplingResult
+
+SamplingResultType = NamedTuple('SamplingResultType', [("row", torch.Tensor),
+                                                       ("col", torch.Tensor),
+                                                       ("all_nodes", torch.Tensor),
+                                                       ("all_timestamps",
+                                                        torch.Tensor),
+                                                       ("delta_timestamps",
+                                                        torch.Tensor),
+                                                       ("eids", torch.Tensor),
+                                                       ("num_src_nodes", int),
+                                                       ("num_dst_nodes", int)])
 
 
 class DistributedTemporalSampler:
@@ -104,7 +115,7 @@ class DistributedTemporalSampler:
         # merge sampling results
         return self._merge_sampling_results(sampling_results)
 
-    def _merge_sampling_results(self, sampling_results: List[SamplingResult]) -> DGLBlock:
+    def _merge_sampling_results(self, sampling_results: List[SamplingResultType]) -> DGLBlock:
         """
         Merge sampling results from different partitions.
 
@@ -118,11 +129,11 @@ class DistributedTemporalSampler:
 
         col = np.array([], dtype=np.int64)
         row = np.array([], dtype=np.int64)
-        num_src_nodes = 0
-        num_dst_nodes = 0
+        total_num_src_nodes = 0
+        total_num_dst_nodes = 0
         for sampling_result in sampling_results:
-            num_dst_nodes += sampling_result.num_dst_nodes
-            num_src_nodes += sampling_result.num_src_nodes
+            total_num_dst_nodes += sampling_result.num_dst_nodes
+            total_num_src_nodes += sampling_result.num_src_nodes
 
         src_nodes = np.array([], dtype=np.int64)
         dst_nodes = np.array([], dtype=np.int64)
@@ -131,29 +142,30 @@ class DistributedTemporalSampler:
         delta_timestamps = np.array([], dtype=np.float32)
         eids = np.array([], dtype=np.int64)
 
-        col_offset = num_dst_nodes
+        col_offset = total_num_dst_nodes
         row_offset = 0
         for sampling_result in sampling_results:
-            src_nodes = np.concatenate((src_nodes, sampling_result.src_nodes))
-            dst_nodes = np.concatenate((dst_nodes, sampling_result.dst_nodes))
+            num_dst_nodes = sampling_result.num_dst_nodes
+            src_nodes = np.concatenate(
+                (src_nodes, sampling_result.all_nodes[num_dst_nodes:]))
+            dst_nodes = np.concatenate(
+                (dst_nodes, sampling_result.all_nodes[:num_dst_nodes]))
             src_timestamps = np.concatenate(
-                (src_timestamps, sampling_result.src_timestamps))
+                (src_timestamps, sampling_result.all_timestamps[num_dst_nodes:]))
             dst_timestamps = np.concatenate(
-                (dst_timestamps, sampling_result.dst_timestamps))
+                (dst_timestamps, sampling_result.all_timestamps[:num_dst_nodes]))
             delta_timestamps = np.concatenate(
                 (delta_timestamps, sampling_result.delta_timestamps))
             eids = np.concatenate((eids, sampling_result.eids))
 
-            sampling_result.col += col_offset
-            sampling_result.row += row_offset
-            col = np.concatenate((col, sampling_result.col))
-            row = np.concatenate((row, sampling_result.row))
+            col = np.concatenate((col, sampling_result.col + col_offset))
+            row = np.concatenate((row, sampling_result.row + row_offset))
 
             col_offset += sampling_result.num_src_nodes
             row_offset += sampling_result.num_dst_nodes
 
-        mfg = dgl.create_block((col, row), num_src_nodes=num_src_nodes,
-                               num_dst_nodes=num_dst_nodes)
+        mfg = dgl.create_block((col, row), num_src_nodes=total_num_src_nodes,
+                               num_dst_nodes=total_num_dst_nodes)
 
         all_nodes = np.concatenate([dst_nodes, src_nodes])
         all_timestamps = np.concatenate([dst_timestamps, src_timestamps])
@@ -164,7 +176,7 @@ class DistributedTemporalSampler:
         return mfg
 
     def sample_layer_local(self, target_vertices:  np.ndarray, timestamps: np.ndarray,
-                           layer: int, snapshot: int) -> SamplingResult:
+                           layer: int, snapshot: int) -> SamplingResultType:
         """
         Sample neighbors of given vertices in a specific layer and snapshot.
 
@@ -177,4 +189,15 @@ class DistributedTemporalSampler:
         Returns:
             sampling result.
         """
-        return self._sampler.sample_layer(target_vertices, timestamps, layer, snapshot, False)
+        ret = self._sampler.sample_layer(
+            target_vertices, timestamps, layer, snapshot, False)
+        assert isinstance(ret, SamplingResult)
+        return SamplingResultType(
+            row=torch.from_numpy(ret.row()),
+            col=torch.from_numpy(ret.col()),
+            num_src_nodes=ret.num_src_nodes(),
+            num_dst_nodes=ret.num_dst_nodes(),
+            all_nodes=torch.from_numpy(ret.all_nodes()),
+            all_timestamps=torch.from_numpy(ret.all_timestamps()),
+            delta_timestamps=torch.from_numpy(ret.delta_timestamps()),
+            eids=torch.from_numpy(ret.eids()))
