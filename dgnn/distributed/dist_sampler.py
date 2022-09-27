@@ -1,9 +1,11 @@
+import logging
 import os
 from typing import List, NamedTuple
 
 import dgl
 import numpy as np
 import torch
+import torch.distributed
 import torch.distributed.rpc as rpc
 from dgl.heterograph import DGLBlock
 
@@ -37,6 +39,7 @@ class DistributedTemporalSampler:
         self._sampler = sampler
         self._dgraph = dgraph
 
+        self._rank = torch.distributed.get_rank()
         self._local_rank = int(os.environ['LOCAL_RANK'])
         self._num_workers_per_machine = torch.cuda.device_count()
         self._num_layers = self._sampler._num_layers
@@ -189,6 +192,8 @@ class DistributedTemporalSampler:
         Returns:
             sampling result.
         """
+        logging.debug("Rank %d: sampling layer %d, snapshot %d, %d target vertices",
+                      self._rank, layer, snapshot, len(target_vertices))
         ret = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot, False)
         assert isinstance(ret, SamplingResult)
