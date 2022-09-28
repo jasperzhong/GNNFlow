@@ -115,7 +115,8 @@ class DynamicGraph {
 
   std::vector<cudaStream_t> streams_;
 
-  std::size_t num_nodes_;  // the maximum node id + 1
+  std::size_t num_nodes_;  
+  std::size_t max_node_id_;
   std::size_t num_edges_;
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;

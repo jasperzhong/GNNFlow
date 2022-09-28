@@ -32,6 +32,7 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
       insertion_policy_(insertion_policy),
       num_nodes_(0),
       num_edges_(0),
+      max_node_id(0),
       device_(device) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
@@ -83,8 +84,12 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   CHECK_EQ(src_nodes.size(), eids.size());
 
   // unique eids
-  std::set<int> s(eids.begin(), eids.end());
+  std::set<EIDType> s(eids.begin(), eids.end());
   num_edges_ += s.size();
+
+  // unique nodes
+  s = {src_nodes.begin(), src_nodes.end()};
+  num_nodes_ += s.size();
 
   // add nodes
   NIDType max_node =
@@ -128,12 +133,12 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
 }
 
 void DynamicGraph::AddNodes(NIDType max_node) {
-  if (max_node < num_nodes_) {
+  if (max_node < max_node_id_) {
     return;
   }
-  num_nodes_ = max_node + 1;
-  d_node_table_.resize(num_nodes_);
-  h_copy_of_d_node_table_.resize(num_nodes_);
+  max_node_id_ = max_node;
+  d_node_table_.resize(max_node_id_ + 1);
+  h_copy_of_d_node_table_.resize(max_node_id_ + 1);
 }
 
 std::size_t DynamicGraph::num_nodes() const { return num_nodes_; }
