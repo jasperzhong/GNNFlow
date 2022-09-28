@@ -27,7 +27,7 @@ LogLevel ParseLogLevelStr(const char* env_var_val) {
 }
 
 LogLevel MinLogLevelFromEnv() {
-  const char* env_var_val = getenv("LOG_LEVEL");
+  const char* env_var_val = getenv("LOGLEVEL");
   if (env_var_val == nullptr) {
     return LogLevel::WARNING;
   }

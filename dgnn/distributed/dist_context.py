@@ -1,7 +1,6 @@
 import logging
 from typing import Optional
 import os
-from dgl.distributed.partition import partition_graph
 
 import pandas as pd
 import torch
