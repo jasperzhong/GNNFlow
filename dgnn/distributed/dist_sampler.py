@@ -203,7 +203,7 @@ class DistributedTemporalSampler:
                       self._rank, ret.num_dst_nodes(), ret.num_src_nodes())
 
         assert isinstance(ret, SamplingResult)
-        return SamplingResultType(
+        s = SamplingResultType(
             row=torch.from_numpy(ret.row()),
             col=torch.from_numpy(ret.col()),
             num_src_nodes=ret.num_src_nodes(),
@@ -212,3 +212,10 @@ class DistributedTemporalSampler:
             all_timestamps=torch.from_numpy(ret.all_timestamps()),
             delta_timestamps=torch.from_numpy(ret.delta_timestamps()),
             eids=torch.from_numpy(ret.eids()))
+        # DEBUG
+        import pickle
+        import sys
+        p = pickle.dumps(s)
+        logging.debug("Rank %d: sampling result size %d",
+                      self._rank, sys.getsizeof(p))
+        return s
