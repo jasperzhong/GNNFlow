@@ -50,6 +50,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                  rank, graph_services.num_vertices(), graph_services.num_edges())
     logging.info("Rank %d: partition table shape: %s",
                  rank, str(graph_services.get_partition_table().shape))
+    logging.info("partition table content: %s",
+            (graph_services.get_partition_table() == -1).sum())
 
     # debug 
     dgraph = graph_services.get_dgraph()
