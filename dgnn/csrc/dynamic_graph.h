@@ -88,6 +88,8 @@ class DynamicGraph {
 
   const DoublyLinkedList* get_device_node_table() const;
 
+  int device() const { return device_; }
+
  private:
   void AddEdgesForOneNode(NIDType src_node,
                           const std::vector<NIDType>& dst_nodes,

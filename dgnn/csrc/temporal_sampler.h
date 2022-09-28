@@ -60,6 +60,8 @@ class TemporalSampler {
   curandState_t* rand_states_;
 
   std::size_t maximum_sampled_nodes_;
+
+  int device_;
 };
 
 }  // namespace dgnn

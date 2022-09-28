@@ -57,6 +57,8 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
     CUDA_CALL(
         cudaStreamCreateWithPriority(&streams_[i], cudaStreamNonBlocking, -1));
   }
+
+  device_ = graph_.device();
 }
 
 void TemporalSampler::FreeBuffer() {
@@ -114,6 +116,9 @@ SamplingResult TemporalSampler::SampleLayer(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps, uint32_t layer,
     uint32_t snapshot) {
+  // NB: it seems to be necessary to set the device again.
+  CUDA_CALL(cudaSetDevice(device_));
+
   // update buffer. +1 means adding itself
   std::size_t maximum_sampled_nodes = (fanouts_[layer] + 1) * dst_nodes.size();
   if (maximum_sampled_nodes > maximum_sampled_nodes_) {

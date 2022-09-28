@@ -82,7 +82,7 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   CHECK_EQ(src_nodes.size(), timestamps.size());
   CHECK_EQ(src_nodes.size(), eids.size());
 
-  // NB: it seems that it is necessary to set the device again. 
+  // NB: it seems to be necessary to set the device again.
   CUDA_CALL(cudaSetDevice(device_));
 
   // unique eids
