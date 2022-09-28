@@ -125,7 +125,7 @@ class DynamicGraph {
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 
-  int device_;
+  const int device_;
 };
 
 }  // namespace dgnn
