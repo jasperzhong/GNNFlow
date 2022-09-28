@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 import numpy as np
@@ -22,7 +23,7 @@ class Dispatcher:
         self._rank = torch.distributed.get_rank()
         assert self._rank == 0, "Only rank 0 can initialize the dispatcher."
         self._num_partitions = num_partitions
-        self._num_workers_per_machine = torch.cuda.device_count()
+        self._local_world_size = int(os.environ["LOCAL_WORLD_SIZE"])
         self._partitioner = get_partitioner(partition_strategy, num_partitions)
 
         self._num_edges = 0
@@ -57,8 +58,8 @@ class Dispatcher:
         futures = []
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
-            for worker_id in range(self._num_workers_per_machine):
-                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+            for worker_id in range(self._local_world_size):
+                worker_rank = partition_id * self._local_world_size + worker_id
                 # TODO: the communication is duplicated for each worker in the remote machine.
                 # We can optimize it by sending the data to one of the worker and let it
                 # broadcast the data to the other workers.
@@ -69,8 +70,8 @@ class Dispatcher:
         # TODO: push features to the KVStore server on the partition.
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
-            for worker_id in range(self._num_workers_per_machine):
-                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+            for worker_id in range(self._local_world_size):
+                worker_rank = partition_id * self._local_world_size + worker_id
 
 
         if not defer_sync:
@@ -136,8 +137,8 @@ class Dispatcher:
         """
         # Broadcast the graph metadata to all the workers.
         for partition_id in range(self._num_partitions):
-            for worker_id in range(self._num_workers_per_machine):
-                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+            for worker_id in range(self._local_world_size):
+                worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
                              args=(self._max_node, self._num_edges, self._num_partitions))
 
@@ -147,8 +148,8 @@ class Dispatcher:
         """
         # Broadcast the partition table to all the workers.
         for partition_id in range(self._num_partitions):
-            for worker_id in range(self._num_workers_per_machine):
-                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+            for worker_id in range(self._local_world_size):
+                worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_partition_table,
                              args=(self._partitioner.get_partition_table(), ))
 

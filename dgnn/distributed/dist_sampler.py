@@ -43,7 +43,7 @@ class DistributedTemporalSampler:
 
         self._rank = torch.distributed.get_rank()
         self._local_rank = int(os.environ['LOCAL_RANK'])
-        self._num_workers_per_machine = torch.cuda.device_count()
+        self._local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         self._num_layers = self._sampler._num_layers
         self._num_snapshots = self._sampler._num_snapshots
         self._partition_table = self._dgraph.get_partition_table()
@@ -106,7 +106,7 @@ class DistributedTemporalSampler:
                 target_vertices[partition_mask])
             partition_timestamps = torch.from_numpy(timestamps[partition_mask])
 
-            worker_rank = partition_id * self._num_workers_per_machine + self._local_rank
+            worker_rank = partition_id * self._local_world_size + self._local_rank
 
             futures.append(rpc.rpc_async(
                 'worker{}'.format(worker_rank),
