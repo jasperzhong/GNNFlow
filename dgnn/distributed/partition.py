@@ -65,10 +65,10 @@ class Partitioner:
         """
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
-        if max_node >= self._max_node:
+        if max_node > self._max_node:
             self._partition_table.resize_(max_node + 1)
-            self._partition_table[self._max_node:] = self.UNASSIGNED
-            self._max_node = max_node + 1
+            self._partition_table[self._max_node+1:] = self.UNASSIGNED
+            self._max_node = max_node 
 
         # dispatch edges to already assigned source nodes
         partitions = []
