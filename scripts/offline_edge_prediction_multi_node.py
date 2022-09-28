@@ -132,7 +132,7 @@ def main():
 
     model_config, data_config = get_default_config(args.model, args.data)
 
-    if args.distributed:
+    if args.local_world_size > 1:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
