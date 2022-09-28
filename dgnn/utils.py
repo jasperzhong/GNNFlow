@@ -130,7 +130,6 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
             logging.info("rank {} node_feats_shm shape {}".format(
                 local_rank, node_feats_shm.shape))
 
-
         if edge_feats_shm is not None:
             logging.info("rank {} edge_feats_shm shape {}".format(
                 local_rank, edge_feats_shm.shape))
@@ -229,21 +228,21 @@ def mfgs_to_cuda(mfgs: List[List[DGLBlock]], device: Union[str, torch.device]):
 
 
 def get_pinned_buffers(
-        fanouts, sample_history, batch_size, node_feats, edge_feats):
+        fanouts, sample_history, batch_size, dim_node, dim_edge):
     pinned_nfeat_buffs = list()
     pinned_efeat_buffs = list()
     limit = int(batch_size * 3.3)
     for i in fanouts:
         limit *= i
-        if edge_feats is not None:
+        if dim_edge != 0:
             for _ in range(sample_history):
                 pinned_efeat_buffs.insert(0, torch.zeros(
-                    (limit, edge_feats.shape[1]), pin_memory=True))
+                    (limit, dim_edge), pin_memory=True))
 
-    if node_feats is not None:
+    if dim_node != 0:
         for _ in range(sample_history):
             pinned_nfeat_buffs.insert(0, torch.zeros(
-                (limit, node_feats.shape[1]), pin_memory=True))
+                (limit, dim_node), pin_memory=True))
 
     return pinned_nfeat_buffs, pinned_efeat_buffs
 

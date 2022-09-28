@@ -10,12 +10,12 @@ import torch.distributed.rpc as rpc
 import dgnn.distributed.graph_services as graph_services
 from dgnn.distributed.dispatcher import get_dispatcher
 from dgnn.distributed.kvstore import KVStoreServer
+from dgnn.utils import load_feat
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                ingestion_batch_size: int, partition_strategy: str,
-               num_partitions: int, undirected: bool, node_feats: Optional[torch.Tensor] = None,
-               edge_feats: Optional[torch.Tensor] = None):
+               num_partitions: int, undirected: bool, data_name: str):
     """
     Initialize the distributed environment.
 
@@ -26,8 +26,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         ingestion_batch_size (int): The number of samples to ingest in each iteration.
         num_partitions (int): The number of partitions to split the dataset into.
         undirected (bool): Whether the graph is undirected.
-        node_feats (torch.Tensor): The node features of the dataset.
-        edge_feats (torch.Tensor): The edge features of the dataset.
+        data_name (str): the dataset name of the dataset for loading features.
     """
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size)
     logging.info("Rank %d: Initialized RPC.", rank)
@@ -40,6 +39,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
+        # load the feature only at rank 0
+        node_feats, edge_feats = load_feat(data_name)
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected, node_feats, edge_feats)
 

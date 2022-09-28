@@ -59,12 +59,22 @@ class Dispatcher:
                                        args=(*edges, ))
                 futures.append(future)
 
-        # TODO: push features to the KVStore server on the partition.
+        # push features to the KVStore server on the partition.
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
-            for worker_id in range(self._num_workers_per_machine):
-                worker_rank = partition_id * self._num_workers_per_machine + worker_id
-
+            # the KVStore server is in local_rank 0
+            # TODO: maybe each worker will have a KVStore server
+            kvstore_rank = partition_id * self._num_workers_per_machine
+            if node_feats is not None:
+                keys = torch.cat((edges[0], edges[1])).unique()
+                features = node_feats[keys]
+                rpc.rpc_async("worder%d" % kvstore_rank, graph_services.push_tensors,
+                              args=(keys, features, 'node'))
+            if edge_feats is not None:
+                keys = edges[3]
+                features = edge_feats[keys]
+                rpc.rpc_async("worder%d" % kvstore_rank, graph_services.push_tensors,
+                              args=(keys, features, 'edge'))
 
         if not defer_sync:
             # Wait for the workers to finish.
@@ -73,6 +83,9 @@ class Dispatcher:
 
             self.broadcast_graph_metadata()
             self.broadcast_partition_table()
+            dim_node = 0 if node_feats is None else node_feats.shape[1]
+            dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+            self.broadcast_node_edge_dim(dim_node, dim_edge)
         return futures
 
     def partition_graph(self, dataset: pd.DataFrame, ingestion_batch_size: int,
@@ -115,7 +128,7 @@ class Dispatcher:
             eids = torch.from_numpy(eids)
 
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
-                           timestamps, eids, defer_sync=True))
+                           timestamps, eids, node_feats, edge_feats, defer_sync=True))
 
             # Wait for the workers to finish.
             for future in futures:
@@ -123,10 +136,13 @@ class Dispatcher:
             futures = []
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
+        dim_node = 0 if node_feats is None else node_feats.shape[1]
+        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+        self.broadcast_node_edge_dim(dim_node, dim_edge)
 
     def broadcast_graph_metadata(self):
         """
-        Broadcast the graph metadata (i.e., num_nodes, num_edges )to all 
+        Broadcast the graph metadata (i.e., num_nodes, num_edges )to all
         the workers.
         """
         # Broadcast the graph metadata to all the workers.
@@ -146,6 +162,17 @@ class Dispatcher:
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_partition_table,
                              args=(self._partitioner.get_partition_table(), ))
+
+    def broadcast_node_edge_dim(self, dim_node, dim_edge):
+        """
+        Broadcast the node_feat/edge_feat dimension to all the workers.
+        """
+        # Broadcast the dim_node/dim_edge to all the workers.
+        for partition_id in range(self._num_partitions):
+            for worker_id in range(self._num_workers_per_machine):
+                worker_rank = partition_id * self._num_workers_per_machine + worker_id
+                rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_dim_node_edge,
+                             args=(dim_node, dim_edge))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):

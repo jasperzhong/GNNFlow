@@ -12,6 +12,8 @@ from dgnn.distributed.kvstore import KVStoreServer
 global DGRAPH
 global DSAMPLER
 global KVSTORE_SERVER
+global DIM_NODE
+global DIM_EDGE
 
 
 def get_dgraph() -> DistributedDynamicGraph:
@@ -209,7 +211,7 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
     return dsampler.sample_layer_local(target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
 
 
-def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor]):
+def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
     """
     Push tensors to the remote workers for KVStore servers.
 
@@ -218,10 +220,10 @@ def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor]):
         tensors (List[torch.Tensor]): The tensors.
     """
     kvstore_server = get_kvstore_server()
-    kvstore_server.push(keys, tensors)
+    kvstore_server.push(keys, tensors, mode)
 
 
-def pull_tensors(keys: torch.Tensor) -> List[torch.Tensor]:
+def pull_tensors(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
     """
     Pull tensors from the remote workers for KVStore servers.
 
@@ -232,4 +234,87 @@ def pull_tensors(keys: torch.Tensor) -> List[torch.Tensor]:
         List[torch.Tensor]: The tensors.
     """
     kvstore_server = get_kvstore_server()
-    return kvstore_server.pull(keys)
+    return kvstore_server.pull(keys, mode)
+
+
+def set_dim_node(dim_node: int):
+    """
+    Set the dim node.
+
+    Args:
+        dim_node (int): The dimension of node features.
+    """
+    global DIM_NODE
+    DIM_NODE = dim_node
+
+
+def get_dim_node() -> int:
+    """
+    Get the dim_node.
+
+    Returns:
+        int: The dimension of node features.
+    """
+    global DIM_NODE
+    if DIM_NODE is None:
+        raise RuntimeError(
+            "The dim_node has not been initialized.")
+    return DIM_NODE
+
+
+def set_dim_edge(dim_edge: int):
+    """
+    Set the dim edge.
+
+    Args:
+        dim_node (int): The dimension of node features.
+    """
+    global DIM_EDGE
+    DIM_EDGE = dim_edge
+
+
+def get_dim_edge() -> int:
+    """
+    Get the dim_edge.
+
+    Returns:
+        int: The dimension of edge features.
+    """
+    global DIM_EDGE
+    if DIM_EDGE is None:
+        raise RuntimeError(
+            "The dim_edge has not been initialized.")
+    return DIM_EDGE
+
+
+def set_dim_node_edge(dim_node: int, dim_edge: int):
+    """
+    Set the dim node/edge.
+
+    Args:
+        dim_node (int): The dimension of node/edge features.
+    """
+    global DIM_EDGE
+    global DIM_NODE
+    DIM_EDGE = dim_edge
+    DIM_NODE = dim_node
+
+
+def get_dim_node_edge() -> Tuple[int, int]:
+    """
+    Get the dim_edge.
+
+    Returns:
+        int: The dimension of edge features.
+    """
+    global DIM_EDGE
+    if DIM_EDGE is None:
+        raise RuntimeError(
+            "The dim_edge has not been initialized.")
+
+    global DIM_NODE
+    if DIM_NODE is None:
+        raise RuntimeError(
+            "The dim_node has not been initialized.")
+
+    return DIM_NODE, DIM_EDGE

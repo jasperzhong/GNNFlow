@@ -190,29 +190,26 @@ def main():
         dgraph = graph_services.get_dgraph()
         dgnn.distributed.initialize(args.rank, args.world_size, full_data,
                                     args.ingestion_batch_size, args.partition_strategy,
-                                    args.num_nodes, data_config["undirected"])
-        # Use kvstore
-        if args.local_rank == 0:
-            kvstore_server = KVStoreServer()
-            graph_services.set_kvstore_server(kvstore_server)
-            kvstore_server = graph_services.get_kvstore_server()
-        else:
-            kvstore_client = KVStoreClient(
-                dgraph.get_partition_table(),
-                dgraph.num_partitions(), args.world_size)
+                                    args.num_nodes, data_config["undirected"], args.data)
+        # every worker will have a kvstore_client
+        kvstore_client = KVStoreClient(
+            dgraph.get_partition_table(),
+            dgraph.num_partitions(), args.world_size)
+
+        dim_node, dim_edge = graph_services.get_dim_node_edge()
     else:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
+        # put the features in shared memory when using distributed training
+        node_feats, edge_feats = load_feat(
+            args.data, shared_memory=args.distributed,
+            local_rank=args.local_rank, local_world_size=args.local_world_size)
+
+        dim_node = 0 if node_feats is None else node_feats.shape[1]
+        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
-    # put the features in shared memory when using distributed training
-    node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.distributed,
-        local_rank=args.local_rank, local_world_size=args.local_world_size)
-
-    dim_node = 0 if node_feats is None else node_feats.shape[1]
-    dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
@@ -236,9 +233,10 @@ def main():
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
-        node_feats, edge_feats)
+        dim_node, dim_edge)
 
     # Cache
+    # TODO: use features in this machine
     cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,

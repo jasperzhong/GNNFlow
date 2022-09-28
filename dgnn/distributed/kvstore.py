@@ -21,9 +21,11 @@ class KVStoreServer:
 
     def __init__(self):
         # keys -> tensors
-        self._map = {}
+        self._node_feat_map = {}
+        self._edge_feat_map = {}
+        self._memory_map = {}
 
-    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor]):
+    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
         """
         Push tensors to the server.
 
@@ -34,20 +36,36 @@ class KVStoreServer:
         assert len(keys) == len(
             tensors), "The number of keys and tensors must be the same."
 
-        for key, tensor in zip(keys, tensors):
-            self._map[key] = tensor
+        if mode == 'node':
+            for key, tensor in zip(keys, tensors):
+                self._node_feat_map[key] = tensor
 
-    def pull(self, keys: torch.Tensor) -> List[torch.Tensor]:
+        if mode == 'edge':
+            for key, tensor in zip(keys, tensors):
+                self._edge_feat_map[key] = tensor
+
+        if mode == 'memory':
+            for key, tensor in zip(keys, tensors):
+                self._memory_map[key] = tensor
+
+    def pull(self, keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
         """
         Pull tensors from the server.
 
-        Args:  
+        Args:
             keys (torch.Tensor): The keys.
 
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        return [self._map[key] for key in keys]
+        if mode == 'node':
+            return [self._node_feat_map[key] for key in keys]
+
+        if mode == 'edge':
+            return [self._edge_feat_map[key] for key in keys]
+
+        if mode == 'memory':
+            return [self._memory_map[key] for key in keys]
 
 
 class KVStoreClient:
@@ -64,7 +82,7 @@ class KVStoreClient:
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
 
-    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor]):
+    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
         """
         Push tensors to the corresponding KVStore servers according to the partition table.
 
@@ -75,6 +93,7 @@ class KVStoreClient:
         # TODO(guangming): rpc call to the corresponding KVStore servers (call graph_services.push_tensors)
         # dispatch different keys to different partitions
         partition_table = self._partition_table
+        # TODO: eid may have some problems
         partition_ids = partition_table[keys]
 
         futures = []
@@ -90,13 +109,13 @@ class KVStoreClient:
             futures.append(rpc.rpc_async(
                 'worker{}'.format(worker_rank)),
                 graph_services.push_tensors,
-                args=(partition_keys, tensors))
+                args=(partition_keys, tensors, mode))
 
         # TODO: futures need wait?
         for future in futures:
             future.wait()
 
-    def pull(self, keys: torch.Tensor) -> List[torch.Tensor]:
+    def pull(self, keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
@@ -109,6 +128,7 @@ class KVStoreClient:
         # TODO(guangming): rpc call to the corresponding KVStore servers (call graph_services.pull_tensors)
         # dispatch different keys to different partitions
         partition_table = self._partition_table
+        # TODO: eid may have some problems
         partition_ids = partition_table[keys]
 
         futures = []
@@ -124,7 +144,7 @@ class KVStoreClient:
             futures.append(rpc.rpc_async(
                 'worker{}'.format(worker_rank)),
                 graph_services.pull_tensors,
-                args=(partition_keys))
+                args=(partition_keys, mode))
 
         # collect pull results
         pull_results = []

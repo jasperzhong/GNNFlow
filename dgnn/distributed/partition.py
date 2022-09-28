@@ -18,7 +18,7 @@ class Partitioner:
     """
     Partition the dataset into multiple partitions.
 
-    NB: we partition the graph by the vertices, not the edges. Edges are 
+    NB: we partition the graph by the vertices, not the edges. Edges are
     partitioned by their source vertices.
     """
     UNASSIGNED = -1
@@ -134,7 +134,7 @@ class Partitioner:
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                                        timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
         """
-        Partition the edges for the unseen source nodes. 
+        Partition the edges for the unseen source nodes.
 
         Args:
             src_nodes (torch.Tensor): The source nodes of the edges.
