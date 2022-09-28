@@ -30,7 +30,6 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
                  mem_resource_type, device),
       insertion_policy_(insertion_policy),
-      num_nodes_(0),
       num_edges_(0),
       max_node_id_(0),
       device_(device) {
@@ -87,9 +86,7 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   std::set<EIDType> s(eids.begin(), eids.end());
   num_edges_ += s.size();
 
-  // unique nodes
-  s = {src_nodes.begin(), src_nodes.end()};
-  num_nodes_ += s.size();
+  nodes_.insert(src_nodes.begin(), src_nodes.end());
 
   // add nodes
   NIDType max_node =
@@ -141,7 +138,7 @@ void DynamicGraph::AddNodes(NIDType max_node) {
   h_copy_of_d_node_table_.resize(max_node_id_ + 1);
 }
 
-std::size_t DynamicGraph::num_nodes() const { return num_nodes_; }
+std::size_t DynamicGraph::num_nodes() const { return nodes_.size(); }
 
 std::size_t DynamicGraph::num_edges() const { return num_edges_; }
 
