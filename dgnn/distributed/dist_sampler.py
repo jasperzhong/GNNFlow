@@ -24,6 +24,8 @@ SamplingResultType = NamedTuple('SamplingResultType', [("row", torch.Tensor),
                                                        ("eids", torch.Tensor),
                                                        ("num_src_nodes", int),
                                                        ("num_dst_nodes", int)])
+# let pickle know how to serialize the SamplingResultType
+globals()['SamplingResultType'] = SamplingResultType
 
 
 class DistributedTemporalSampler:
@@ -100,7 +102,8 @@ class DistributedTemporalSampler:
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue
-            partition_vertices = torch.from_numpy(target_vertices[partition_mask])
+            partition_vertices = torch.from_numpy(
+                target_vertices[partition_mask])
             partition_timestamps = torch.from_numpy(timestamps[partition_mask])
 
             worker_rank = partition_id * self._num_workers_per_machine + self._local_rank
@@ -196,6 +199,9 @@ class DistributedTemporalSampler:
                       self._rank, layer, snapshot, len(target_vertices))
         ret = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot, False)
+        logging.debug("Rank %d: target_vertices %d, sampled vertices %d",
+                      self._rank, ret.num_dst_nodes(), ret.num_src_nodes())
+
         assert isinstance(ret, SamplingResult)
         return SamplingResultType(
             row=torch.from_numpy(ret.row()),
