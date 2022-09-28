@@ -32,7 +32,7 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
       insertion_policy_(insertion_policy),
       num_nodes_(0),
       num_edges_(0),
-      max_node_id(0),
+      max_node_id_(0),
       device_(device) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
