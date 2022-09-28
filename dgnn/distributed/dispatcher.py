@@ -25,8 +25,9 @@ class Dispatcher:
         self._num_workers_per_machine = torch.cuda.device_count()
         self._partitioner = get_partitioner(partition_strategy, num_partitions)
 
-        self._num_nodes = 0
         self._num_edges = 0
+        self._max_nodex = 0
+        self._nodes = set()
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor, node_feats: Optional[torch.Tensor] = None,
@@ -43,8 +44,14 @@ class Dispatcher:
             edge_feats (torch.Tensor): The edge features of the edges.
             defer_sync (bool): Whether to defer the synchronization.
         """
+        self._nodes.update(src_nodes)
+        self._nodes.update(dst_nodes)
+        self._num_edges += torch.unique(eids).size(0)
+
         partitions = self._partitioner.partition(
             src_nodes, dst_nodes, timestamps, eids)
+
+        self._max_node = self._partitioner._max_node
 
         # Dispatch the partitions to the workers.
         futures = []
@@ -97,9 +104,7 @@ class Dispatcher:
             timestamps = batch["time"].values.astype(np.float32)
             eids = batch["eid"].values.astype(np.int64)
 
-            self._num_nodes = len(
-                np.unique(np.concatenate([src_nodes, dst_nodes])))
-            self._num_edges += len(eids)
+            
 
             if undirected:
                 src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
@@ -134,7 +139,7 @@ class Dispatcher:
             for worker_id in range(self._num_workers_per_machine):
                 worker_rank = partition_id * self._num_workers_per_machine + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args=(self._num_nodes, self._num_edges, self._num_partitions))
+                             args=(self._max_node, self._num_edges, self._num_partitions))
 
     def broadcast_partition_table(self):
         """
