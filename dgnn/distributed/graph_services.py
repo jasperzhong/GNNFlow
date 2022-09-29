@@ -198,7 +198,8 @@ def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, tor
     pass
 
 
-def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, layer: int, snapshot: int):
+def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
+                       layer: int, snapshot: int) -> SamplingResultTorch:
     """
     Sample neighbors of given vertices in a specific layer and snapshot locally.
 
@@ -209,7 +210,7 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
         snapshot (int): The snapshot.
 
     Returns:
-        torch.Tensor: The temporal neighbors of the vertex.
+        SamplingResultTorch: The sampled neighbors.
     """
     def callback(handle: int):
         global handle_manager
@@ -225,6 +226,8 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
     while not handle_manager.poll(handle):
         time.sleep(0.01)
 
+    logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
+                  torch.distributed.get_rank(), handle, ret.num_src_nodes)
     return ret
 
 

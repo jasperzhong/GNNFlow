@@ -224,6 +224,4 @@ class DistributedTemporalSampler:
                       self._rank, layer, snapshot, len(target_vertices))
         ret = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot, False)
-        logging.debug("Rank %d: target_vertices %d, sampled vertices %d",
-                      self._rank, ret.num_dst_nodes(), ret.num_src_nodes())
         return ret
