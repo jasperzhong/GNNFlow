@@ -13,7 +13,7 @@ fields = [("row", torch.Tensor),
           ("num_src_nodes", int),
           ("num_dst_nodes", int)],
 
-SamplingResultType = NamedTuple('SamplingResultType', fields,
+SamplingResultType = NamedTuple('SamplingResultType', *fields,
                                 defaults=(None,) * len(fields))
 # let pickle know how to serialize the SamplingResultType
 globals()['SamplingResultType'] = SamplingResultType
