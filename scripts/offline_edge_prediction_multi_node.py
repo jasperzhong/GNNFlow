@@ -58,7 +58,7 @@ parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
 
 # distributed
-parser.add_argument("--partition", action="store_true", 
+parser.add_argument("--partition", action="store_true",
                     help="whether to partition the graph")
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
@@ -132,7 +132,7 @@ def main():
 
     model_config, data_config = get_default_config(args.model, args.data)
 
-    if args.local_world_size > 1:
+    if args.distributed:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
@@ -198,7 +198,7 @@ def main():
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.distributed,
+        args.data, shared_memory=args.local_world_size > 1,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
@@ -211,7 +211,7 @@ def main():
                  memory_device=device, memory_shared=args.distributed)
     model.to(device)
 
-    if args.distributed:
+    if args.partition:
         assert isinstance(dgraph, DistributedDynamicGraph)
         sampler = TemporalSampler(dgraph._dgraph, **model_config)
         graph_services.set_dsampler(sampler)
