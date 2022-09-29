@@ -146,13 +146,8 @@ void DynamicGraph::AddNodes(NIDType max_node) {
 }
 
 std::size_t DynamicGraph::num_nodes() const { return nodes_.size(); }
-<<<<<<< HEAD
-
-std::size_t DynamicGraph::num_edges() const { return num_edges_; }
-=======
 std::size_t DynamicGraph::num_src_nodes() const { return src_nodes_.size(); }
 std::size_t DynamicGraph::num_edges() const { return edges_.size(); }
->>>>>>> main
 
 void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
                                cudaStream_t stream) {
