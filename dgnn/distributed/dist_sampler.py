@@ -67,7 +67,6 @@ class DistributedTemporalSampler:
                 result.eids = torch.from_numpy(ret.eids())
 
                 callback(handle)
-
             time.sleep(0.01)
 
     def enqueue_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
