@@ -126,11 +126,32 @@ class DynamicGraph:
     def num_vertices(self) -> int:
         return self._dgraph.num_vertices()
 
+    def num_source_vertices(self) -> int:
+        return self._dgraph.num_source_vertices()
+
     def num_edges(self) -> int:
         return self._dgraph.num_edges()
 
     def out_degree(self, vertexs: np.ndarray) -> np.ndarray:
         return self._dgraph.out_degree(vertexs)
+
+    def nodes(self) -> np.ndarray:
+        """
+        Return the nodes of the graph.
+        """
+        return self._dgraph.nodes()
+
+    def src_nodes(self) -> np.ndarray:
+        """
+        Return the source nodes of the graph.
+        """
+        return self._dgraph.src_nodes()
+
+    def edges(self) -> np.ndarray:
+        """
+        Return the edges of the graph.
+        """
+        return self._dgraph.edges()
 
     def get_temporal_neighbors(self, vertex: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
