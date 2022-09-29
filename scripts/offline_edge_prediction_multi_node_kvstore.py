@@ -95,7 +95,9 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
         for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
+            # TODO: fetch_feature in distributed setting
             mfgs = cache.fetch_feature(mfgs)
+            # TODO: how to use edge_feats in distributed
             pred_pos, pred_neg = model(
                 mfgs, eid=eid, edge_feats=cache.edge_feats)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
@@ -195,7 +197,9 @@ def main():
         kvstore_client = KVStoreClient(
             dgraph.get_partition_table(),
             dgraph.num_partitions(), args.world_size)
-
+        # get features partitioned to its machine
+        node_feats = kvstore_client.pull(dgraph.nodes(), mode='node')
+        edge_feats = kvstore_client.pull(dgraph.edges(), mode='edge')
         dim_node, dim_edge = graph_services.get_dim_node_edge()
     else:
         dgraph = build_dynamic_graph(
@@ -204,7 +208,8 @@ def main():
         node_feats, edge_feats = load_feat(
             args.data, shared_memory=args.distributed,
             local_rank=args.local_rank, local_world_size=args.local_world_size)
-        # TODO: get local node & edge sets from dgraph; need api
+
+        kvstore_client = None
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
@@ -241,7 +246,8 @@ def main():
                                         num_edges, device,
                                         node_feats, edge_feats,
                                         pinned_nfeat_buffs,
-                                        pinned_efeat_buffs)
+                                        pinned_efeat_buffs,
+                                        kvstore_client)
 
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
@@ -293,10 +299,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
+            # TODO: fetch_feature in distributed setting
             mfgs = cache.fetch_feature(mfgs)
 
             # Train
             optimizer.zero_grad()
+            # TODO: use edge_feats here.
             pred_pos, pred_neg = model(
                 mfgs, eid=eid, edge_feats=cache.edge_feats)
 
