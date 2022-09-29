@@ -56,8 +56,8 @@ class DistributedTemporalSampler:
                 ret = self.sample_layer_local(
                     target_vertices, timestamps, layer, snapshot)
 
-                result.rows = torch.from_numpy(ret.row())
-                result.cols = torch.from_numpy(ret.col())
+                result.row = torch.from_numpy(ret.row())
+                result.col = torch.from_numpy(ret.col())
                 result.num_src_nodes = ret.num_src_nodes()
                 result.num_dst_nodes = ret.num_dst_nodes()
                 result.all_nodes = torch.from_numpy(ret.all_nodes())
