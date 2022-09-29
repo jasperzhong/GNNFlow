@@ -30,8 +30,7 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
                  mem_resource_type, device),
       insertion_policy_(insertion_policy),
-      num_nodes_(0),
-      num_edges_(0),
+      max_node_id_(0),
       device_(device) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
@@ -82,9 +81,13 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   CHECK_EQ(src_nodes.size(), timestamps.size());
   CHECK_EQ(src_nodes.size(), eids.size());
 
-  // unique eids
-  std::set<int> s(eids.begin(), eids.end());
-  num_edges_ += s.size();
+  // NB: it seems to be necessary to set the device again.
+  CUDA_CALL(cudaSetDevice(device_));
+
+  src_nodes_.insert(src_nodes.begin(), src_nodes.end());
+  nodes_.insert(src_nodes.begin(), src_nodes.end());
+  nodes_.insert(dst_nodes.begin(), dst_nodes.end());
+  edges_.insert(eids.begin(), eids.end());
 
   // add nodes
   NIDType max_node =
@@ -128,17 +131,17 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
 }
 
 void DynamicGraph::AddNodes(NIDType max_node) {
-  if (max_node < num_nodes_) {
+  if (max_node < max_node_id_) {
     return;
   }
-  num_nodes_ = max_node + 1;
-  d_node_table_.resize(num_nodes_);
-  h_copy_of_d_node_table_.resize(num_nodes_);
+  max_node_id_ = max_node;
+  d_node_table_.resize(max_node_id_ + 1);
+  h_copy_of_d_node_table_.resize(max_node_id_ + 1);
 }
 
-std::size_t DynamicGraph::num_nodes() const { return num_nodes_; }
-
-std::size_t DynamicGraph::num_edges() const { return num_edges_; }
+std::size_t DynamicGraph::num_nodes() const { return nodes_.size(); }
+std::size_t DynamicGraph::num_src_nodes() const { return src_nodes_.size(); }
+std::size_t DynamicGraph::num_edges() const { return edges_.size(); }
 
 void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
                                cudaStream_t stream) {
@@ -192,7 +195,7 @@ void DynamicGraph::AddEdgesForOneNode(
           h_tail_block->capacity - h_tail_block->size;
       if (num_edges_to_current_block > 0) {
         CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, 0,
-                         num_edges_to_current_block, stream);
+                         num_edges_to_current_block, device_, stream);
         // NB: sync is necessary here since the value is updated in
         // `InsertBlock` right after the copy
         SyncBlock(h_tail_block, stream);
@@ -215,7 +218,7 @@ void DynamicGraph::AddEdgesForOneNode(
 
   // copy data to block
   CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, start_idx,
-                   num_edges, stream);
+                   num_edges, device_, stream);
   SyncBlock(h_tail_block, stream);
 }
 
@@ -284,4 +287,13 @@ const DoublyLinkedList* DynamicGraph::get_device_node_table() const {
   return thrust::raw_pointer_cast(d_node_table_.data());
 }
 
+std::vector<NIDType> DynamicGraph::nodes() const {
+  return {nodes_.begin(), nodes_.end()};
+}
+std::vector<NIDType> DynamicGraph::src_nodes() const {
+  return {src_nodes_.begin(), src_nodes_.end()};
+}
+std::vector<EIDType> DynamicGraph::edges() const {
+  return {edges_.begin(), edges_.end()};
+}
 }  // namespace dgnn

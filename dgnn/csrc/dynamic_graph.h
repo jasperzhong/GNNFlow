@@ -5,6 +5,7 @@
 #include <thrust/device_vector.h>
 
 #include <memory>
+#include <set>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -73,8 +74,12 @@ class DynamicGraph {
   void AddNodes(NIDType max_node);
 
   std::size_t num_nodes() const;
-
   std::size_t num_edges() const;
+  std::size_t num_src_nodes() const;
+
+  std::vector<NIDType> nodes() const;
+  std::vector<NIDType> src_nodes() const;
+  std::vector<EIDType> edges() const;
 
   std::vector<std::size_t> out_degree(const std::vector<NIDType>& nodes) const;
 
@@ -86,6 +91,8 @@ class DynamicGraph {
   NodeNeighborTuple get_temporal_neighbors(NIDType node) const;
 
   const DoublyLinkedList* get_device_node_table() const;
+
+  int device() const { return device_; }
 
  private:
   void AddEdgesForOneNode(NIDType src_node,
@@ -115,12 +122,15 @@ class DynamicGraph {
 
   std::vector<cudaStream_t> streams_;
 
-  std::size_t num_nodes_;  // the maximum node id + 1
-  std::size_t num_edges_;
+  std::size_t max_node_id_;
+
+  std::set<NIDType> nodes_;
+  std::set<NIDType> src_nodes_;
+  std::set<EIDType> edges_;
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 
-  int device_;
+  const int device_;
 };
 
 }  // namespace dgnn

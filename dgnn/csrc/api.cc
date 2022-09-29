@@ -47,12 +47,18 @@ PYBIND11_MODULE(libdgnn, m) {
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"))
       .def("num_vertices", &DynamicGraph::num_nodes)
+      .def("num_source_vertices", &DynamicGraph::num_src_nodes)
       .def("num_edges", &DynamicGraph::num_edges)
-      //  .def("out_degree", &DynamicGraph::out_degree)
       .def("out_degree",
            [](const DynamicGraph &dgraph, std::vector<NIDType> nodes) {
              return vec2npy(dgraph.out_degree(nodes));
            })
+      .def("nodes",
+           [](const DynamicGraph &dgraph) { return vec2npy(dgraph.nodes()); })
+      .def("src_nodes",
+           [](const DynamicGraph &dgraph) { return vec2npy(dgraph.src_nodes()); })
+      .def("edges",
+           [](const DynamicGraph &dgraph) { return vec2npy(dgraph.edges()); })
       .def("get_temporal_neighbors",
            [](const DynamicGraph &dgraph, NIDType node) {
              auto neighbors = dgraph.get_temporal_neighbors(node);
