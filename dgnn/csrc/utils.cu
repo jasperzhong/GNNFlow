@@ -24,7 +24,6 @@ void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst, int device,
     CUDA_CALL(cudaMemcpyAsync(dst->eids, src->eids, src->size * sizeof(EIDType),
                               cudaMemcpyDefault, stream));
   }
-
   dst->size = src->size;
   dst->start_timestamp = src->start_timestamp;
   dst->end_timestamp = src->end_timestamp;
@@ -56,13 +55,12 @@ void CopyEdgesToBlock(TemporalBlock* block,
                               sizeof(EIDType) * num_edges, cudaMemcpyDefault,
                               stream));
   }
-
   block->size += num_edges;
 
   block->start_timestamp =
       std::min(block->start_timestamp, timestamps[start_idx]);
   block->end_timestamp = timestamps[start_idx + num_edges - 1];
-}
+}  // namespace dgnn
 
 std::size_t GetSharedMemoryMaxSize() {
   std::size_t max_size = 0;

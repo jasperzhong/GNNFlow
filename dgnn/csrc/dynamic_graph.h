@@ -74,8 +74,12 @@ class DynamicGraph {
   void AddNodes(NIDType max_node);
 
   std::size_t num_nodes() const;
-
   std::size_t num_edges() const;
+  std::size_t num_src_nodes() const;
+
+  std::vector<NIDType> nodes() const;
+  std::vector<NIDType> src_nodes() const;
+  std::vector<EIDType> edges() const;
 
   std::vector<std::size_t> out_degree(const std::vector<NIDType>& nodes) const;
 
@@ -119,9 +123,10 @@ class DynamicGraph {
   std::vector<cudaStream_t> streams_;
 
   std::size_t max_node_id_;
-  std::size_t num_edges_;
 
   std::set<NIDType> nodes_;
+  std::set<NIDType> src_nodes_;
+  std::set<EIDType> edges_;
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 

@@ -46,7 +46,7 @@ std::vector<T> sort_vector(const std::vector<T>& v,
  *
  * @param dst The destination temporal block.
  * @param src The source temporal block.
- * @param device The device where the destination block is.
+ * @param device The device id.
  * @param stream The CUDA stream.
  */
 void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst, int device,
@@ -64,7 +64,7 @@ void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst, int device,
  * @param eids The ids of the incoming edges.
  * @param start_idx The start index of the incoming edges.
  * @param num_edges The number of incoming edges.
- * @param device The device where the destination block is.
+ * @param device The device id.
  * @param stream The CUDA stream.
  */
 void CopyEdgesToBlock(TemporalBlock* block,
