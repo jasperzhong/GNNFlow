@@ -16,7 +16,7 @@ TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t initial_pool_size, std::size_t maximum_pool_size,
     std::size_t minium_block_size, MemoryResourceType mem_resource_type,
     int device)
-    : minium_block_size_(minium_block_size) {
+    : minium_block_size_(minium_block_size), device_(device) {
   CUDA_CALL(cudaSetDevice(device));
   // create a memory pool
   switch (mem_resource_type) {
@@ -120,7 +120,7 @@ void TemporalBlockAllocator::Reallocate(TemporalBlock *block, std::size_t size,
 
   TemporalBlock tmp;
   AllocateInternal(&tmp, size);
-  CopyTemporalBlock(block, &tmp, stream);
+  CopyTemporalBlock(block, &tmp, device_, stream);
   DeallocateInternal(block);
 
   *block = tmp;

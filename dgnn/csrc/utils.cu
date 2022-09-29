@@ -6,23 +6,24 @@
 #include "utils.h"
 
 namespace dgnn {
-void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst,
+void CopyTemporalBlock(TemporalBlock* src, TemporalBlock* dst, int device,
                        cudaStream_t stream) {
   CHECK_NOTNULL(src);
   CHECK_NOTNULL(dst);
   CHECK_GE(dst->capacity, src->capacity);
 
-  CUDA_CALL(cudaMemcpyAsync(dst->dst_nodes, src->dst_nodes,
-                            src->size * sizeof(NIDType), cudaMemcpyDefault,
-                            stream));
+  if (device == 0) {
+    CUDA_CALL(cudaMemcpyAsync(dst->dst_nodes, src->dst_nodes,
+                              src->size * sizeof(NIDType), cudaMemcpyDefault,
+                              stream));
 
-  CUDA_CALL(cudaMemcpyAsync(dst->timestamps, src->timestamps,
-                            src->size * sizeof(TimestampType),
-                            cudaMemcpyDefault, stream));
+    CUDA_CALL(cudaMemcpyAsync(dst->timestamps, src->timestamps,
+                              src->size * sizeof(TimestampType),
+                              cudaMemcpyDefault, stream));
 
-  CUDA_CALL(cudaMemcpyAsync(dst->eids, src->eids, src->size * sizeof(EIDType),
-                            cudaMemcpyDefault, stream));
-
+    CUDA_CALL(cudaMemcpyAsync(dst->eids, src->eids, src->size * sizeof(EIDType),
+                              cudaMemcpyDefault, stream));
+  }
   dst->size = src->size;
   dst->start_timestamp = src->start_timestamp;
   dst->end_timestamp = src->end_timestamp;
@@ -33,7 +34,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
                       const std::vector<NIDType>& dst_nodes,
                       const std::vector<TimestampType>& timestamps,
                       const std::vector<EIDType>& eids, std::size_t start_idx,
-                      std::size_t num_edges, cudaStream_t stream) {
+                      std::size_t num_edges, int device, cudaStream_t stream) {
   CHECK_NOTNULL(block);
   CHECK_EQ(dst_nodes.size(), timestamps.size());
   CHECK_EQ(eids.size(), timestamps.size());
@@ -41,18 +42,19 @@ void CopyEdgesToBlock(TemporalBlock* block,
   // NB: we assume that the incoming edges are newer than the existing ones.
   CHECK_LE(block->end_timestamp, timestamps[start_idx + num_edges - 1]);
 
-  CUDA_CALL(cudaMemcpyAsync(block->dst_nodes + block->size,
-                            &dst_nodes[start_idx], sizeof(NIDType) * num_edges,
-                            cudaMemcpyDefault, stream));
+  if (device == 0) {
+    CUDA_CALL(cudaMemcpyAsync(
+        block->dst_nodes + block->size, &dst_nodes[start_idx],
+        sizeof(NIDType) * num_edges, cudaMemcpyDefault, stream));
 
-  CUDA_CALL(cudaMemcpyAsync(
-      block->timestamps + block->size, &timestamps[start_idx],
-      sizeof(TimestampType) * num_edges, cudaMemcpyDefault, stream));
+    CUDA_CALL(cudaMemcpyAsync(
+        block->timestamps + block->size, &timestamps[start_idx],
+        sizeof(TimestampType) * num_edges, cudaMemcpyDefault, stream));
 
-  CUDA_CALL(cudaMemcpyAsync(block->eids + block->size, &eids[start_idx],
-                            sizeof(EIDType) * num_edges, cudaMemcpyDefault,
-                            stream));
-
+    CUDA_CALL(cudaMemcpyAsync(block->eids + block->size, &eids[start_idx],
+                              sizeof(EIDType) * num_edges, cudaMemcpyDefault,
+                              stream));
+  }
   block->size += num_edges;
 
   block->start_timestamp =
