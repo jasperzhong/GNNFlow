@@ -23,7 +23,7 @@ class Cache:
                     range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
-            device: The device to use 
+            device: The device to use
             node_feats: The node features
             edge_feats: The edge features
             pinned_nfeat_buffs: The pinned memory buffers for node features

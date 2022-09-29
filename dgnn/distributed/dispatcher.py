@@ -68,12 +68,12 @@ class Dispatcher:
             if node_feats is not None:
                 keys = torch.cat((edges[0], edges[1])).unique()
                 features = node_feats[keys]
-                rpc.rpc_async("worder%d" % kvstore_rank, graph_services.push_tensors,
+                rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                               args=(keys, features, 'node'))
             if edge_feats is not None:
                 keys = edges[3]
                 features = edge_feats[keys]
-                rpc.rpc_async("worder%d" % kvstore_rank, graph_services.push_tensors,
+                rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                               args=(keys, features, 'edge'))
 
         if not defer_sync:
