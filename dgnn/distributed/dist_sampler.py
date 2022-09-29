@@ -14,7 +14,7 @@ from dgl.heterograph import DGLBlock
 
 import dgnn.distributed.graph_services as graph_services
 from dgnn import TemporalSampler
-from dgnn.distributed.common import SamplingResultType
+from dgnn.distributed.common import SamplingResultTorch
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from libdgnn import SamplingResult
 
@@ -70,7 +70,7 @@ class DistributedTemporalSampler:
             time.sleep(0.01)
 
     def enqueue_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
-                              layer: int, snapshot: int, result:  SamplingResultType, callback: Callable, handle: int):
+                              layer: int, snapshot: int, result:  SamplingResultTorch, callback: Callable, handle: int):
         self._sampling_task_queue.put(
             (target_vertices, timestamps, layer, snapshot, result, callback, handle))
 
@@ -146,7 +146,7 @@ class DistributedTemporalSampler:
         # merge sampling results
         return self._merge_sampling_results(sampling_results)
 
-    def _merge_sampling_results(self, sampling_results: List[SamplingResultType]) -> DGLBlock:
+    def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch]) -> DGLBlock:
         """
         Merge sampling results from different partitions.
 

@@ -6,7 +6,7 @@ import torch
 import torch.distributed
 
 from dgnn import DynamicGraph, TemporalSampler
-from dgnn.distributed.common import SamplingResultType
+from dgnn.distributed.common import SamplingResultTorch
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 from dgnn.distributed.kvstore import KVStoreServer
@@ -216,7 +216,7 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
         handle_manager.mark_done(handle)
 
     dsampler = get_dsampler()
-    ret = SamplingResultType()
+    ret = SamplingResultTorch()
     handle = handle_manager.allocate_handle()
     dsampler.enqueue_sampling_task(
         target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret, callback, handle)
