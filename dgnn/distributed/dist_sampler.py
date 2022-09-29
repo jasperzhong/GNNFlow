@@ -1,6 +1,9 @@
 import logging
 import os
-from typing import List, NamedTuple
+import threading
+import time
+from queue import Queue
+from typing import Callable, List
 
 import dgl
 import numpy as np
@@ -11,24 +14,15 @@ from dgl.heterograph import DGLBlock
 
 import dgnn.distributed.graph_services as graph_services
 from dgnn import TemporalSampler
+from dgnn.distributed.common import SamplingResultType
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from libdgnn import SamplingResult
 
-SamplingResultType = NamedTuple('SamplingResultType', [("row", torch.Tensor),
-                                                       ("col", torch.Tensor),
-                                                       ("all_nodes", torch.Tensor),
-                                                       ("all_timestamps",
-                                                        torch.Tensor),
-                                                       ("delta_timestamps",
-                                                        torch.Tensor),
-                                                       ("eids", torch.Tensor),
-                                                       ("num_src_nodes", int),
-                                                       ("num_dst_nodes", int)])
-# let pickle know how to serialize the SamplingResultType
-globals()['SamplingResultType'] = SamplingResultType
-
 
 class DistributedTemporalSampler:
+    """
+    Distributed Temporal Sampler API
+    """
 
     def __init__(self, sampler: TemporalSampler, dgraph: DistributedDynamicGraph):
         """
@@ -48,6 +42,38 @@ class DistributedTemporalSampler:
         self._num_snapshots = self._sampler._num_snapshots
         self._partition_table = self._dgraph.get_partition_table()
         self._num_partitions = self._dgraph.num_partitions()
+
+        self._sampling_thread = threading.Thread(target=self._sampling_loop)
+        self._sampling_task_queue = Queue()
+        self._sampling_thread.start()
+
+    def _sampling_loop(self):
+        while True:
+            while not self._sampling_task_queue.empty():
+                target_vertices, timestamps, layer, snapshot, result, callback, \
+                    handle = self._sampling_task_queue.get()
+
+                ret = self.sample_layer_local(
+                    target_vertices, timestamps, layer, snapshot)
+
+                result.rows = torch.from_numpy(ret.row())
+                result.cols = torch.from_numpy(ret.col())
+                result.num_src_nodes = ret.num_src_nodes()
+                result.num_dst_nodes = ret.num_dst_nodes()
+                result.all_nodes = torch.from_numpy(ret.all_nodes())
+                result.all_timestamps = torch.from_numpy(ret.all_timestamps())
+                result.delta_timestamps = torch.from_numpy(
+                    ret.delta_timestamps())
+                result.eids = torch.from_numpy(ret.eids())
+
+                callback(handle)
+
+            time.sleep(0.01)
+
+    def enqueue_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
+                              layer: int, snapshot: int, result:  SamplingResultType, callback: Callable, handle: int):
+        self._sampling_task_queue.put(
+            (target_vertices, timestamps, layer, snapshot, result, callback, handle))
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -182,7 +208,7 @@ class DistributedTemporalSampler:
         return mfg
 
     def sample_layer_local(self, target_vertices:  np.ndarray, timestamps: np.ndarray,
-                           layer: int, snapshot: int) -> SamplingResultType:
+                           layer: int, snapshot: int) -> SamplingResult:
         """
         Sample neighbors of given vertices in a specific layer and snapshot.
 
@@ -201,21 +227,4 @@ class DistributedTemporalSampler:
             target_vertices, timestamps, layer, snapshot, False)
         logging.debug("Rank %d: target_vertices %d, sampled vertices %d",
                       self._rank, ret.num_dst_nodes(), ret.num_src_nodes())
-
-        assert isinstance(ret, SamplingResult)
-        s = SamplingResultType(
-            row=torch.from_numpy(ret.row()),
-            col=torch.from_numpy(ret.col()),
-            num_src_nodes=ret.num_src_nodes(),
-            num_dst_nodes=ret.num_dst_nodes(),
-            all_nodes=torch.from_numpy(ret.all_nodes()),
-            all_timestamps=torch.from_numpy(ret.all_timestamps()),
-            delta_timestamps=torch.from_numpy(ret.delta_timestamps()),
-            eids=torch.from_numpy(ret.eids()))
-        # DEBUG
-        import pickle
-        import sys
-        p = pickle.dumps(s)
-        logging.debug("Rank %d: sampling result size %d",
-                      self._rank, sys.getsizeof(p))
-        return s
+        return ret

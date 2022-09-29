@@ -1,13 +1,19 @@
 import logging
+import time
 from typing import List, Tuple
 
 import torch
 import torch.distributed
 
 from dgnn import DynamicGraph, TemporalSampler
+from dgnn.distributed.common import SamplingResultType
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 from dgnn.distributed.kvstore import KVStoreServer
+from dgnn.distributed.utils import HandleManager
+
+global handle_manager
+handle_manager = HandleManager()
 
 global DGRAPH
 global DSAMPLER
@@ -205,8 +211,21 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
     Returns:
         torch.Tensor: The temporal neighbors of the vertex.
     """
+    def callback(handle: int):
+        global handle_manager
+        handle_manager.mark_done(handle)
+
     dsampler = get_dsampler()
-    return dsampler.sample_layer_local(target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
+    ret = SamplingResultType()
+    handle = handle_manager.allocate_handle()
+    dsampler.enqueue_sampling_task(
+        target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret, callback, handle)
+
+    # Wait for the sampling task to finish.
+    while not handle_manager.poll(handle):
+        time.sleep(0.01)
+
+    return ret
 
 
 def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor]):

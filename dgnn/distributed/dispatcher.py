@@ -132,7 +132,7 @@ class Dispatcher:
 
     def broadcast_graph_metadata(self):
         """
-        Broadcast the graph metadata (i.e., num_nodes, num_edges )to all 
+        Broadcast the graph metadata (i.e., num_nodes, num_edges ) to all 
         the workers.
         """
         # Broadcast the graph metadata to all the workers.
