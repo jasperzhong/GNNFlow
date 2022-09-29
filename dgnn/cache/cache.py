@@ -17,7 +17,8 @@ class Cache:
                  edge_feats: Optional[torch.Tensor] = None,
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
-                 kvstore_client: Optional[KVStoreClient] = None):
+                 kvstore_client: Optional[KVStoreClient] = None,
+                 distributed: Optional[bool] = False):
         """
         Initialize the cache
 
@@ -71,6 +72,9 @@ class Cache:
         self.cache_edge_ratio = 0
 
         self.kvstore_client = kvstore_client
+        # we can add a flag to indicate whether it's distributed
+        # so that we can only use one fetch feature function
+        self.distributed = distributed
 
         # stores node's features
         if self.dim_node_feat != 0:
@@ -239,14 +243,27 @@ class Cache:
                 uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
                     uncached_node_id, return_inverse=True)
 
-                if self.pinned_nfeat_buffs is not None:
-                    torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
-                                       out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
-                    uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                        self.device, non_blocking=True)
+                if self.distributed:
+                    if self.pinned_nfeat_buffs is not None:
+                        # TODO: maybe fetch local and remote features separately
+                        # TODO: may need .to('cpu')
+                        self.pinned_nfeat_buffs[
+                            i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
+                            uncached_node_id_unique, mode='node')
+                        uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                            self.device, non_blocking=True)
+                    else:
+                        uncached_node_feature = self.kvstore_client.pull(
+                            uncached_node_id_unique, mode='node')
                 else:
-                    uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
-                        self.device, non_blocking=True)
+                    if self.pinned_nfeat_buffs is not None:
+                        torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
+                                           out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
+                        uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                            self.device, non_blocking=True)
+                    else:
+                        uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
+                            self.device, non_blocking=True)
                 node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
 
                 i += 1
@@ -286,14 +303,26 @@ class Cache:
                     uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                         uncached_edge_id, return_inverse=True)
 
-                    if self.pinned_efeat_buffs is not None:
-                        torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
-                                           out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
-                        uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
-                            self.device, non_blocking=True)
+                    if self.distributed:
+                        if self.pinned_efeat_buffs is not None:
+                            self.pinned_efeat_buffs[
+                                i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
+                                    uncached_edge_id_unique, mode='edge')
+                            uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
+                                self.device, non_blocking=True)
+                        else:
+                            uncached_edge_feature = self.kvstore_client.pull(
+                                uncached_edge_id_unique, mode='edge')
                     else:
-                        uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
-                            self.device, non_blocking=True)
+                        if self.pinned_efeat_buffs is not None:
+                            torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
+                                               out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
+                            uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
+                                self.device, non_blocking=True)
+                        else:
+                            uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
+                                self.device, non_blocking=True)
+
                     edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
 
                     i += 1

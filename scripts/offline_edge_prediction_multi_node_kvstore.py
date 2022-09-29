@@ -95,9 +95,8 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
         for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
-            # TODO: fetch_feature in distributed setting
             mfgs = cache.fetch_feature(mfgs)
-            # TODO: how to use edge_feats in distributed
+            # TODO: how to use edge_feats in distributed?
             pred_pos, pred_neg = model(
                 mfgs, eid=eid, edge_feats=cache.edge_feats)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
@@ -241,13 +240,13 @@ def main():
         dim_node, dim_edge)
 
     # Cache
-    # TODO: use kvstore server to fetch feature
     cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs,
-                                        kvstore_client)
+                                        kvstore_client,
+                                        args.partition)
 
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
@@ -299,7 +298,6 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
-            # TODO: fetch_feature in distributed setting
             mfgs = cache.fetch_feature(mfgs)
 
             # Train
