@@ -197,8 +197,8 @@ class DistributedTemporalSampler:
             col_offset += sampling_result.num_src_nodes
             row_offset += sampling_result.num_dst_nodes
 
-        print(col)
-        print(row)
+        np.savetxt('col.txt', col, fmt='%d')
+        np.savetxt('row.txt', row, fmt='%d')
         logging.debug('num_src_nodes: {}'.format(total_num_src_nodes))
         logging.debug('num_dst_nodes: {}'.format(total_num_dst_nodes))
 
