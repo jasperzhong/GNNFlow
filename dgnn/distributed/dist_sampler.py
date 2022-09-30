@@ -196,6 +196,11 @@ class DistributedTemporalSampler:
             col_offset += sampling_result.num_src_nodes
             row_offset += sampling_result.num_dst_nodes
 
+        logging.debug('col: {}'.format(col))
+        logging.debug('row: {}'.format(row))
+        logging.debug('num_src_nodes: {}'.format(total_num_src_nodes))
+        logging.debug('num_dst_nodes: {}'.format(total_num_dst_nodes))
+
         mfg = dgl.create_block((col, row), num_src_nodes=total_num_src_nodes,
                                num_dst_nodes=total_num_dst_nodes)
 
