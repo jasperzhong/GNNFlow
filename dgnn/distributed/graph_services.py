@@ -199,7 +199,7 @@ def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, tor
 
 
 def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
-                       layer: int, snapshot: int) -> SamplingResultTorch:
+                       layer: int, snapshot: int) -> torch.Tensor:
     """
     Sample neighbors of given vertices in a specific layer and snapshot locally.
 
@@ -212,23 +212,25 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     Returns:
         SamplingResultTorch: The sampled neighbors.
     """
-    def callback(handle: int):
-        global handle_manager
-        handle_manager.mark_done(handle)
+    # dummy data
+    return torch.zeros(0, dtype=torch.int64)
+    # def callback(handle: int):
+    #     global handle_manager
+    #     handle_manager.mark_done(handle)
 
-    dsampler = get_dsampler()
-    ret = SamplingResultTorch()
-    handle = handle_manager.allocate_handle()
-    dsampler.enqueue_sampling_task(
-        target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret, callback, handle)
+    # dsampler = get_dsampler()
+    # ret = SamplingResultTorch()
+    # handle = handle_manager.allocate_handle()
+    # dsampler.enqueue_sampling_task(
+    #     target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret, callback, handle)
 
-    # Wait for the sampling task to finish.
-    while not handle_manager.poll(handle):
-        time.sleep(0.01)
+    # # Wait for the sampling task to finish.
+    # while not handle_manager.poll(handle):
+    #     time.sleep(0.01)
 
-    logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
-                  torch.distributed.get_rank(), handle, ret.num_src_nodes)
-    return ret
+    # logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
+    #               torch.distributed.get_rank(), handle, ret.num_src_nodes)
+    # return ret
 
 
 def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor]):
