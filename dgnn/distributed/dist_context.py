@@ -44,7 +44,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                                    undirected, node_feats, edge_feats)
 
     # check
-    torch.distributed.barrier()
+    # NB: barrier() causes hang here because it finds the wrong device.
+    torch.distributed.all_reduce(torch.tensor(1).cuda())
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
                  rank, graph_services.num_vertices(), graph_services.num_edges())
     logging.info("Rank %d: partition table shape: %s",
