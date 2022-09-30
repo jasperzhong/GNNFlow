@@ -157,7 +157,7 @@ class DistributedTemporalSampler:
         # return self._merge_sampling_results(sampling_results)
 
         # dummy data
-        return dgl.create_block((0, 0))
+        return dgl.create_block(((0, ), (0, )))
 
     def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch]) -> DGLBlock:
         """
