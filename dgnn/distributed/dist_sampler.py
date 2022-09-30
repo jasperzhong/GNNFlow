@@ -190,7 +190,7 @@ class DistributedTemporalSampler:
                 (delta_timestamps, sampling_result.delta_timestamps))
             eids = np.concatenate((eids, sampling_result.eids))
 
-            np.savetxt('col_{}_{}.txt'.format(self._local_rank, i), sampling_result.col)
+            np.savetxt('col_{}_{}.txt'.format(self._local_rank, i), sampling_result.col - num_dst_nodes)
             col = np.concatenate(
                 (col, sampling_result.col + col_offset - num_dst_nodes))
             row = np.concatenate((row, sampling_result.row + row_offset))
