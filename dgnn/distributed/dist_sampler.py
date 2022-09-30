@@ -191,7 +191,7 @@ class DistributedTemporalSampler:
             eids = np.concatenate((eids, sampling_result.eids))
 
             logging.debug("len(col)={}, num_src_nodes={}".format(
-                len(col), sampling_result.num_src_nodes - num_dst_nodes))
+                len(sampling_result.col), sampling_result.num_src_nodes - num_dst_nodes))
             col = np.concatenate(
                 (col, sampling_result.col + col_offset - num_dst_nodes))
             row = np.concatenate((row, sampling_result.row + row_offset))
