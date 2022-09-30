@@ -53,28 +53,18 @@ class DistributedTemporalSampler:
                 target_vertices, timestamps, layer, snapshot, result, callback, \
                     handle = self._sampling_task_queue.get()
 
-                # ret = self.sample_layer_local(
-                #     target_vertices, timestamps, layer, snapshot)
+                ret = self.sample_layer_local(
+                    target_vertices, timestamps, layer, snapshot)
 
-                # result.row = torch.from_numpy(ret.row())
-                # result.col = torch.from_numpy(ret.col())
-                # result.num_src_nodes = ret.num_src_nodes()
-                # result.num_dst_nodes = ret.num_dst_nodes()
-                # result.all_nodes = torch.from_numpy(ret.all_nodes())
-                # result.all_timestamps = torch.from_numpy(ret.all_timestamps())
-                # result.delta_timestamps = torch.from_numpy(
-                #     ret.delta_timestamps())
-                # result.eids = torch.from_numpy(ret.eids())
-
-                # dummy data
-                result.row = torch.zeros(0, dtype=torch.int64)
-                result.col = torch.zeros(0, dtype=torch.int64)
-                result.num_src_nodes = 0
-                result.num_dst_nodes = 0
-                result.all_nodes = torch.zeros(0, dtype=torch.int64)
-                result.all_timestamps = torch.zeros(0, dtype=torch.float32)
-                result.delta_timestamps = torch.zeros(0, dtype=torch.float32)
-                result.eids = torch.zeros(0, dtype=torch.int64)
+                result.row = torch.from_numpy(ret.row())
+                result.col = torch.from_numpy(ret.col())
+                result.num_src_nodes = ret.num_src_nodes()
+                result.num_dst_nodes = ret.num_dst_nodes()
+                result.all_nodes = torch.from_numpy(ret.all_nodes())
+                result.all_timestamps = torch.from_numpy(ret.all_timestamps())
+                result.delta_timestamps = torch.from_numpy(
+                    ret.delta_timestamps())
+                result.eids = torch.from_numpy(ret.eids())
 
                 callback(handle)
             time.sleep(0.01)
