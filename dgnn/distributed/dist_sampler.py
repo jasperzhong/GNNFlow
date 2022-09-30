@@ -176,7 +176,7 @@ class DistributedTemporalSampler:
 
         col_offset = total_num_dst_nodes
         row_offset = 0
-        for sampling_result in sampling_results:
+        for i, sampling_result in enumerate(sampling_results):
             num_dst_nodes = sampling_result.num_dst_nodes
             src_nodes = np.concatenate(
                 (src_nodes, sampling_result.all_nodes[num_dst_nodes:]))
@@ -190,6 +190,7 @@ class DistributedTemporalSampler:
                 (delta_timestamps, sampling_result.delta_timestamps))
             eids = np.concatenate((eids, sampling_result.eids))
 
+            np.savetxt('col_{}.txt'.format(i), sampling_result.col)
             col = np.concatenate(
                 (col, sampling_result.col + col_offset - num_dst_nodes))
             row = np.concatenate((row, sampling_result.row + row_offset))
@@ -197,8 +198,6 @@ class DistributedTemporalSampler:
             col_offset += sampling_result.num_src_nodes
             row_offset += sampling_result.num_dst_nodes
 
-        np.savetxt('col.txt', col, fmt='%d')
-        np.savetxt('row.txt', row, fmt='%d')
         logging.debug('num_src_nodes: {}'.format(total_num_src_nodes))
         logging.debug('num_dst_nodes: {}'.format(total_num_dst_nodes))
 

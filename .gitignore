@@ -189,6 +189,8 @@ rmm_log.txt
 *.qdrep
 *.ncu-rep
 *.pt
+col*.txt
+row*.txt
 
 # MacOS
 .DS_Store
