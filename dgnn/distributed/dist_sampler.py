@@ -66,6 +66,16 @@ class DistributedTemporalSampler:
                 #     ret.delta_timestamps())
                 # result.eids = torch.from_numpy(ret.eids())
 
+                # dummy data
+                result.row = torch.zeros(0, dtype=torch.int64)
+                result.col = torch.zeros(0, dtype=torch.int64)
+                result.num_src_nodes = 0
+                result.num_dst_nodes = 0
+                result.all_nodes = torch.zeros(0, dtype=torch.int64)
+                result.all_timestamps = torch.zeros(0, dtype=torch.float32)
+                result.delta_timestamps = torch.zeros(0, dtype=torch.float32)
+                result.eids = torch.zeros(0, dtype=torch.int64)
+
                 callback(handle)
             time.sleep(0.01)
 
