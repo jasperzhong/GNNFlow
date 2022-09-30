@@ -197,8 +197,8 @@ class DistributedTemporalSampler:
             col_offset += sampling_result.num_src_nodes
             row_offset += sampling_result.num_dst_nodes
 
-        logging.debug('col: {}, len={}'.format(col, len(col)))
-        logging.debug('row: {}, len={}'.format(row, len(row)))
+        print(col)
+        print(row)
         logging.debug('num_src_nodes: {}'.format(total_num_src_nodes))
         logging.debug('num_dst_nodes: {}'.format(total_num_dst_nodes))
 
