@@ -139,7 +139,8 @@ class DistributedTemporalSampler:
                 continue
             partition_vertices = torch.from_numpy(
                 target_vertices[partition_mask]).clone()
-            partition_timestamps = torch.from_numpy(timestamps[partition_mask]).clone()
+            partition_timestamps = torch.from_numpy(
+                timestamps[partition_mask]).clone()
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
 
@@ -154,10 +155,7 @@ class DistributedTemporalSampler:
             sampling_results.append(future.wait())
 
         # merge sampling results
-        # return self._merge_sampling_results(sampling_results)
-
-        # dummy data
-        return dgl.create_block(((0, ), (0, )))
+        return self._merge_sampling_results(sampling_results)
 
     def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch]) -> DGLBlock:
         """
