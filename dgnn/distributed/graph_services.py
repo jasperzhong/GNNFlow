@@ -212,8 +212,8 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     Returns:
         SamplingResultTorch: The sampled neighbors.
     """
-    logging.debug("Rank %d: receiving sample_layer_local request. target_vertices: %s, timestamps: %s, layer: %d, snapshot: %d",
-                  torch.distributed.get_rank(), target_vertices, timestamps, layer, snapshot)
+    logging.debug("Rank %d: receiving sample_layer_local request. #target_vertices: %d",
+                  torch.distributed.get_rank(), target_vertices.size(0))
 
     def callback(handle: int):
         global handle_manager
