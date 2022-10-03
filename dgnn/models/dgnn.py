@@ -1,3 +1,4 @@
+from tkinter import N
 from typing import Dict, List, Optional, Union
 
 import torch
@@ -111,7 +112,7 @@ class DGNN(torch.nn.Module):
         """
         Args:
             mfgs: list of list of DGLBlocks
-            neg_sample_ratio: negative sampling ratio 
+            neg_sample_ratio: negative sampling ratio
         """
         if self.use_memory:
             b = mfgs[0][0]  # type: DGLBlock
@@ -138,11 +139,8 @@ class DGNN(torch.nn.Module):
             # NB: no need to do backward here
             with torch.no_grad():
                 edge_feats = None
-                if 'eid' in kwargs and 'edge_feats' in kwargs and \
-                        kwargs['edge_feats'] is not None:
-                    eid = kwargs['eid']
+                if 'edge_feats' in kwargs and kwargs['edge_feats'] is not None:
                     edge_feats = kwargs['edge_feats']
-                    edge_feats = edge_feats[eid]
 
                 self.memory.update_mailbox(
                     **last_updated, edge_feats=edge_feats,

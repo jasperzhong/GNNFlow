@@ -2,6 +2,7 @@ from typing import List, Optional, Union
 
 import torch
 from dgl.heterograph import DGLBlock
+from dgnn.distributed import kvstore
 
 from dgnn.distributed.kvstore import KVStoreClient
 
@@ -210,12 +211,16 @@ class Cache:
         """
         raise NotImplementedError
 
-    def fetch_feature(self, mfgs: List[List[DGLBlock]], update_cache: bool = True):
+    def fetch_feature(self, mfgs: List[List[DGLBlock]],
+                      eid: torch.Tensor = None, update_cache: bool = True,
+                      target_edge_features: bool = True):
         """Fetching the node/edge features of input_node_ids
 
         Args:
             mfgs: message-passing flow graphs
+            eid: target edge ids
             update_cache: whether to update the cache
+            target_edge_features: whether to fetch target edge features for TGN
 
         Returns:
             mfgs: message-passing flow graphs with node/edge features
@@ -334,6 +339,14 @@ class Cache:
                                                uncached_edge_feature=uncached_edge_feature)
 
             self.cache_edge_ratio = hit_ratio_sum / i if i > 0 else 0
+
+            if target_edge_features:
+                if self.distributed:
+                    # TODO: maybe there are some edge_features is in the memory now
+                    self.target_edge_features = self.kvstore_client.pull(
+                        eid, mode='edge')
+                else:
+                    self.target_edge_features = self.edge_feats[eid]
 
         return mfgs
 

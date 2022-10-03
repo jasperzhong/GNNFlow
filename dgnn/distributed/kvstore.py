@@ -90,7 +90,6 @@ class KVStoreClient:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
         """
-        # TODO(guangming): rpc call to the corresponding KVStore servers (call graph_services.push_tensors)
         # dispatch different keys to different partitions
         partition_table = self._partition_table
         # TODO: eid may have some problems
@@ -125,7 +124,6 @@ class KVStoreClient:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        # TODO(guangming): rpc call to the corresponding KVStore servers (call graph_services.pull_tensors)
         # dispatch different keys to different partitions
         partition_table = self._partition_table
         # TODO: eid may have some problems

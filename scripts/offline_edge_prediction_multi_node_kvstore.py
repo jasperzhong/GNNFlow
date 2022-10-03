@@ -95,10 +95,10 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
         for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
-            mfgs = cache.fetch_feature(mfgs)
-            # TODO: how to use edge_feats in distributed?
+            mfgs = cache.fetch_feature(
+                mfgs, eid, target_edge_features=model.use_memory)
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs, edge_feats=cache.target_edge_features)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -298,13 +298,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
-            mfgs = cache.fetch_feature(mfgs)
-
+            mfgs = cache.fetch_feature(
+                mfgs, eid, target_edge_features=model.use_memory)
             # Train
             optimizer.zero_grad()
-            # TODO: use edge_feats here.
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs, edge_feats=cache.target_edge_features)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
