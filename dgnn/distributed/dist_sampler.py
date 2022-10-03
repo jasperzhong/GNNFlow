@@ -144,8 +144,9 @@ class DistributedTemporalSampler:
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
-                futures.append(self.sample_layer_local(
-                    partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot))
+                pass
+                # futures.append(self.sample_layer_local(
+                #     partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot))
             else:
                 futures.append(rpc.rpc_sync(
                     'worker{}'.format(worker_rank),
