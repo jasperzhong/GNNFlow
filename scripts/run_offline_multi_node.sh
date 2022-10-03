@@ -23,7 +23,7 @@ export NCCL_SOCKET_IFNAME=${INTERFACE}
 export GLOO_SOCKET_IFNAME=${INTERFACE}
 export TP_SOCKET_IFNAME=${INTERFACE}
 
-cmd="torchrun \
+cmd="python -m torch.distributed.run
     --nnodes=$NNODES --nproc_per_node=$NPROC_PER_NODE \
     --rdzv_id=1234 --rdzv_backend=c10d \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
@@ -32,6 +32,8 @@ cmd="torchrun \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY"
+
+cmd="gdb -ex run -ex bt -batch --args $cmd"
 
 echo $cmd
 NCCL_IB_DISABLE=1 NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
