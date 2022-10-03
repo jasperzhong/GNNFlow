@@ -138,9 +138,9 @@ class DistributedTemporalSampler:
             if partition_mask.sum() == 0:
                 continue
             partition_vertices = torch.from_numpy(
-                target_vertices[partition_mask]).clone()
+                target_vertices[partition_mask]).contiguous()
             partition_timestamps = torch.from_numpy(
-                timestamps[partition_mask]).clone()
+                timestamps[partition_mask]).contiguous()
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
