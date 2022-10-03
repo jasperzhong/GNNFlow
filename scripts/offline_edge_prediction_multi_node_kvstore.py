@@ -184,6 +184,9 @@ def main():
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
+    node_feats = None
+    edge_feats = None
+    kvstore_client = None
     if args.partition:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank)
@@ -196,9 +199,6 @@ def main():
         kvstore_client = KVStoreClient(
             dgraph.get_partition_table(),
             dgraph.num_partitions(), args.world_size)
-        # get features partitioned to its machine
-        node_feats = kvstore_client.pull(dgraph.nodes(), mode='node')
-        edge_feats = kvstore_client.pull(dgraph.edges(), mode='edge')
         dim_node, dim_edge = graph_services.get_dim_node_edge()
     else:
         dgraph = build_dynamic_graph(
@@ -208,7 +208,6 @@ def main():
             args.data, shared_memory=args.distributed,
             local_rank=args.local_rank, local_world_size=args.local_world_size)
 
-        kvstore_client = None
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
@@ -243,6 +242,7 @@ def main():
     cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,
+                                        dim_node, dim_edge,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs,
                                         kvstore_client,

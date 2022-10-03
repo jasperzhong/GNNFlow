@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from numpy import int32
 
 import torch
@@ -82,18 +82,29 @@ class KVStoreClient:
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
 
-    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
+    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str, nid: Optional[torch.Tensor] = None):
         """
         Push tensors to the corresponding KVStore servers according to the partition table.
 
         Args:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
+            mode (bool): Decide to push node/edge features or memory.
+            nid (Optional[torch.Tensor]): If push edge features,
+                use nid to get the partition ids
+
         """
         # dispatch different keys to different partitions
         partition_table = self._partition_table
-        # TODO: eid may have some problems
-        partition_ids = partition_table[keys]
+        if mode == 'edge':
+            if nid is None:
+                raise ValueError(
+                    'Nid is None when pushing edge features'
+                )
+            # get the partition_ids using nid
+            partition_ids = partition_table[nid]
+        else:
+            partition_ids = partition_table[keys]
 
         futures = []
         for partition_id in range(self._num_partitions):
@@ -114,26 +125,37 @@ class KVStoreClient:
         for future in futures:
             future.wait()
 
-    def pull(self, keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
+    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
         Args:
             keys (torch.Tensor): The keys.
+            mode (bool): Decide to fetch node/edge features or memory.
+            nid (Optional[torch.Tensor]): If fetch edge features,
+                use nid to get the partition ids
 
         Returns:
             List[torch.Tensor]: The tensors.
         """
         # dispatch different keys to different partitions
         partition_table = self._partition_table
-        # TODO: eid may have some problems
-        partition_ids = partition_table[keys]
+        if mode == 'edge':
+            if nid is None:
+                raise ValueError(
+                    'Nid is None when fetching edge features'
+                )
+            # get the partition_ids using nid
+            partition_ids = partition_table[nid]
+        else:
+            partition_ids = partition_table[keys]
 
         futures = []
         for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue
+            # nid and keys are in the same positions
             partition_keys = keys[partition_mask]
 
             # local rank 0 in those partitions

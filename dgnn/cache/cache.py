@@ -16,6 +16,8 @@ class Cache:
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
+                 dim_node_feat: Optional[int] = 0,
+                 dim_edge_feat: Optional[int] = 0,
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
@@ -31,6 +33,8 @@ class Cache:
             device: The device to use
             node_feats: The node features
             edge_feats: The edge features
+            dim_node_feat: The dimension of node features
+            dim_edge_feat: The dimension of edge features
             pinned_nfeat_buffs: The pinned memory buffers for node features
             pinned_efeat_buffs: The pinned memory buffers for edge features
             kvstore_client: The KVStore_Client for fetching features when using distributed
@@ -38,7 +42,7 @@ class Cache:
         if device == 'cpu' or device == torch.device('cpu'):
             raise ValueError('Cache must be on GPU')
 
-        if node_feats is None and edge_feats is None:
+        if node_feats is None and edge_feats is None and not distributed:
             raise ValueError(
                 'At least one of node_feats and edge_feats must be provided')
 
@@ -63,8 +67,8 @@ class Cache:
         self.num_edges = num_edges
         self.node_feats = node_feats
         self.edge_feats = edge_feats
-        self.dim_node_feat = 0 if node_feats is None else node_feats.shape[1]
-        self.dim_edge_feat = 0 if edge_feats is None else edge_feats.shape[1]
+        self.dim_node_feat = dim_node_feat
+        self.dim_edge_feat = dim_edge_feat
         self.device = device
         self.pinned_nfeat_buffs = pinned_nfeat_buffs
         self.pinned_efeat_buffs = pinned_efeat_buffs
@@ -309,15 +313,17 @@ class Cache:
                         uncached_edge_id, return_inverse=True)
 
                     if self.distributed:
+                        # edge_features need to convert to nid first.
+                        src_nid = b.srcdata['ID'][b.edges()[1]]
                         if self.pinned_efeat_buffs is not None:
                             self.pinned_efeat_buffs[
                                 i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
-                                    uncached_edge_id_unique, mode='edge')
+                                    uncached_edge_id_unique, mode='edge', nid=src_nid)
                             uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
                                 self.device, non_blocking=True)
                         else:
                             uncached_edge_feature = self.kvstore_client.pull(
-                                uncached_edge_id_unique, mode='edge')
+                                uncached_edge_id_unique, mode='edge', nid=src_nid)
                     else:
                         if self.pinned_efeat_buffs is not None:
                             torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
