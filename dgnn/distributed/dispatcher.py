@@ -63,16 +63,18 @@ class Dispatcher:
                 # TODO: the communication is duplicated for each worker in the remote machine.
                 # We can optimize it by sending the data to one of the worker and let it
                 # broadcast the data to the other workers.
-                future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
-                                       args=(*edges, ))
-                futures.append(future)
+                if worker_rank == self._rank:
+                    graph_services.add_edges(*edges)
+                else:
+                    future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
+                                           args=(*edges, ))
+                    futures.append(future)
 
         # TODO: push features to the KVStore server on the partition.
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
-
 
         if not defer_sync:
             # Wait for the workers to finish.
@@ -104,8 +106,6 @@ class Dispatcher:
             dst_nodes = batch["dst"].values.astype(np.int64)
             timestamps = batch["time"].values.astype(np.float32)
             eids = batch["eid"].values.astype(np.int64)
-
-            
 
             if undirected:
                 src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
