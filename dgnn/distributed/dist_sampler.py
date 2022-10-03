@@ -134,7 +134,7 @@ class DistributedTemporalSampler:
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
 
-            futures.append(rpc.rpc_async(
+            futures.append(rpc.rpc_sync(
                 'worker{}'.format(worker_rank),
                 graph_services.sample_layer_local,
                 args=(partition_vertices, partition_timestamps, layer, snapshot)))
@@ -142,7 +142,8 @@ class DistributedTemporalSampler:
         # collect sampling results
         sampling_results = []
         for future in futures:
-            sampling_results.append(future.wait())
+            sampling_results.append(future)
+            # sampling_results.append(future.wait())
 
         # merge sampling results
         return self._merge_sampling_results(sampling_results)
