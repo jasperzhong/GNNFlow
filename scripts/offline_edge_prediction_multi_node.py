@@ -208,7 +208,7 @@ def main():
     logging.debug("device: {}".format(device))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.distributed)
+                 memory_device=device, memory_shared=args.local_world_size > 1)
     model.to(device)
 
     if args.partition:
