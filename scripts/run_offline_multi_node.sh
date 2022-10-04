@@ -23,7 +23,7 @@ export NCCL_SOCKET_IFNAME=${INTERFACE}
 export GLOO_SOCKET_IFNAME=${INTERFACE}
 export TP_SOCKET_IFNAME=${INTERFACE}
 
-cmd="python -m torch.distributed.run
+cmd="torchrun \
     --nnodes=$NNODES --nproc_per_node=$NPROC_PER_NODE \
     --rdzv_id=1234 --rdzv_backend=c10d \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
@@ -35,6 +35,6 @@ cmd="python -m torch.distributed.run
 
 
 echo $cmd
-NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
+NCCL_IB_DISABLE=1 NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
 
 
