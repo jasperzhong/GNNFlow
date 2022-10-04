@@ -34,6 +34,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     local_rank = int(os.environ["LOCAL_RANK"])
 
+    torch.distributed.all_reduce(torch.tensor(1).cuda())
+
     # Initialize the KVStore.
     if local_rank == 0:
         graph_services.set_kvstore_server(KVStoreServer())
