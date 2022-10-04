@@ -93,11 +93,8 @@ class DistributedTemporalSampler:
             mfgs.append([])
             if layer == 0:
                 for snapshot in range(self._num_snapshots):
-                    ret = self.sample_layer_global(
-                        target_vertices, timestamps, layer, snapshot)
-                    result = SamplingResultTorch()
-                    self._transform_output(ret, result)
-                    mfgs[layer].append(result)
+                    mfgs[layer].append(self.sample_layer_global(
+                        target_vertices, timestamps, layer, snapshot))
             else:
                 for snapshot in range(self._num_snapshots):
                     prev_mfg = mfgs[layer - 1][snapshot]
@@ -139,8 +136,11 @@ class DistributedTemporalSampler:
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
-                futures.append(self.sample_layer_local(
-                    partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot))
+                ret = self.sample_layer_local(
+                    partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot)
+                result = SamplingResultTorch()
+                self._transform_output(ret, result)
+                futures.append(result)
             else:
                 futures.append(rpc.rpc_async(
                     'worker{}'.format(worker_rank),
