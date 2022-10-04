@@ -66,7 +66,7 @@ parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
