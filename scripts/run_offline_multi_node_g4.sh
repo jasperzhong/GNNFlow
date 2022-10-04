@@ -31,8 +31,9 @@ cmd="torchrun \
     offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
-    --partition-strategy $PARTITION_STRATEGY"
+    --partition-strategy $PARTITION_STRATEGY \
+    --num-workers 4"
 
 echo $cmd
-NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=DEBUG OMP_NUM_THREADS=4 exec $cmd
+NCCL_DEBUG=INFO LOGLEVEL=DEBUG OMP_NUM_THREADS=4 exec $cmd
 

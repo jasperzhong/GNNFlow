@@ -53,28 +53,18 @@ class DistributedTemporalSampler:
                 target_vertices, timestamps, layer, snapshot, result, callback, \
                     handle = self._sampling_task_queue.get()
 
-                # ret = self.sample_layer_local(
-                #     target_vertices, timestamps, layer, snapshot)
+                ret = self.sample_layer_local(
+                    target_vertices, timestamps, layer, snapshot)
 
-                # result.row = torch.from_numpy(ret.row())
-                # result.col = torch.from_numpy(ret.col())
-                # result.num_src_nodes = ret.num_src_nodes()
-                # result.num_dst_nodes = ret.num_dst_nodes()
-                # result.all_nodes = torch.from_numpy(ret.all_nodes())
-                # result.all_timestamps = torch.from_numpy(ret.all_timestamps())
-                # result.delta_timestamps = torch.from_numpy(
-                #     ret.delta_timestamps())
-                # result.eids = torch.from_numpy(ret.eids())
-
-                # dummy data
-                result.row = torch.zeros(0, dtype=torch.int64)
-                result.col = torch.zeros(0, dtype=torch.int64)
-                result.num_src_nodes = target_vertices.shape[0]
-                result.num_dst_nodes = target_vertices.shape[0]
-                result.all_nodes = torch.from_numpy(target_vertices)
-                result.all_timestamps = torch.from_numpy(timestamps)
-                result.delta_timestamps = torch.zeros(0, dtype=torch.float32)
-                result.eids = torch.zeros(0, dtype=torch.int64)
+                result.row = torch.from_numpy(ret.row())
+                result.col = torch.from_numpy(ret.col())
+                result.num_src_nodes = ret.num_src_nodes()
+                result.num_dst_nodes = ret.num_dst_nodes()
+                result.all_nodes = torch.from_numpy(ret.all_nodes())
+                result.all_timestamps = torch.from_numpy(ret.all_timestamps())
+                result.delta_timestamps = torch.from_numpy(
+                    ret.delta_timestamps())
+                result.eids = torch.from_numpy(ret.eids())
 
                 callback(handle)
             time.sleep(0.01)
@@ -137,20 +127,17 @@ class DistributedTemporalSampler:
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue
-            # partition_vertices = torch.from_numpy(
-            #     target_vertices[partition_mask]).contiguous()
-            # partition_timestamps = torch.from_numpy(
-            #     timestamps[partition_mask]).contiguous()
-            partition_vertices = torch.tensor([1, 2, 3], dtype=torch.int64)
-            partition_timestamps = torch.tensor([1, 2, 3], dtype=torch.float32)
+            partition_vertices = torch.from_numpy(
+                target_vertices[partition_mask]).contiguous()
+            partition_timestamps = torch.from_numpy(
+                timestamps[partition_mask]).contiguous()
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
-                pass
-                # futures.append(self.sample_layer_local(
-                #     partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot))
+                futures.append(self.sample_layer_local(
+                    partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot))
             else:
-                futures.append(rpc.rpc_sync(
+                futures.append(rpc.rpc_async(
                     'worker{}'.format(worker_rank),
                     graph_services.sample_layer_local,
                     args=(partition_vertices, partition_timestamps, layer, snapshot)))
@@ -158,8 +145,10 @@ class DistributedTemporalSampler:
         # collect sampling results
         sampling_results = []
         for future in futures:
-            sampling_results.append(future)
-            # sampling_results.append(future.wait())
+            if isinstance(future, torch.futures.Future):
+                sampling_results.append(future.wait())
+            else:
+                sampling_results.append(future)
 
         # merge sampling results
         return self._merge_sampling_results(sampling_results)

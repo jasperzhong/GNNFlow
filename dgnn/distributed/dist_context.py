@@ -1,7 +1,6 @@
 import logging
 from typing import Optional
 import os
-import time
 
 import pandas as pd
 import torch
@@ -43,12 +42,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected, node_feats, edge_feats)
-    else:
-        time.sleep(30)
 
     # check
     # NB: barrier() causes hang here because it finds the wrong device.
-    # torch.distributed.all_reduce(torch.tensor(1).cuda())
+    torch.distributed.all_reduce(torch.tensor(1).cuda())
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
                  rank, graph_services.num_vertices(), graph_services.num_edges())
     logging.info("Rank %d: partition table shape: %s",
