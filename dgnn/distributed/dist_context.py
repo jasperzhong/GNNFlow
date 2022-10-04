@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 import os
+import time
 
 import pandas as pd
 import torch
@@ -34,8 +35,6 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     local_rank = int(os.environ["LOCAL_RANK"])
 
-    torch.distributed.all_reduce(torch.tensor(1).cuda())
-
     # Initialize the KVStore.
     if local_rank == 0:
         graph_services.set_kvstore_server(KVStoreServer())
@@ -44,18 +43,20 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected, node_feats, edge_feats)
+    else:
+        time.sleep(30)
 
     # check
     # NB: barrier() causes hang here because it finds the wrong device.
-    torch.distributed.all_reduce(torch.tensor(1).cuda())
+    # torch.distributed.all_reduce(torch.tensor(1).cuda())
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
                  rank, graph_services.num_vertices(), graph_services.num_edges())
     logging.info("Rank %d: partition table shape: %s",
                  rank, str(graph_services.get_partition_table().shape))
     logging.info("partition table content: %s",
-            (graph_services.get_partition_table() == -1).sum())
+                 (graph_services.get_partition_table() == -1).sum())
 
-    # debug 
+    # debug
     dgraph = graph_services.get_dgraph()
     logging.info("Rank %d: local number of vertices: %d, number of edges: %d",
-            rank, dgraph._dgraph.num_vertices(), dgraph._dgraph.num_edges())
+                 rank, dgraph._dgraph.num_vertices(), dgraph._dgraph.num_edges())
