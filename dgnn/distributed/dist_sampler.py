@@ -136,11 +136,8 @@ class DistributedTemporalSampler:
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
-                ret = self.sample_layer_local(
-                    partition_vertices.numpy(), partition_timestamps.numpy(), layer, snapshot)
-                result = SamplingResultTorch()
-                self._transform_output(ret, result)
-                futures.append(result)
+                futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
+                                                                 layer, snapshot))
             else:
                 futures.append(rpc.rpc_async(
                     'worker{}'.format(worker_rank),
