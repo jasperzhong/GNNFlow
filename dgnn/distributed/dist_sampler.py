@@ -56,18 +56,20 @@ class DistributedTemporalSampler:
                 ret = self.sample_layer_local(
                     target_vertices, timestamps, layer, snapshot)
 
-                result.row = torch.from_numpy(ret.row())
-                result.col = torch.from_numpy(ret.col())
-                result.num_src_nodes = ret.num_src_nodes()
-                result.num_dst_nodes = ret.num_dst_nodes()
-                result.all_nodes = torch.from_numpy(ret.all_nodes())
-                result.all_timestamps = torch.from_numpy(ret.all_timestamps())
-                result.delta_timestamps = torch.from_numpy(
-                    ret.delta_timestamps())
-                result.eids = torch.from_numpy(ret.eids())
+                self._transform_output(ret, result)
 
                 callback(handle)
             time.sleep(0.01)
+
+    def _transform_output(self, input: SamplingResult, output: SamplingResultTorch):
+        output.row = torch.from_numpy(input.row())
+        output.col = torch.from_numpy(input.col())
+        output.num_src_nodes = input.num_src_nodes()
+        output.num_dst_nodes = input.num_dst_nodes()
+        output.all_nodes = torch.from_numpy(input.all_nodes())
+        output.all_timestamps = torch.from_numpy(input.all_timestamps())
+        output.delta_timestamps = torch.from_numpy(input.delta_timestamps())
+        output.eids = torch.from_numpy(input.eids())
 
     def enqueue_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
                               layer: int, snapshot: int, result:  SamplingResultTorch, callback: Callable, handle: int):
@@ -91,8 +93,11 @@ class DistributedTemporalSampler:
             mfgs.append([])
             if layer == 0:
                 for snapshot in range(self._num_snapshots):
-                    mfgs[layer].append(self.sample_layer_global(
-                        target_vertices, timestamps, layer, snapshot))
+                    ret = self.sample_layer_global(
+                        target_vertices, timestamps, layer, snapshot)
+                    result = SamplingResultTorch()
+                    self._transform_output(ret, result)
+                    mfgs[layer].append(result)
             else:
                 for snapshot in range(self._num_snapshots):
                     prev_mfg = mfgs[layer - 1][snapshot]
