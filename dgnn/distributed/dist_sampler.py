@@ -125,6 +125,7 @@ class DistributedTemporalSampler:
         partition_ids = partition_table[target_vertices]
 
         futures = []
+        masks = []
         for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
@@ -143,6 +144,7 @@ class DistributedTemporalSampler:
                     'worker{}'.format(worker_rank),
                     graph_services.sample_layer_local,
                     args=(partition_vertices, partition_timestamps, layer, snapshot)))
+            masks.append(partition_mask)
 
         # collect sampling results
         sampling_results = []
@@ -153,70 +155,79 @@ class DistributedTemporalSampler:
                 sampling_results.append(future.wait())
 
         # merge sampling results
-        return self._merge_sampling_results(sampling_results)
+        return self._merge_sampling_results(sampling_results, masks)
 
-    def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch]) -> DGLBlock:
+    def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch], masks: List[torch.Tensor]) -> DGLBlock:
         """
         Merge sampling results from different partitions.
 
         Args:
             sampling_results: sampling results from different partitions.
+            masks: masks for each partition.
 
         Returns:
             merged sampling result.
         """
         assert len(sampling_results) > 0
 
-        col = np.array([], dtype=np.int64)
-        row = np.array([], dtype=np.int64)
-        total_num_src_nodes = 0
-        total_num_dst_nodes = 0
+        all_num_src_nodes = 0
+        all_num_dst_nodes = 0
+        all_num_edges = 0
         for sampling_result in sampling_results:
-            total_num_dst_nodes += sampling_result.num_dst_nodes
-            total_num_src_nodes += sampling_result.num_src_nodes
+            all_num_dst_nodes += sampling_result.num_dst_nodes
+            all_num_src_nodes += sampling_result.num_src_nodes
 
-        src_nodes = np.array([], dtype=np.int64)
-        dst_nodes = np.array([], dtype=np.int64)
-        src_timestamps = np.array([], dtype=np.float32)
-        dst_timestamps = np.array([], dtype=np.float32)
-        delta_timestamps = np.array([], dtype=np.float32)
-        eids = np.array([], dtype=np.int64)
+        all_num_edges = all_num_src_nodes - all_num_dst_nodes
 
-        col_offset = total_num_dst_nodes
-        row_offset = 0
+        all_col = np.arange(start=all_num_dst_nodes,
+                            stop=all_num_src_nodes, dtype=np.int64)
+        all_row = np.zeros(all_num_edges, dtype=np.int64)
+        all_src_nodes = np.array(all_num_edges, dtype=np.int64)
+        all_dst_nodes = np.array(all_num_dst_nodes, dtype=np.int64)
+        all_src_timestamps = np.array(all_num_edges, dtype=np.float32)
+        all_dst_timestamps = np.array(all_num_dst_nodes, dtype=np.float32)
+        all_delta_timestamps = np.zeros(all_num_edges, dtype=np.float32)
+        all_eids = np.zeros(all_num_edges, dtype=np.int64)
+
+        offset = 0
+        # use mask to restore dst node order
         for i, sampling_result in enumerate(sampling_results):
             num_dst_nodes = sampling_result.num_dst_nodes
-            src_nodes = np.concatenate(
-                (src_nodes, sampling_result.all_nodes[num_dst_nodes:]))
-            dst_nodes = np.concatenate(
-                (dst_nodes, sampling_result.all_nodes[:num_dst_nodes]))
-            src_timestamps = np.concatenate(
-                (src_timestamps, sampling_result.all_timestamps[num_dst_nodes:]))
-            dst_timestamps = np.concatenate(
-                (dst_timestamps, sampling_result.all_timestamps[:num_dst_nodes]))
-            delta_timestamps = np.concatenate(
-                (delta_timestamps, sampling_result.delta_timestamps))
-            eids = np.concatenate((eids, sampling_result.eids))
+            num_edges = sampling_result.num_src_nodes - num_dst_nodes
+            dst_nodes = sampling_result.all_nodes[:num_dst_nodes]
+            dst_timestamps = sampling_result.all_timestamps[:num_dst_nodes]
+            src_nodes = sampling_result.all_nodes[num_dst_nodes:]
+            src_timestamps = sampling_result.all_timestamps[num_dst_nodes:]
+            delta_timestamps = sampling_result.delta_timestamps
+            eids = sampling_result.eids
 
-            col = np.concatenate(
-                (col, sampling_result.col + col_offset - num_dst_nodes))
-            row = np.concatenate((row, sampling_result.row + row_offset))
+            mask = masks[i]
+            dst_idx = mask.nonzero(as_tuple=True)
+            all_row[offset:offset + num_edges] = dst_idx[sampling_result.row]
 
-            col_offset += sampling_result.num_src_nodes - num_dst_nodes
-            row_offset += sampling_result.num_dst_nodes
+            all_dst_nodes[dst_idx] = dst_nodes
+            all_dst_timestamps[dst_idx] = dst_timestamps
 
-        logging.debug('num_src_nodes: {}'.format(total_num_src_nodes))
-        logging.debug('num_dst_nodes: {}'.format(total_num_dst_nodes))
+            all_src_nodes[offset:offset + num_edges] = src_nodes
+            all_src_timestamps[offset:offset + num_edges] = src_timestamps
+            all_delta_timestamps[offset:offset + num_edges] = delta_timestamps
+            all_eids[offset:offset + num_edges] = eids
 
-        mfg = dgl.create_block((col, row), num_src_nodes=total_num_src_nodes,
-                               num_dst_nodes=total_num_dst_nodes)
+            offset += num_edges
 
-        all_nodes = np.concatenate([dst_nodes, src_nodes])
-        all_timestamps = np.concatenate([dst_timestamps, src_timestamps])
-        mfg.srcdata['ID'] = torch.from_numpy(all_nodes)
-        mfg.srcdata['ts'] = torch.from_numpy(all_timestamps)
-        mfg.edata['dt'] = torch.from_numpy(delta_timestamps)
-        mfg.edata['ID'] = torch.from_numpy(eids)
+        logging.debug('num_src_nodes: {}'.format(all_num_src_nodes))
+        logging.debug('num_dst_nodes: {}'.format(all_num_dst_nodes))
+
+        mfg = dgl.create_block((all_col, all_row), num_src_nodes=all_num_src_nodes,
+                               num_dst_nodes=all_num_dst_nodes)
+
+        all_nodes = np.concatenate([all_dst_nodes, all_src_nodes])
+        all_timestamps = np.concatenate(
+            [all_dst_timestamps, all_src_timestamps])
+        mfg.srcdata['ID'] = torch.from_numpy(all_nodes).contiguous()
+        mfg.srcdata['ts'] = torch.from_numpy(all_timestamps).contiguous()
+        mfg.edata['dt'] = torch.from_numpy(all_delta_timestamps).contiguous()
+        mfg.edata['ID'] = torch.from_numpy(all_eids).contiguous()
         return mfg
 
     def sample_layer_local(self, target_vertices:  np.ndarray, timestamps: np.ndarray,
