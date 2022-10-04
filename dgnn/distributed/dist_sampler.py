@@ -150,10 +150,10 @@ class DistributedTemporalSampler:
         # collect sampling results
         sampling_results = []
         for future in futures:
-            if isinstance(future, torch.futures.Future):
-                sampling_results.append(future.wait())
-            else:
+            if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
+            else:
+                sampling_results.append(future.wait())
 
         # merge sampling results
         return self._merge_sampling_results(sampling_results)
