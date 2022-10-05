@@ -313,7 +313,7 @@ class LDGPartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
             if partition_size > self._partition_capacity:
-                print(partition_size + "," + i)
+                print(str(partition_size) + "," + str(i) + ',' + str(vid) + '\n')
 
             if partition_size >= self._partition_capacity:
                 partition_score.append(-2147483647)
