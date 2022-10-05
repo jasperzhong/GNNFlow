@@ -101,5 +101,5 @@ class DistributedDynamicGraph:
                   timestamps: np.ndarray, eids: np.ndarray):
         return self._dgraph.add_edges(source_vertices, target_vertices, timestamps, eids)
 
-    def out_degree(self, vertex: int):
-        return self._dgraph.out_degree(vertex)
+    def out_degree(self, vertices: np.ndarray):
+        return self._dgraph.out_degree(vertices)
