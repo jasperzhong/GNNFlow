@@ -79,6 +79,7 @@ class Partitioner:
 
         # TODO: 1.1 is a heuristic setting
         self._partition_capacity = (max_node * 1.1) / self._num_partitions
+        print('partition capacity C is :{} \n'.format(self._partition_capacity))
 
         # dispatch edges to already assigned source nodes
         partitions = []
