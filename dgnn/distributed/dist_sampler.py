@@ -202,7 +202,7 @@ class DistributedTemporalSampler:
             eids = sampling_result.eids
 
             mask = masks[i]
-            dst_idx = mask.nonzero().numpy()
+            dst_idx = mask.nonzero().squeeze().numpy()
             all_row[offset:offset + num_edges] = dst_idx[sampling_result.row]
 
             all_dst_nodes[dst_idx] = dst_nodes
