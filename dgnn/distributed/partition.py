@@ -323,9 +323,6 @@ class LDGPartitioner(Partitioner):
 
             partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
 
-        if 1000 < vid < 2000:
-            print(partition_score)
-
         return np.argmax(partition_score)
 
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
