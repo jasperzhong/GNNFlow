@@ -308,7 +308,6 @@ class LDGPartitioner(Partitioner):
 
         # hyper parameter
         alpha = (self._num_partitions ** 0.5) * self._edges_partitioned / (self._max_node ** 1.5)
-        print("alpha is {}\n".format(alpha))
         gamma = 1.5
 
         for i in range(self._num_partitions):
@@ -322,9 +321,6 @@ class LDGPartitioner(Partitioner):
             if vid in self._neighbor_memory.keys():
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
-            if 1000 < vid < 2000:
-                print("vid {} : neighbour size :{}; partition : {} : size :{} "
-                      .format(vid, neighbour_in_partition_size, i, partition_size))
             partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
 
         if 1000 < vid < 2000:
@@ -338,6 +334,9 @@ class LDGPartitioner(Partitioner):
         for i in range(len(src_nodes)):
             pid = self.LDG(int(src_nodes[i]))
             partition_table[int(src_nodes[i])] = pid
+
+            # update partition_table simultaneously
+            self._partition_table[int(src_nodes[i])] = pid
 
             # update memory table
             if int(dst_nodes[i]) in self._neighbor_memory.keys():
