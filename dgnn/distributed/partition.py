@@ -300,8 +300,10 @@ class LDGPartitioner(Partitioner):
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
             load_penalty = 1 - float(partition_size) / float(self._partition_capacity)
-
             partition_score.append(load_penalty * neighbour_in_partition_size)
+
+        if 3000 < vid < 4000:
+            print(partition_score)
 
         return np.argmax(partition_score)
 
