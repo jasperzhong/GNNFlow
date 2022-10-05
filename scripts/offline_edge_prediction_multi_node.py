@@ -22,7 +22,6 @@ from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
-from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
