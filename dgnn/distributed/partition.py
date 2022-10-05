@@ -280,6 +280,7 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
         self._metrics[partition_id] += (
             timestamp - self._metrics[partition_id]) / self._num_edges[partition_id]
 
+
 # SOTA Partitioner
 class LDGPartitioner(Partitioner):
     """
@@ -299,8 +300,6 @@ class LDGPartitioner(Partitioner):
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
             load_penalty = 1 - float(partition_size) / float(self._partition_capacity)
-            if load_penalty < 0:
-                load_penalty = 0
 
             partition_score.append(load_penalty * neighbour_in_partition_size)
 
@@ -321,6 +320,7 @@ class LDGPartitioner(Partitioner):
                 self._neighbor_memory[int(dst_nodes[i])][pid].add(int(src_nodes[i]))
 
         return partition_table
+
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
