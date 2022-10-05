@@ -297,7 +297,9 @@ class LDGPartitioner(Partitioner):
             if vid in self._neighbor_memory.keys():
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
-            load_penalty = 1 - partition_size / self._partition_capacity
+            load_penalty = 1 - float(partition_size) / float(self._partition_capacity)
+            if load_penalty < 0:
+                load_penalty = 0
 
             partition_score.append(load_penalty * neighbour_in_partition_size)
 

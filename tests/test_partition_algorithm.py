@@ -75,7 +75,7 @@ class TestPartition(unittest.TestCase):
         for i in range(num_p):
             psize_list.append(ptable.tolist().count(i))
             print("Partition {} has {} nodes.\n".format(i, ptable.tolist().count(i)))
-        load_factor = np.max(psize_list) / np.min(psize_list) if np.min(psize_list) != 0 else 1
+        load_factor = np.max(psize_list) / (np.min(psize_list) if np.min(psize_list) != 0 else 1)
 
         overall_end = time.time()
 
