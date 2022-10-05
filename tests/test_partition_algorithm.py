@@ -11,11 +11,12 @@ class TestPartition(unittest.TestCase):
 
     def test_partition_graph(self):
 
-        dataset_name = 'REDDIT'
+        dataset_name = 'WIKI'
         p_stgy = 'hash'
         num_p = 4
         ingestion_batch_size = 100000
         dataset = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))  # LINUX
+        dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
 
         num_nodes = 0
         num_edges = 0
