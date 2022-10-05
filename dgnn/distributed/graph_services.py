@@ -112,17 +112,20 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                      target_vertices.numpy(), timestamps.numpy(), eids.numpy())
 
 
-def set_graph_metadata(num_vertices: int, num_edges: int, num_partitions: int):
+def set_graph_metadata(num_vertices: int, num_edges: int, max_vertex_id: int, num_partitions: int):
     """
     Set the graph metadata.
 
     Args:
         num_vertices (int): The number of vertices.
         num_edges (int): The number of edges.
+        max_vertex_id (int): The maximum vertex ID.
+        num_partitions (int): The number of partitions.
     """
     dgraph = get_dgraph()
     dgraph.set_num_vertices(num_vertices)
     dgraph.set_num_edges(num_edges)
+    dgraph.set_max_vertex_id(max_vertex_id)
     dgraph.set_num_partitions(num_partitions)
 
 

@@ -140,7 +140,7 @@ class Dispatcher:
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args=(self._max_node, self._num_edges, self._num_partitions))
+                             args=(len(self._nodes), self._num_edges, self._max_node, self._num_partitions))
 
     def broadcast_partition_table(self):
         """
