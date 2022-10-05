@@ -311,7 +311,11 @@ class LDGPartitioner(Partitioner):
             partition_table[int(src_nodes[i])] = pid
 
             # update memory table
-            self._neighbor_memory[int(dst_nodes[i])][pid].add(int(src_nodes[i]))
+            if int(dst_nodes[i]) in self._neighbor_memory.keys():
+                self._neighbor_memory[int(dst_nodes[i])][pid].add(int(src_nodes[i]))
+            else:
+                self._neighbor_memory[int(dst_nodes[i])] = [set() for i in range(self._num_partitions)]
+                self._neighbor_memory[int(dst_nodes[i])][pid].add(int(src_nodes[i]))
 
         return partition_table
 
