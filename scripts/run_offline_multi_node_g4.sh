@@ -35,5 +35,5 @@ cmd="torchrun \
     --num-workers 4"
 
 echo $cmd
-NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=INFO OMP_NUM_THREADS=4 exec $cmd
+NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=4 exec $cmd
 
