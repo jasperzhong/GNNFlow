@@ -236,7 +236,7 @@ class LeastLoadedPartitioner(Partitioner):
         partition_table = torch.zeros(len(src_nodes), dtype=torch.int8)
         for i in range(len(src_nodes)):
             partition_id = int(torch.argmin(self._metrics).item())
-            partition_table[int(src_nodes[i])] = partition_id
+            partition_table[i] = partition_id
             self.update_metrics_for_one_edge(partition_id,
                                              int(src_nodes[i]),
                                              int(dst_nodes[i]),
@@ -326,14 +326,16 @@ class LDGPartitioner(Partitioner):
 
             partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
 
+        # TODO: return a randomized partition for multiple maximum value
         return np.argmax(partition_score)
 
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                                        timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
+        # TODO: torch zeros is not good
         partition_table = torch.zeros(len(src_nodes), dtype=torch.int8)
         for i in range(len(src_nodes)):
             pid = self.LDG(int(src_nodes[i]))
-            partition_table[int(src_nodes[i])] = pid
+            partition_table[i] = pid
 
             # update partition_table simultaneously
             self._partition_table[int(src_nodes[i])] = pid
