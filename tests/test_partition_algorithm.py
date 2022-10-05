@@ -15,6 +15,7 @@ class TestPartition(unittest.TestCase):
         p_stgy = 'hash'
         num_p = 4
         ingestion_batch_size = 100000
+        undirected = True
         dataset = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))  # LINUX
         dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
 
@@ -36,6 +37,15 @@ class TestPartition(unittest.TestCase):
 
             num_nodes = num_nodes + len(np.unique(np.concatenate([src_nodes, dst_nodes])))
             num_edges = num_edges + len(eids)
+
+            # undirected
+            if undirected:
+                src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
+                dst_nodes_ext = np.concatenate([dst_nodes, src_nodes])
+                src_nodes = src_nodes_ext
+                dst_nodes = dst_nodes_ext
+                timestamps = np.concatenate([timestamps, timestamps])
+                eids = np.concatenate([eids, eids])
 
             src_nodes = torch.from_numpy(src_nodes)
             dst_nodes = torch.from_numpy(dst_nodes)
