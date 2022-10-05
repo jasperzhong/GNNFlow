@@ -70,11 +70,15 @@ class TestPartition(unittest.TestCase):
 
         # edge cut
         edge_cut = 0
+        tt = 0
         for idx, row in dataset.iterrows():
             u = int(row['src'])
             v = int(row['dst'])
             if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
                 edge_cut += 1
+            if tt < 1000:
+                print("u's partition is {}, while v's partition is {}".format(ptable[u], ptable[v]))
+            tt += 1
 
         cut_percentage = float(100.0 * float(edge_cut) / float(len(dataset)))
 
