@@ -193,8 +193,8 @@ def main():
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
 
-    num_nodes = dgraph.num_vertices()
-    num_edges = dgraph.num_edges()
+    max_node_id = dgraph.max_node_id()
+    max_edge_id = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
         args.data, shared_memory=args.local_world_size > 1,
@@ -206,7 +206,7 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
 
-    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
+    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=max_node_id + 1,
                  memory_device=device, memory_shared=args.local_world_size > 1)
     model.to(device)
 
@@ -228,8 +228,8 @@ def main():
         node_feats, edge_feats)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
-                                        num_edges, device,
+    cache = caches.__dict__[args.cache](args.cache_ratio, max_node_id + 1,
+                                        max_edge_id+1, device,
                                         node_feats, edge_feats,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)

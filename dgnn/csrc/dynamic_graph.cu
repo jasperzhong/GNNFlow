@@ -302,4 +302,6 @@ std::vector<NIDType> DynamicGraph::src_nodes() const {
 std::vector<EIDType> DynamicGraph::edges() const {
   return {edges_.begin(), edges_.end()};
 }
+
+NIDType DynamicGraph::max_node_id() const { return max_node_id_; }
 }  // namespace dgnn
