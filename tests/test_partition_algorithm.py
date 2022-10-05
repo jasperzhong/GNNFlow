@@ -77,7 +77,7 @@ class TestPartition(unittest.TestCase):
             if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
                 edge_cut += 1
             if tt < 1000:
-                print("u's partition is {}, while v's partition is {}".format(ptable[u], ptable[v]))
+                print("u({})'s partition is {}, while v({})'s partition is {}".format(u, ptable[u], v, ptable[v]))
             tt += 1
 
         cut_percentage = float(100.0 * float(edge_cut) / float(len(dataset)))
