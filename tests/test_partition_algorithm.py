@@ -55,6 +55,8 @@ class TestPartition(unittest.TestCase):
                 print("Test Partition; Dataset Name:{}; Partition ID:{}; num_edges:{}\n"
                       .format(dataset_name, idx, len(pt.eids)))
 
+            print("Current Partition Table size is :{}\n".format(len(test_partitioner.get_partition_table())))
+
             print("====== Dataset Range {} to {} finished ======\n".format(i, i + ingestion_batch_size))
 
         # load balance
