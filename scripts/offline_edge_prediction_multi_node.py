@@ -193,7 +193,7 @@ def main():
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
 
-    max_node_id = dgraph.max_node_id()
+    max_node_id = dgraph.max_vertex_id()
     max_edge_id = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(

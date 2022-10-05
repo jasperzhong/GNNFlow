@@ -57,6 +57,9 @@ class DistributedDynamicGraph:
         """
         self._num_edges = num_edges
 
+    def max_vertex_id(self) -> int:
+        return self._dgraph.max_vertex_id()
+
     def set_partition_table(self, partition_table: torch.Tensor):
         """
         Set the partition table.
