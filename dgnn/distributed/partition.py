@@ -235,7 +235,6 @@ class LeastLoadedPartitioner(Partitioner):
         partition_table = torch.zeros(len(src_nodes), dtype=torch.int8)
         for i in range(len(src_nodes)):
             partition_id = int(torch.argmin(self._metrics).item())
-            # TODO: bug?
             partition_table[int(src_nodes[i])] = partition_id
             self.update_metrics_for_one_edge(partition_id,
                                              int(src_nodes[i]),
@@ -323,6 +322,9 @@ class LDGPartitioner(Partitioner):
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
             partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
+
+        if 1000 < vid < 2000:
+            print(partition_score)
 
         return np.argmax(partition_score)
 
