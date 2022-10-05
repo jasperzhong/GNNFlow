@@ -46,6 +46,8 @@ class Partitioner:
         self._neighbor_memory = {}
         # ideal partition capacity
         self._partition_capacity = 0
+        # edges partitioned
+        self._edges_partitioned = 0
 
     def get_num_partitions(self) -> int:
         """
@@ -55,6 +57,13 @@ class Partitioner:
             int: The number of partitions.
         """
         return self._num_partitions
+
+    def set_edges_partitioned(self, val:int):
+        self._edges_partitioned = val
+        return
+
+    def get_edges_partitioned(self) -> int:
+        return self._edges_partitioned
 
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
@@ -77,8 +86,12 @@ class Partitioner:
             self._partition_table[self._max_node:] = self.UNASSIGNED
             self._max_node = max_node + 1
 
+        # update edges partitioned
+        self._edges_partitioned = self._edges_partitioned + len(src_nodes)
+
         # TODO: 1.1 is a heuristic setting
-        self._partition_capacity = (max_node * 1.1) / self._num_partitions
+        upsilon = 1.1
+        self._partition_capacity = (max_node * upsilon) / self._num_partitions
         print('partition capacity C is :{} \n'.format(self._partition_capacity))
 
         # dispatch edges to already assigned source nodes
@@ -293,17 +306,23 @@ class LDGPartitioner(Partitioner):
 
     def LDG(self, vid: int):
         partition_score = []
+
+        # hyper parameter
+        alpha = (self._num_partitions ** 0.5) * self._edges_partitioned / (self._max_node ** 1.5)
+        gamma = 1.5
+
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
+
+            if partition_size >= self._partition_capacity:
+                partition_score.append(-2147483647)
+                continue
+
             neighbour_in_partition_size = 0
             if vid in self._neighbor_memory.keys():
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
-            load_penalty = 1 - float(partition_size) / float(self._partition_capacity)
-            partition_score.append(load_penalty * neighbour_in_partition_size)
-
-        if 3000 < vid < 3100:
-            print(partition_score)
+            partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
 
         return np.argmax(partition_score)
 
