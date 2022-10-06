@@ -163,9 +163,6 @@ class Partitioner:
         partition_table = partition_table[inverse_idx]
         partition_table = partition_table.gather(0, sorted_idx.argsort(0))
 
-        partition_table2 = self._do_partition_for_unseen_nodes_impl(
-            src_nodes, dst_nodes_list, timestamps_list, eids_list)
-
         return partition_table
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
