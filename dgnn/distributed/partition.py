@@ -1,6 +1,7 @@
 import logging
 from typing import List, NamedTuple
 
+import numpy as np
 import torch
 
 
@@ -24,7 +25,7 @@ class Partitioner:
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, enable_neighbour_memory: bool = False):
         """
         Initialize the partitioner.
 
@@ -40,6 +41,14 @@ class Partitioner:
         # NID -> partition ID, maximum 128 partitions
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
         self._partition_table[:] = self.UNASSIGNED
+
+        # key: NID -> value: List[num_partitions]
+        self._enable_neighbor_memory = enable_neighbour_memory
+        self._neighbor_memory = {}
+        # ideal partition capacity
+        self._partition_capacity = 0
+        # edges partitioned
+        self._edges_partitioned = 0
 
     def get_num_partitions(self) -> int:
         """
@@ -71,10 +80,28 @@ class Partitioner:
             self._partition_table[self._max_node+1:] = self.UNASSIGNED
             self._max_node = max_node
 
+        # update edges partitioned
+        self._edges_partitioned = self._edges_partitioned + len(src_nodes)
+
+        # TODO: 1.1 is a heuristic setting
+        upsilon = 1.1
+        self._partition_capacity = (max_node * upsilon) / self._num_partitions
+        print('partition capacity C is :{} \n'.format(self._partition_capacity))
+
+
         # dispatch edges to already assigned source nodes
         partitions = []
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
+
+            # enable memory
+            if self._enable_neighbor_memory:
+                for src_id, dst_id in zip(src_nodes[mask], dst_nodes[mask]):
+                    if dst_id not in self._neighbor_memory.keys():
+                        self._neighbor_memory[dst_id] = [set() for i in range(self._num_partitions)]
+                    else:
+                        self._neighbor_memory[dst_id][i].add(src_id)
+
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
@@ -278,6 +305,61 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
         self._num_edges[src_node] += count
         return count
 
+# SOTA Partitoner
+class LDGPartitioner(Partitioner):
+    """
+    Linear Deterministic Greedy (LDG) Partiton Algorithm
+    """
+
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, assign_with_dst_node, True)
+
+    def LDG(self, vid: int):
+        partition_score = []
+
+        # hyper parameter
+        alpha = (self._num_partitions ** 0.5) * self._edges_partitioned / (self._max_node ** 1.5)
+        gamma = 1.5
+
+        for i in range(self._num_partitions):
+            partition_size = self._partition_table.tolist().count(i)
+            if i == 0 and 1000 < vid < 2000:
+                print(partition_size)
+
+            if partition_size >= self._partition_capacity:
+                partition_score.append(-2147483647)
+                continue
+
+            neighbour_in_partition_size = 0
+            if vid in self._neighbor_memory.keys():
+                neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
+
+            partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
+
+        partition_score = np.array(partition_score)
+
+        return np.random.choice(np.where(partition_score == partition_score.max())[0])
+        # return np.argmax(partition_score)
+
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
+        for i in range(len(unique_src_nodes)):
+            pid = self.LDG(unique_src_nodes[i])
+            partition_table[i] = pid
+            self._partition_table[unique_src_nodes[i]] = pid
+
+            for dst_nid in dst_nodes_list[i]:
+                # update memory table
+                if int(dst_nid) in self._neighbor_memory.keys():
+                    self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
+                else:
+                    self._neighbor_memory[int(dst_nid)] = [set() for i in range(self._num_partitions)]
+                    self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
+
+        return partition_table
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
@@ -291,7 +373,6 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
     Returns:
         Partitioner: The partitioner.
     """
-    # TODO(tianzuo): add a test for existing partitioners in tests/
     if partition_strategy == "hash":
         return HashPartitioner(num_partitions, assign_with_dst_node)
     elif partition_strategy == "roundrobin":
@@ -306,6 +387,8 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
     elif partition_strategy == "timestampavg":
         return LeastLoadedPartitionerByTimestampAvg(
             num_partitions, assign_with_dst_node)
-    # TODO(tianzuo): SOTA partitioners.
+    elif partition_strategy == "ldg":
+        return LDGPartitioner(num_partitions, assign_with_dst_node)
+
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
