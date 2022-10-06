@@ -145,6 +145,27 @@ class Partitioner:
         Returns:
             partition table (torch.Tensor): The partition table for the unseen source nodes.
         """
+        # group by src_nodes
+        sorted_idx = torch.argsort(src_nodes)
+        unique_src_nodes, idx, counts = torch.unique(
+            src_nodes[sorted_idx], return_inverse=True, return_counts=True)
+        split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
+        dst_nodes_list = [dst_nodes[idx] for idx in split_idx]
+        timestamps_list = [timestamps[idx] for idx in split_idx]
+        eids_list = [eids[idx] for idx in split_idx]
+
+        # partition for each src_node
+        partition_table = self._do_partition_for_unseen_nodes_impl(
+            unique_src_nodes, dst_nodes_list, timestamps_list, eids_list)
+
+        # restore partition table to the original src_nodes's size
+        partition_table = partition_table[idx]
+        return partition_table
+
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
         raise NotImplementedError
 
 
@@ -155,11 +176,11 @@ class HashPartitioner(Partitioner):
     It assigns the source vertex to a partition by the hash value of the vertex ID.
     """
 
-    def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                                       timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
-        partition_table = src_nodes.clone().detach()
-        partition_table.apply_(lambda x: hash(str(x)) % self._num_partitions)
-        return partition_table.to(torch.int8)
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        return torch.fmod(unique_src_nodes, self._num_partitions).to(torch.int8)
 
 
 class RoundRobinPartitioner(Partitioner):
@@ -169,9 +190,11 @@ class RoundRobinPartitioner(Partitioner):
     It assigns the source vertex to a partition by the round-robin algorithm.
     """
 
-    def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                                       timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
-        return (torch.arange(0, len(src_nodes)) % self._num_partitions).to(torch.int8)
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        return torch.arange(unique_src_nodes.shape[0]) % self._num_partitions
 
 
 class LeastLoadedPartitioner(Partitioner):
@@ -186,31 +209,20 @@ class LeastLoadedPartitioner(Partitioner):
         super().__init__(num_partitions, assign_with_dst_node)
         self._metrics = torch.zeros(num_partitions, dtype=torch.float32)
 
-    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
-                                    dst_node: int, timestamp: float, eid: int):
-        """
-        Update the metrics of the partition for one edge.
-
-        Args:
-            partition_id (int): The current partition of the edge.
-            src_node (int): The source node of the edge.
-            dst_node (int): The destination node of the edge.
-            timestamp (float): The timestamp of the edge.
-            eid (int): The edge ID of the edge.
-        """
-        raise NotImplementedError
-
-    def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                                       timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
-        partition_table = torch.zeros(len(src_nodes), dtype=torch.int8)
-        for i in range(len(src_nodes)):
-            partition_id = int(torch.argmin(self._metrics).item())
-            partition_table[i] = partition_id
-            self.update_metrics_for_one_edge(partition_id,
-                                             int(src_nodes[i]),
-                                             int(dst_nodes[i]),
-                                             float(timestamps[i]), int(eids[i]))
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
+        for i in range(len(unique_src_nodes)):
+            partition_table[i] = torch.argmin(self._metrics)
+            self._metrics[partition_table[i]] += self._compute_metric(
+                int(unique_src_nodes[i]), dst_nodes_list[i], timestamps_list[i], eids_list[i])
         return partition_table
+
+    def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
+                        timestamps: torch.Tensor, eids: torch.Tensor) -> float:
+        raise NotImplementedError
 
 
 class LeastLoadedPartitionerByEdgeCount(LeastLoadedPartitioner):
@@ -220,9 +232,9 @@ class LeastLoadedPartitionerByEdgeCount(LeastLoadedPartitioner):
     It assigns the source vertex to a partition with the least number of edges.
     """
 
-    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
-                                    dst_node: int, timestamp: float, eid: int) -> float:
-        self._metrics[partition_id] += 1
+    def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
+                        timestamps: torch.Tensor, eids: torch.Tensor) -> float:
+        return len(dst_nodes)
 
 
 class LeastLoadedPartitionerByTimestampSum(LeastLoadedPartitioner):
@@ -232,9 +244,9 @@ class LeastLoadedPartitionerByTimestampSum(LeastLoadedPartitioner):
     It assigns the source vertex to a partition with the least sum of timestamps.
     """
 
-    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
-                                    dst_node: int, timestamp: float, eid: int) -> float:
-        self._metrics[partition_id] += timestamp
+    def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
+                        timestamps: torch.Tensor, eids: torch.Tensor) -> float:
+        return timestamps.sum().item()
 
 
 class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
@@ -252,11 +264,14 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
         super().__init__(num_partitions, assign_with_dst_node)
         self._num_edges = torch.zeros(num_partitions, dtype=torch.int64)
 
-    def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
-                                    dst_node: int, timestamp: float, eid: int) -> float:
-        self._num_edges[partition_id] += 1
-        self._metrics[partition_id] += (
-            timestamp - self._metrics[partition_id]) / self._num_edges[partition_id]
+    def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
+                        timestamps: torch.Tensor, eids: torch.Tensor) -> float:
+        count = len(dst_nodes)
+        average = self._metrics[src_node]
+        self._metrics[src_node] += (timestamps.sum().item() -
+                                    average * count) / (self._num_edges[src_node] + count)
+        self._num_edges[src_node] += count
+        return count
 
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):

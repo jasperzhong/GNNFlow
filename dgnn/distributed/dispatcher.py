@@ -9,6 +9,7 @@ import torch.distributed.rpc as rpc
 
 import dgnn.distributed.graph_services as graph_services
 from dgnn.distributed.partition import get_partitioner
+from dgnn.distributed.utils import local_world_size
 
 global dispatcher
 dispatcher = None
@@ -23,7 +24,7 @@ class Dispatcher:
         self._rank = torch.distributed.get_rank()
         assert self._rank == 0, "Only rank 0 can initialize the dispatcher."
         self._num_partitions = num_partitions
-        self._local_world_size = int(os.environ["LOCAL_WORLD_SIZE"])
+        self._local_world_size = local_world_size()
         self._partitioner = get_partitioner(partition_strategy, num_partitions)
 
         self._num_edges = 0

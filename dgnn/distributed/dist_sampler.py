@@ -16,6 +16,7 @@ import dgnn.distributed.graph_services as graph_services
 from dgnn import TemporalSampler
 from dgnn.distributed.common import SamplingResultTorch
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
+from dgnn.distributed.utils import local_rank, local_world_size
 from libdgnn import SamplingResult
 
 
@@ -36,8 +37,8 @@ class DistributedTemporalSampler:
         self._dgraph = dgraph
 
         self._rank = torch.distributed.get_rank()
-        self._local_rank = int(os.environ['LOCAL_RANK'])
-        self._local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
+        self._local_rank = local_rank()
+        self._local_world_size = local_world_size()
         self._num_layers = self._sampler._num_layers
         self._num_snapshots = self._sampler._num_snapshots
         self._partition_table = self._dgraph.get_partition_table()
