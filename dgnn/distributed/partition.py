@@ -68,7 +68,7 @@ class Partitioner:
         if max_node > self._max_node:
             self._partition_table.resize_(max_node + 1)
             self._partition_table[self._max_node+1:] = self.UNASSIGNED
-            self._max_node = max_node 
+            self._max_node = max_node
 
         # dispatch edges to already assigned source nodes
         partitions = []
@@ -219,10 +219,6 @@ class LeastLoadedPartitionerByEdgeCount(LeastLoadedPartitioner):
 
     It assigns the source vertex to a partition with the least number of edges.
     """
-
-    def update_metrics(self, partitions: List[Partition]):
-        for i in range(self._num_partitions):
-            self._metrics[i] += len(partitions[i].src_nodes)
 
     def update_metrics_for_one_edge(self, partition_id: int, src_node: int,
                                     dst_node: int, timestamp: float, eid: int) -> float:
