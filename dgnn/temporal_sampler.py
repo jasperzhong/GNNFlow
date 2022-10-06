@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 import dgl
 import numpy as np
@@ -45,6 +45,7 @@ class TemporalSampler:
         self._sampler = _TemporalSampler(
             graph._dgraph, fanouts, sample_strategy, num_snapshots,
             snapshot_time_window, prop_time, seed)
+        self._num_layers = len(fanouts)
         self._num_snapshots = num_snapshots
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
@@ -63,7 +64,9 @@ class TemporalSampler:
             target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
 
-    def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray, layer: int, snapshot: int) -> DGLBlock:
+    def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray,
+                     layer: int, snapshot: int, to_dgl_block: bool = True) \
+            -> Union[DGLBlock, SamplingResult]:
         """
         Sample neighbors of given vertices in a specific layer and snapshot.
 
@@ -74,11 +77,13 @@ class TemporalSampler:
             snapshot: snapshot to sample.
 
         Returns:
-            message flow graph for the specific layer and snapshot.
+            either a DGLBlock or a SamplingResult.
         """
         sampling_result = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot)
-        return self._to_dgl_block_layer_snapshot(sampling_result)
+        if to_dgl_block:
+            return self._to_dgl_block_layer_snapshot(sampling_result)
+        return sampling_result
 
     def _to_dgl_block(self, sampling_results: SamplingResult) -> List[List[DGLBlock]]:
         mfgs = list()
@@ -101,7 +106,7 @@ class TemporalSampler:
     def _to_dgl_block_layer_snapshot(self, sampling_result: SamplingResult) -> DGLBlock:
         mfg = dgl.create_block(
             (sampling_result.col(),
-            sampling_result.row()),
+             sampling_result.row()),
             num_src_nodes=sampling_result.num_src_nodes(),
             num_dst_nodes=sampling_result.num_dst_nodes())
         mfg.srcdata['ID'] = torch.from_numpy(sampling_result.all_nodes())

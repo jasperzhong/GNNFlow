@@ -60,7 +60,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
   block->start_timestamp =
       std::min(block->start_timestamp, timestamps[start_idx]);
   block->end_timestamp = timestamps[start_idx + num_edges - 1];
-}
+}  // namespace dgnn
 
 std::size_t GetSharedMemoryMaxSize() {
   std::size_t max_size = 0;

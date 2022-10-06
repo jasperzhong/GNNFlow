@@ -81,6 +81,8 @@ class DynamicGraph {
   std::vector<NIDType> src_nodes() const;
   std::vector<EIDType> edges() const;
 
+  NIDType max_node_id() const;
+
   std::vector<std::size_t> out_degree(const std::vector<NIDType>& nodes) const;
 
   // NB: it is inefficient to call this function every time for each node. Debug

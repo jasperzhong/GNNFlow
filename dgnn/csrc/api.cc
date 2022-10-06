@@ -56,9 +56,13 @@ PYBIND11_MODULE(libdgnn, m) {
       .def("nodes",
            [](const DynamicGraph &dgraph) { return vec2npy(dgraph.nodes()); })
       .def("src_nodes",
-           [](const DynamicGraph &dgraph) { return vec2npy(dgraph.src_nodes()); })
+           [](const DynamicGraph &dgraph) {
+             return vec2npy(dgraph.src_nodes());
+           })
       .def("edges",
            [](const DynamicGraph &dgraph) { return vec2npy(dgraph.edges()); })
+      .def("max_vertex_id",
+           [](const DynamicGraph &dgraph) { return dgraph.max_node_id(); })
       .def("get_temporal_neighbors",
            [](const DynamicGraph &dgraph, NIDType node) {
              auto neighbors = dgraph.get_temporal_neighbors(node);

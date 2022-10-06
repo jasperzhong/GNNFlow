@@ -33,8 +33,7 @@ class TemporalBlockAllocator {
   TemporalBlockAllocator(std::size_t initial_pool_size,
                          std::size_t maximum_pool_size,
                          std::size_t minimum_block_size,
-                         MemoryResourceType mem_resource_type,
-                         int device);
+                         MemoryResourceType mem_resource_type, int device);
 
   /**
    * @brief Destructor.

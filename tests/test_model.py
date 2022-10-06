@@ -14,7 +14,7 @@ class TestModel(unittest.TestCase):
         node_feats, edge_feats = load_feat('REDDIT')
         train_df, val_df, test_df, df = load_dataset('REDDIT')
         model_config, data_config = get_default_config('TGN', 'REDDIT')
-        dgraph = build_dynamic_graph(df, **data_config)
+        dgraph = build_dynamic_graph(**data_config, dataset_df=df)
         gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
         gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
         batch_size = 600

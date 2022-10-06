@@ -160,7 +160,6 @@ def get_batch(df: pd.DataFrame, batch_size: int):
 
 
 def build_dynamic_graph(
-        dataset_df: pd.DataFrame,
         initial_pool_size: int,
         maximum_pool_size: int,
         mem_resource_type: str,
@@ -169,6 +168,7 @@ def build_dynamic_graph(
         insertion_policy: str,
         undirected: bool,
         device: int = 0,
+        dataset_df: Optional[pd.DataFrame] = None,
         *args, **kwargs) -> DynamicGraph:
     """
     Builds a dynamic graph from the given dataframe.
@@ -186,10 +186,13 @@ def build_dynamic_graph(
         undirected: whether the graph is undirected.
         device: the device to use.
     """
-    src = dataset_df['src'].values.astype(np.int64)
-    dst = dataset_df['dst'].values.astype(np.int64)
-    ts = dataset_df['time'].values.astype(np.float32)
-    eids = dataset_df['eid'].values.astype(np.int64)
+    if dataset_df is None:
+        src = dst = ts = eids = None
+    else:
+        src = dataset_df['src'].values.astype(np.int64)
+        dst = dataset_df['dst'].values.astype(np.int64)
+        ts = dataset_df['time'].values.astype(np.float32)
+        eids = dataset_df['eid'].values.astype(np.int64)
 
     dgraph = DynamicGraph(
         initial_pool_size,
