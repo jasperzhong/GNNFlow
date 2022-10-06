@@ -12,7 +12,7 @@ class TestPartition(unittest.TestCase):
     def test_partition_graph(self):
 
         dataset_name = 'WIKI'
-        p_stgy = 'ldg'
+        p_stgy = 'roundrobin'
         num_p = 4
         ingestion_batch_size = 100000
         undirected = True
@@ -99,7 +99,7 @@ class TestPartition(unittest.TestCase):
         print("Edge Cut Percentage is :{}%; Number of Edge Cut: {}; Number of Total Edge: {}\n"
               .format(cut_percentage, edge_cut, len(dataset)))
 
-    def test_partition_graph(self):
+    def test_new_partition_graph(self):
 
         dataset_name = 'WIKI'
         p_stgy = 'roundrobin'
