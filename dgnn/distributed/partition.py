@@ -180,7 +180,9 @@ class HashPartitioner(Partitioner):
                                             dst_nodes_list: List[torch.Tensor],
                                             timestamps_list: List[torch.Tensor],
                                             eids_list: List[torch.Tensor]) -> torch.Tensor:
-        return torch.fmod(unique_src_nodes, self._num_partitions).to(torch.int8)
+        partition_table = unique_src_nodes.clone().detach()
+        partition_table.apply_(lambda x: hash(str(x)) % self._num_partitions)
+        return partition_table.to(torch.int8)
 
 
 class RoundRobinPartitioner(Partitioner):
