@@ -166,8 +166,6 @@ class Partitioner:
         partition_table2 = self._do_partition_for_unseen_nodes_impl(
             src_nodes, dst_nodes_list, timestamps_list, eids_list)
 
-        assert torch.all(partition_table == partition_table2), "partition_table: {}, partition_table2: {}".format(
-            partition_table, partition_table2)
         return partition_table
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
