@@ -1,5 +1,4 @@
 from typing import List, Optional
-from numpy import int32
 
 import torch
 import torch.distributed.rpc as rpc
@@ -39,14 +38,14 @@ class KVStoreServer:
         if mode == 'node':
             for key, tensor in zip(keys, tensors):
                 self._node_feat_map[key] = tensor
-
-        if mode == 'edge':
+        elif mode == 'edge':
             for key, tensor in zip(keys, tensors):
                 self._edge_feat_map[key] = tensor
-
-        if mode == 'memory':
+        elif mode == 'memory':
             for key, tensor in zip(keys, tensors):
                 self._memory_map[key] = tensor
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
     def pull(self, keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
         """
@@ -60,12 +59,12 @@ class KVStoreServer:
         """
         if mode == 'node':
             return [self._node_feat_map[key] for key in keys]
-
-        if mode == 'edge':
+        elif mode == 'edge':
             return [self._edge_feat_map[key] for key in keys]
-
-        if mode == 'memory':
+        elif mode == 'memory':
             return [self._memory_map[key] for key in keys]
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
 
 class KVStoreClient:
@@ -76,8 +75,8 @@ class KVStoreClient:
     """
 
     def __init__(self, partition_table: torch.Tensor,
-                 num_partitions: int32,
-                 num_workers_per_machine: int32):
+                 num_partitions: int,
+                 num_workers_per_machine: int):
         self._partition_table = partition_table
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
@@ -98,9 +97,7 @@ class KVStoreClient:
         partition_table = self._partition_table
         if mode == 'edge':
             if nid is None:
-                raise ValueError(
-                    'Nid is None when pushing edge features'
-                )
+                raise ValueError('Nid is None when pushing edge features')
             # get the partition_ids using nid
             partition_ids = partition_table[nid]
         else:
@@ -116,16 +113,14 @@ class KVStoreClient:
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
 
-            futures.append(rpc.rpc_async(
-                'worker{}'.format(worker_rank)),
-                graph_services.push_tensors,
-                args=(partition_keys, tensors, mode))
+            futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
+                graph_services.push_tensors, args=(partition_keys, tensors, mode)))
 
         # TODO: futures need wait?
         for future in futures:
             future.wait()
 
-    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
+    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor]=None) -> List[torch.Tensor]:
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
@@ -139,35 +134,33 @@ class KVStoreClient:
             List[torch.Tensor]: The tensors.
         """
         # dispatch different keys to different partitions
-        partition_table = self._partition_table
+        partition_table=self._partition_table
         if mode == 'edge':
             if nid is None:
                 raise ValueError(
                     'Nid is None when fetching edge features'
                 )
             # get the partition_ids using nid
-            partition_ids = partition_table[nid]
+            partition_ids=partition_table[nid]
         else:
-            partition_ids = partition_table[keys]
+            partition_ids=partition_table[keys]
 
-        futures = []
+        futures=[]
         for partition_id in range(self._num_partitions):
-            partition_mask = partition_ids == partition_id
+            partition_mask=partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue
             # nid and keys are in the same positions
-            partition_keys = keys[partition_mask]
+            partition_keys=keys[partition_mask]
 
             # local rank 0 in those partitions
-            worker_rank = partition_id * self._num_workers_per_machine
+            worker_rank=partition_id * self._num_workers_per_machine
 
-            futures.append(rpc.rpc_async(
-                'worker{}'.format(worker_rank)),
-                graph_services.pull_tensors,
-                args=(partition_keys, mode))
+            futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
+                graph_services.pull_tensors, args=(partition_keys, mode)))
 
         # collect pull results
-        pull_results = []
+        pull_results=[]
         for future in futures:
             pull_results.append(future.wait())
 

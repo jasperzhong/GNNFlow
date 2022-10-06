@@ -81,6 +81,10 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   CHECK_EQ(src_nodes.size(), timestamps.size());
   CHECK_EQ(src_nodes.size(), eids.size());
 
+  int device;
+  CUDA_CALL(cudaGetDevice(&device));
+  LOG(DEBUG) << "device: " << device << " graph device: " << device_;
+
   // NB: it seems to be necessary to set the device again.
   CUDA_CALL(cudaSetDevice(device_));
 
@@ -88,6 +92,8 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   nodes_.insert(src_nodes.begin(), src_nodes.end());
   nodes_.insert(dst_nodes.begin(), dst_nodes.end());
   edges_.insert(eids.begin(), eids.end());
+
+  nodes_.insert(src_nodes.begin(), src_nodes.end());
 
   // add nodes
   NIDType max_node =
@@ -296,4 +302,6 @@ std::vector<NIDType> DynamicGraph::src_nodes() const {
 std::vector<EIDType> DynamicGraph::edges() const {
   return {edges_.begin(), edges_.end()};
 }
+
+NIDType DynamicGraph::max_node_id() const { return max_node_id_; }
 }  // namespace dgnn

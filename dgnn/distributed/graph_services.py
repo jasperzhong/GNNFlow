@@ -1,13 +1,19 @@
 import logging
+import time
 from typing import List, Tuple
 
 import torch
 import torch.distributed
 
 from dgnn import DynamicGraph, TemporalSampler
+from dgnn.distributed.common import SamplingResultTorch
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
 from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 from dgnn.distributed.kvstore import KVStoreServer
+from dgnn.distributed.utils import HandleManager
+
+global handle_manager
+handle_manager = HandleManager()
 
 global DGRAPH
 global DSAMPLER
@@ -108,17 +114,20 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
                      target_vertices.numpy(), timestamps.numpy(), eids.numpy())
 
 
-def set_graph_metadata(num_vertices: int, num_edges: int, num_partitions: int):
+def set_graph_metadata(num_vertices: int, num_edges: int, max_vertex_id: int, num_partitions: int):
     """
     Set the graph metadata.
 
     Args:
         num_vertices (int): The number of vertices.
         num_edges (int): The number of edges.
+        max_vertex_id (int): The maximum vertex ID.
+        num_partitions (int): The number of partitions.
     """
     dgraph = get_dgraph()
     dgraph.set_num_vertices(num_vertices)
     dgraph.set_num_edges(num_edges)
+    dgraph.set_max_vertex_id(max_vertex_id)
     dgraph.set_num_partitions(num_partitions)
 
 
@@ -194,7 +203,8 @@ def get_temporal_neighbors(vertex: int) -> Tuple[torch.Tensor, torch.Tensor, tor
     pass
 
 
-def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, layer: int, snapshot: int):
+def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
+                       layer: int, snapshot: int) -> SamplingResultTorch:
     """
     Sample neighbors of given vertices in a specific layer and snapshot locally.
 
@@ -207,8 +217,26 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor, 
     Returns:
         torch.Tensor: The temporal neighbors of the vertex.
     """
+    logging.debug("Rank %d: receiving sample_layer_local request. #target_vertices: %d",
+                  torch.distributed.get_rank(), target_vertices.size(0))
+
+    def callback(handle: int):
+        global handle_manager
+        handle_manager.mark_done(handle)
+
     dsampler = get_dsampler()
-    return dsampler.sample_layer_local(target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
+    ret = SamplingResultTorch()
+    handle = handle_manager.allocate_handle()
+    dsampler.enqueue_sampling_task(
+        target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret, callback, handle)
+
+    # Wait for the sampling task to finish.
+    while not handle_manager.poll(handle):
+        time.sleep(0.01)
+
+    logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
+                  torch.distributed.get_rank(), handle, ret.num_src_nodes)
+    return ret
 
 
 def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
@@ -229,9 +257,10 @@ def pull_tensors(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
 
     Args:
         keys (torch.Tensor): The key of the tensors.
+        mode (str): The mode of the pull operation.
 
     Returns:
-        List[torch.Tensor]: The tensors.
+        List[torch.Tensor]: The pulled tensors.
     """
     kvstore_server = get_kvstore_server()
     return kvstore_server.pull(keys, mode)

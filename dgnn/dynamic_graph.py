@@ -129,6 +129,9 @@ class DynamicGraph:
     def num_source_vertices(self) -> int:
         return self._dgraph.num_source_vertices()
 
+    def max_vertex_id(self) -> int:
+        return self._dgraph.max_vertex_id()
+
     def num_edges(self) -> int:
         return self._dgraph.num_edges()
 

@@ -22,7 +22,6 @@ from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
 from dgnn.distributed.dist_graph import DistributedDynamicGraph
-from dgnn.distributed.dist_sampler import DistributedTemporalSampler
 from dgnn.models.dgnn import DGNN
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
@@ -58,7 +57,7 @@ parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
 
 # distributed
-parser.add_argument("--partition", action="store_true", 
+parser.add_argument("--partition", action="store_true",
                     help="whether to partition the graph")
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
@@ -66,7 +65,8 @@ parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.DEBUG)
+
+logging.basicConfig(level=logging.INFO)
 logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
@@ -119,7 +119,7 @@ def main():
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group('nccl')
+        torch.distributed.init_process_group('gloo')
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
@@ -194,11 +194,11 @@ def main():
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
 
-    num_nodes = dgraph.num_vertices()
-    num_edges = dgraph.num_edges()
+    max_node_id = dgraph.max_vertex_id() + 1
+    max_edge_id = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.distributed,
+        args.data, shared_memory=args.local_world_size > 1,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
@@ -207,11 +207,12 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
 
-    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.distributed)
+
+    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=max_node_id,
+                 memory_device=device, memory_shared=args.local_world_size > 1)
     model.to(device)
 
-    if args.distributed:
+    if args.partition:
         assert isinstance(dgraph, DistributedDynamicGraph)
         sampler = TemporalSampler(dgraph._dgraph, **model_config)
         graph_services.set_dsampler(sampler)
@@ -229,8 +230,8 @@ def main():
         node_feats, edge_feats)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
-                                        num_edges, device,
+    cache = caches.__dict__[args.cache](args.cache_ratio, max_node_id,
+                                        max_edge_id, device,
                                         node_feats, edge_feats,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)

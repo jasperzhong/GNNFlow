@@ -1,5 +1,5 @@
 #!/bin/bash
-INTERFACE="eth2"
+INTERFACE="ens5"
 
 MODEL=$1
 DATA=$2
@@ -7,10 +7,10 @@ CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${5:-hash}"
 
-HOST_NODE_ADDR=10.28.1.16
+HOST_NODE_ADDR=172.31.34.17
 HOST_NODE_PORT=29400
 NNODES=2
-NPROC_PER_NODE=2
+NPROC_PER_NODE=1
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
@@ -31,8 +31,9 @@ cmd="torchrun \
     offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
-    --partition-strategy $PARTITION_STRATEGY"
+    --partition-strategy $PARTITION_STRATEGY \
+    --num-workers 4"
 
 echo $cmd
-NCCL_IB_DISABLE=1 NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
+NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=4 exec $cmd
 

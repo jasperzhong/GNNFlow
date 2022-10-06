@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 import os
 
 import pandas as pd
@@ -50,3 +49,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                  rank, graph_services.num_vertices(), graph_services.num_edges())
     logging.info("Rank %d: partition table shape: %s",
                  rank, str(graph_services.get_partition_table().shape))
+
+    dgraph = graph_services.get_dgraph()
+    logging.info("Rank %d: local number of vertices: %d, number of edges: %d",
+                 rank, dgraph._dgraph.num_vertices(), dgraph._dgraph.num_edges())

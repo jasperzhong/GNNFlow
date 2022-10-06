@@ -21,6 +21,7 @@ class DistributedDynamicGraph:
         self._partition_table = None
         self._num_vertices = 0
         self._num_edges = 0
+        self._max_vertex_id = 0
 
     def num_vertices(self) -> int:
         """
@@ -78,6 +79,12 @@ class DistributedDynamicGraph:
         """
         self._num_edges = num_edges
 
+    def max_vertex_id(self) -> int:
+        return self._max_vertex_id
+
+    def set_max_vertex_id(self, max_vertex_id: int):
+        self._max_vertex_id = max_vertex_id
+
     def set_partition_table(self, partition_table: torch.Tensor):
         """
         Set the partition table.
@@ -122,5 +129,5 @@ class DistributedDynamicGraph:
                   timestamps: np.ndarray, eids: np.ndarray):
         return self._dgraph.add_edges(source_vertices, target_vertices, timestamps, eids)
 
-    def out_degree(self, vertex: int):
-        return self._dgraph.out_degree(vertex)
+    def out_degree(self, vertices: np.ndarray):
+        return self._dgraph.out_degree(vertices)
