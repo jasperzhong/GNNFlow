@@ -347,9 +347,9 @@ class LDGPartitioner(Partitioner):
                                             eids_list: List[torch.Tensor]) -> torch.Tensor:
         partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
         for i in range(len(unique_src_nodes)):
-            pid = self.LDG(unique_src_nodes[i])
+            pid = self.LDG(int(unique_src_nodes[i]))
             partition_table[i] = pid
-            self._partition_table[unique_src_nodes[i]] = pid
+            self._partition_table[int(unique_src_nodes[i])] = pid
 
             for dst_nid in dst_nodes_list[i]:
                 # update memory table
