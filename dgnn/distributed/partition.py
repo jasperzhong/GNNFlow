@@ -336,7 +336,7 @@ class LDGPartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
-        if 1000 < vid < 2000:
+        if partition_score.max() > 0:
             print(partition_score)
 
         return np.random.choice(np.where(partition_score == partition_score.max())[0])
