@@ -27,7 +27,7 @@ from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
                         load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
-model_names = ['TGN', 'TGAT', 'DySAT', 'SAGE', 'GAT']
+model_names = ['TGN', 'TGAT', 'DySAT', 'graphsage', 'gat']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
                      and callable(caches.__dict__[name]))
@@ -39,7 +39,7 @@ parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.0005)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
@@ -81,11 +81,12 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     with torch.no_grad():
         total_loss = 0
         for target_nodes, ts, eid in dataloader:
-            mfgs = sampler.sample(target_nodes, ts)
+            mfgs = sampler.sample(target_nodes, np.full(
+                target_nodes.shape, np.finfo(np.float32).max))
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(mfgs)
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -175,9 +176,11 @@ def main():
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
-    node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.distributed,
-        local_rank=args.local_rank, local_world_size=args.local_world_size)
+    # node_feats, edge_feats = load_feat(
+    #     args.data, shared_memory=args.distributed,
+    #     local_rank=args.local_rank, local_world_size=args.local_world_size)
+    edge_feats = torch.randn(672447, 172)
+    node_feats = torch.randn(10985, 172)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
@@ -185,9 +188,9 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
 
-    if args.model == "SAGE":
+    if args.model == "graphsage":
         model = SAGE(dim_node, model_config['dim_embed'])
-    elif args.model == 'GAT':
+    elif args.model == 'gat':
         model = GAT(dim_node, model_config['dim_embed'])
     else:
         model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
@@ -257,7 +260,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
-            mfgs = sampler.sample(target_nodes, ts)
+            mfgs = sampler.sample(target_nodes, np.full(
+                target_nodes.shape, np.finfo(np.float32).max))
 
             # Feature
             mfgs_to_cuda(mfgs, device)
@@ -266,7 +270,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))

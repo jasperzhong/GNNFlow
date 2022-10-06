@@ -16,7 +16,7 @@ def get_default_config(model: str, dataset: str):
         Default configuration for the model and dataset.
     """
     model, dataset = model.lower(), dataset.lower()
-    assert model in ["tgn", "tgat", "dysat"] and dataset in [
+    assert model in ["tgn", "tgat", "dysat", "graphsage", "gat"] and dataset in [
         "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag"], "Invalid model or dataset."
 
     mod = sys.modules[__name__]
@@ -70,6 +70,31 @@ _dysat_default_config = {
     "use_memory": False,
     "dim_time": 0,
     "dim_embed": 100
+}
+
+_graphsage_default_config = {
+    "dim_embed": 100,
+    "num_layers": 3,
+    "aggregator": 'mean',
+    "fanouts": [15, 10, 5],
+    "sample_strategy": "uniform",
+    "num_snapshots": 1,
+    "snapshot_time_window": 0,
+    "prop_time": False,
+}
+
+_gat_default_config = {
+    "dim_embed": 100,
+    "num_layers": 2,
+    "attn_head": [8, 1],
+    "feat_drop": 0.6,
+    "attn_drop": 0.6,
+    "allow_zero_in_degree": True,
+    "fanouts": [15, 10],
+    "sample_strategy": "uniform",
+    "num_snapshots": 1,
+    "snapshot_time_window": 0,
+    "prop_time": False,
 }
 
 _wiki_default_config = {
