@@ -330,6 +330,7 @@ class LDGPartitioner(Partitioner):
 
             neighbour_in_partition_size = 0
             if vid in self._neighbor_memory.keys():
+                print("vid:{} in neighbour memory's keys\n".format(vid))
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
             partition_score.append(neighbour_in_partition_size - 0.01 * alpha * gamma * (partition_size ** (gamma - 1)))
