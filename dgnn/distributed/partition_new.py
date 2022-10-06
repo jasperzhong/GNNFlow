@@ -149,7 +149,7 @@ class NewPartitioner:
         sorted_idx = torch.argsort(src_nodes)
         unique_src_nodes, idx, counts = torch.unique(
             src_nodes[sorted_idx], return_inverse=True, return_counts=True)
-        split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
+        split_idx = torch.split(sorted_idx, counts.tolist())
         dst_nodes_list = [dst_nodes[idx] for idx in split_idx]
         timestamps_list = [timestamps[idx] for idx in split_idx]
         eids_list = [eids[idx] for idx in split_idx]
