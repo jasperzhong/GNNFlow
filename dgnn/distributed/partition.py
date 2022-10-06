@@ -1,3 +1,4 @@
+import logging
 from typing import List, NamedTuple
 
 import torch
@@ -147,8 +148,8 @@ class Partitioner:
         """
         # group by src_nodes
         sorted_idx = torch.argsort(src_nodes)
-        unique_src_nodes, idx, counts = torch.unique(
-            src_nodes[sorted_idx], return_inverse=True, return_counts=True)
+        unique_src_nodes, inverse_idx, counts = torch.unique(
+            src_nodes[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
         split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
         dst_nodes_list = [dst_nodes[idx] for idx in split_idx]
         timestamps_list = [timestamps[idx] for idx in split_idx]
@@ -159,7 +160,14 @@ class Partitioner:
             unique_src_nodes, dst_nodes_list, timestamps_list, eids_list)
 
         # restore partition table to the original src_nodes's size
-        partition_table = partition_table[idx]
+        partition_table = partition_table[inverse_idx]
+        partition_table = partition_table.gather(0, sorted_idx.argsort(0))
+
+        partition_table2 = self._do_partition_for_unseen_nodes_impl(
+            src_nodes, dst_nodes_list, timestamps_list, eids_list)
+
+        assert torch.all(partition_table == partition_table2), "partition_table: {}, partition_table2: {}".format(
+            partition_table, partition_table2)
         return partition_table
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
