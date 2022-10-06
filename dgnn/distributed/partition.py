@@ -77,7 +77,7 @@ class Partitioner:
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
             self._partition_table.resize_(max_node + 1)
-            self._partition_table[self._max_node+1:] = self.UNASSIGNED
+            self._partition_table[self._max_node + 1:] = self.UNASSIGNED
             self._max_node = max_node
 
         # update edges partitioned
@@ -87,7 +87,6 @@ class Partitioner:
         upsilon = 1.1
         self._partition_capacity = (max_node * upsilon) / self._num_partitions
         print('partition capacity C is :{} \n'.format(self._partition_capacity))
-
 
         # dispatch edges to already assigned source nodes
         partitions = []
@@ -142,11 +141,11 @@ class Partitioner:
             # no need to sort edges here
             partitions[i] = Partition(
                 torch.cat([partitions[i].src_nodes,
-                          src_nodes[unassigned_mask][mask]]),
+                           src_nodes[unassigned_mask][mask]]),
                 torch.cat([partitions[i].dst_nodes,
-                          dst_nodes[unassigned_mask][mask]]),
+                           dst_nodes[unassigned_mask][mask]]),
                 torch.cat([partitions[i].timestamps,
-                          timestamps[unassigned_mask][mask]]),
+                           timestamps[unassigned_mask][mask]]),
                 torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
         return partitions
@@ -306,6 +305,7 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
         self._num_edges[src_node] += count
         return count
 
+
 # SOTA Partitoner
 class LDGPartitioner(Partitioner):
     """
@@ -338,9 +338,6 @@ class LDGPartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
-        if partition_score.max() > 0:
-            print(partition_score)
-
         return np.random.choice(np.where(partition_score == partition_score.max())[0])
         # return np.argmax(partition_score)
 
@@ -363,6 +360,7 @@ class LDGPartitioner(Partitioner):
                     self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
 
         return partition_table
+
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
