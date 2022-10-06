@@ -97,7 +97,7 @@ class Partitioner:
             # enable memory
             if self._enable_neighbor_memory:
                 for src_id, dst_id in zip(src_nodes[mask], dst_nodes[mask]):
-                    if dst_id in self._neighbor_memory.keys():
+                    if int(dst_id) in self._neighbor_memory.keys():
                         self._neighbor_memory[dst_id][i].add(src_id)
                     else:
                         self._neighbor_memory[dst_id] = [set() for i in range(self._num_partitions)]
