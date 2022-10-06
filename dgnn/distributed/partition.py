@@ -323,8 +323,6 @@ class LDGPartitioner(Partitioner):
 
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
-            if i == 0 and 1000 < vid < 2000:
-                print(partition_size)
 
             if partition_size >= self._partition_capacity:
                 partition_score.append(-2147483647)
@@ -338,8 +336,8 @@ class LDGPartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
-        return np.random.choice(np.where(partition_score == partition_score.max())[0])
-        # return np.argmax(partition_score)
+        # return np.random.choice(np.where(partition_score == partition_score.max())[0])
+        return np.argmax(partition_score)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
