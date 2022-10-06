@@ -98,10 +98,10 @@ class Partitioner:
             if self._enable_neighbor_memory:
                 for src_id, dst_id in zip(src_nodes[mask], dst_nodes[mask]):
                     if int(dst_id) in self._neighbor_memory.keys():
-                        self._neighbor_memory[dst_id][i].add(src_id)
+                        self._neighbor_memory[int(dst_id)][i].add(int(src_id))
                     else:
-                        self._neighbor_memory[dst_id] = [set() for i in range(self._num_partitions)]
-                        self._neighbor_memory[dst_id][i].add(src_id)
+                        self._neighbor_memory[int(dst_id)] = [set() for i in range(self._num_partitions)]
+                        self._neighbor_memory[int(dst_id)][i].add(int(src_id))
 
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
