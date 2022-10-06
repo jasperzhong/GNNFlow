@@ -12,7 +12,7 @@ class TestPartition(unittest.TestCase):
     def test_partition_graph(self):
 
         dataset_name = 'WIKI'
-        p_stgy = 'roundrobin'
+        p_stgy = 'hash'
         num_p = 4
         ingestion_batch_size = 100000
         undirected = True
@@ -102,7 +102,7 @@ class TestPartition(unittest.TestCase):
     def test_new_partition_graph(self):
 
         dataset_name = 'WIKI'
-        p_stgy = 'roundrobin'
+        p_stgy = 'hash'
         num_p = 4
         ingestion_batch_size = 100000
         undirected = True
