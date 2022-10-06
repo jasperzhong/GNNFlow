@@ -130,7 +130,6 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
             logging.info("rank {} node_feats_shm shape {}".format(
                 local_rank, node_feats_shm.shape))
 
-
         if edge_feats_shm is not None:
             logging.info("rank {} edge_feats_shm shape {}".format(
                 local_rank, edge_feats_shm.shape))
@@ -209,12 +208,18 @@ def prepare_input(mfgs, node_feats, edge_feats):
     if node_feats is not None:
         for b in mfgs[0]:
             srch = node_feats[b.srcdata['ID']].float()
-            b.srcdata['h'] = srch.cuda()
-
+            b.srcdata['h'] = srch
+    else:
+        for b in mfgs[0]:
+            b.srcdata['h'] = None
     if edge_feats is not None:
         for mfg in mfgs:
             for b in mfg:
                 b.edata['f'] = edge_feats[b.edata['ID']].float()
+    else:
+        for mfg in mfgs:
+            for b in mfg:
+                b.edata['f'] = None
     return mfgs
 
 

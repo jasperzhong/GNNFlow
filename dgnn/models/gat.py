@@ -8,10 +8,11 @@ from dgl.heterograph import DGLBlock
 
 class GAT(nn.Module):
     def __init__(self, dim_in: int, dim_out: int,
-                 num_layers: int = 3,
+                 num_layers: int = 2,
                  attn_head: List[int] = [8, 1],
                  feat_drop: float = 0.6,
-                 attn_drop: float = 0.6):
+                 attn_drop: float = 0.6,
+                 allow_zero_in_degree: bool = False):
         if num_layers != len(attn_head):
             raise ValueError(
                 "length of attn head {} must equal to num_layers {}".format(
@@ -31,15 +32,17 @@ class GAT(nn.Module):
                     feat_drop=0.6,
                     attn_drop=0.6,
                     activation=F.elu,
+                    allow_zero_in_degree=allow_zero_in_degree
                 )
             else:
                 self.layers[key] = dglnn.GATConv(
-                    dim_out * attn_head[l-1],
+                    dim_out,
                     dim_out,
                     attn_head[l],
                     feat_drop=0.6,
                     attn_drop=0.6,
                     activation=None,
+                    allow_zero_in_degree=allow_zero_in_degree
                 )
 
         self.dim_out = dim_out
@@ -61,8 +64,9 @@ class GAT(nn.Module):
             else:
                 h = h.flatten(1)
 
+        # TODO:use neg_sample_ratio
         src_h, pos_dst_h, neg_dst_h = h.tensor_split(3)
-        h_pos = self.predictor(src_h, pos_dst_h)
+        h_pos = self.predictor(src_h * pos_dst_h)
         # TODO: it seems that neg sample of static graph is different from dynamic
-        h_neg = self.predictor(src_h, neg_dst_h)
+        h_neg = self.predictor(src_h * neg_dst_h)
         return h_pos, h_neg
