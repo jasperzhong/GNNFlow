@@ -36,7 +36,7 @@ class GAT(nn.Module):
                 )
             else:
                 self.layers[key] = dglnn.GATConv(
-                    dim_out,
+                    dim_out * attn_head[l-1],
                     dim_out,
                     attn_head[l],
                     feat_drop=0.6,
@@ -59,10 +59,11 @@ class GAT(nn.Module):
             key = 'l' + str(l) + 'h' + str(0)
             h = self.layers[key](mfgs[l][0], mfgs[l][0].srcdata['h'])
             if l != self.num_layers - 1:  # not last layer
-                h = h.mean(1)
+                h = h.flatten(1)
                 mfgs[l + 1][0].srcdata['h'] = h
             else:
-                h = h.flatten(1)
+                # last layer use mean
+                h = h.mean(1)
 
         num_edge = h.shape[0] // (neg_sample_ratio + 2)
         src_h = h[:num_edge]
