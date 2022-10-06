@@ -12,7 +12,7 @@ class GAT(nn.Module):
                  attn_head: List[int] = [8, 1],
                  feat_drop: float = 0.6,
                  attn_drop: float = 0.6,
-                 allow_zero_in_degree: bool = False):
+                 allow_zero_in_degree: bool = True):
         if num_layers != len(attn_head):
             raise ValueError(
                 "length of attn head {} must equal to num_layers {}".format(
@@ -64,9 +64,11 @@ class GAT(nn.Module):
             else:
                 h = h.flatten(1)
 
-        # TODO:use neg_sample_ratio
-        src_h, pos_dst_h, neg_dst_h = h.tensor_split(3)
+        num_edge = h.shape[0] // (neg_sample_ratio + 2)
+        src_h = h[:num_edge]
+        pos_dst_h = h[num_edge:2 * num_edge]
+        neg_dst_h = h[2 * num_edge:]
         h_pos = self.predictor(src_h * pos_dst_h)
         # TODO: it seems that neg sample of static graph is different from dynamic
-        h_neg = self.predictor(src_h * neg_dst_h)
+        h_neg = self.predictor(src_h.tile(neg_sample_ratio, 1) * neg_dst_h)
         return h_pos, h_neg

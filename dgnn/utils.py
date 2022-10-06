@@ -209,17 +209,10 @@ def prepare_input(mfgs, node_feats, edge_feats):
         for b in mfgs[0]:
             srch = node_feats[b.srcdata['ID']].float()
             b.srcdata['h'] = srch
-    else:
-        for b in mfgs[0]:
-            b.srcdata['h'] = None
     if edge_feats is not None:
         for mfg in mfgs:
             for b in mfg:
                 b.edata['f'] = edge_feats[b.edata['ID']].float()
-    else:
-        for mfg in mfgs:
-            for b in mfg:
-                b.edata['f'] = None
     return mfgs
 
 

@@ -56,9 +56,11 @@ class SAGE(nn.Module):
                 h = F.relu(h)
                 mfgs[l + 1][0].srcdata['h'] = h
 
-        # TODO:use neg_sample_ratio
-        src_h, pos_dst_h, neg_dst_h = h.tensor_split(3)
+        num_edge = h.shape[0] // (neg_sample_ratio + 2)
+        src_h = h[:num_edge]
+        pos_dst_h = h[num_edge:2 * num_edge]
+        neg_dst_h = h[2 * num_edge:]
         h_pos = self.predictor(src_h * pos_dst_h)
         # TODO: it seems that neg sample of static graph is different from dynamic
-        h_neg = self.predictor(src_h * neg_dst_h)
+        h_neg = self.predictor(src_h.tile(neg_sample_ratio, 1) * neg_dst_h)
         return h_pos, h_neg
