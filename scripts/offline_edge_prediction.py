@@ -19,13 +19,15 @@ from dgnn.config import get_default_config
 from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
 from dgnn.models.dgnn import DGNN
+from dgnn.models.gat import GAT
+from dgnn.models.graphsage import SAGE
 from dgnn.temporal_sampler import TemporalSampler
 from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
                         get_pinned_buffers, get_project_root_dir, load_dataset,
                         load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
-model_names = ['TGN', 'TGAT', 'DySAT']
+model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
                      and callable(caches.__dict__[name]))
@@ -37,7 +39,7 @@ parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.0005)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
@@ -135,7 +137,7 @@ def main():
 
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
-    args.lr = args.lr * math.sqrt(args.world_size) 
+    args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
     if args.distributed:
@@ -177,14 +179,22 @@ def main():
         args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
+    edge_feats = torch.randn(672447, 172)
+    node_feats = torch.randn(10985, 172)
+
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
 
-    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.distributed)
+    if args.model == "GRAPHSAGE":
+        model = SAGE(dim_node, model_config['dim_embed'])
+    elif args.model == 'GAT':
+        model = GAT(dim_node, model_config['dim_embed'])
+    else:
+        model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
+                     memory_device=device, memory_shared=args.distributed)
     model.to(device)
 
     sampler = TemporalSampler(dgraph, **model_config)

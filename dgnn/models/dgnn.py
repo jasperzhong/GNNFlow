@@ -2,7 +2,6 @@ from typing import Dict, List, Optional, Union
 
 import torch
 from dgl.heterograph import DGLBlock
-
 from dgnn.models.modules.layers import EdgePredictor, TransfomerAttentionLayer
 from dgnn.models.modules.memory import Memory
 from dgnn.models.modules.memory_updater import GRUMemeoryUpdater

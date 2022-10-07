@@ -48,6 +48,11 @@ class TemporalSampler:
         self._num_layers = len(fanouts)
         self._num_snapshots = num_snapshots
 
+        if 'is_static' in kwargs and kwargs['is_static'] == True:
+            self._is_static = True
+        else:
+            self._is_static = False
+
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
@@ -60,8 +65,14 @@ class TemporalSampler:
             list of message flow graphs (# of graphs = # of snapshots) for
             each layer.
         """
-        sampling_results = self._sampler.sample(
-            target_vertices, timestamps)
+        if self._is_static:
+            sampling_results = self._sampler.sample(
+                target_vertices,
+                np.full(target_vertices.shape,
+                        np.finfo(np.float32).max))
+        else:
+            sampling_results = self._sampler.sample(
+                target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
 
     def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray,
