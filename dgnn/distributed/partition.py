@@ -25,7 +25,7 @@ class Partitioner:
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, enable_neighbour_memory: bool = False):
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
         """
         Initialize the partitioner.
 
@@ -42,13 +42,7 @@ class Partitioner:
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
         self._partition_table[:] = self.UNASSIGNED
 
-        # key: NID -> value: List[num_partitions]
-        self._enable_neighbor_memory = enable_neighbour_memory
-        self._neighbor_memory = {}
-        # ideal partition capacity
-        self._partition_capacity = 0
-        # edges partitioned
-        self._edges_partitioned = 0
+
 
     def get_num_partitions(self) -> int:
         """
@@ -312,7 +306,15 @@ class LDGPartitioner(Partitioner):
     """
 
     def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, assign_with_dst_node, True)
+        super().__init__(num_partitions, assign_with_dst_node)
+
+        # key: NID -> value: List[num_partitions]
+        self._enable_neighbor_memory = True
+        self._neighbor_memory = {}
+        # ideal partition capacity
+        self._partition_capacity = 0
+        # edges partitioned
+        self._edges_partitioned = 0
 
     def LDG(self, vid: int):
         partition_score = []
