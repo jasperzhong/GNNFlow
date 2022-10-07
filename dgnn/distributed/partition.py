@@ -308,6 +308,7 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
 class LDGPartitioner(Partitioner):
     """
     Linear Deterministic Greedy (LDG) Partiton Algorithm
+    paper: http://www.vldb.org/pvldb/vol11/p1590-abbas.pdf
     """
 
     def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
@@ -323,9 +324,9 @@ class LDGPartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
 
-            # if partition_size >= self._partition_capacity:
-            #     partition_score.append(-2147483647)
-            #     continue
+            if partition_size >= self._partition_capacity:
+                partition_score.append(-2147483647)
+                continue
 
             neighbour_in_partition_size = 0
             if vid in self._neighbor_memory.keys():
