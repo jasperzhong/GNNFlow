@@ -83,10 +83,8 @@ class Partitioner:
         # update edges partitioned
         self._edges_partitioned = self._edges_partitioned + len(src_nodes)
 
-        # TODO: 1.1 is a heuristic setting
         upsilon = 1.1
         self._partition_capacity = (max_node * upsilon) / self._num_partitions
-        print('partition capacity C is :{} \n'.format(self._partition_capacity))
 
         # dispatch edges to already assigned source nodes
         partitions = []
