@@ -37,7 +37,7 @@ class SAGE(nn.Module):
             nn.ReLU(),
             nn.Linear(dim_out, 1))
 
-    def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1):
+    def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1, *args, **kwargs):
         """
         Args:
             b: sampled message flow graph (mfg), where

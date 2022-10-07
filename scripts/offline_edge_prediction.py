@@ -27,7 +27,7 @@ from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
                         load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
-model_names = ['TGN', 'TGAT', 'DySAT', 'SAGE', 'GAT']
+model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
                      and callable(caches.__dict__[name]))
@@ -39,7 +39,7 @@ parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.0005)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
@@ -179,13 +179,16 @@ def main():
         args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
+    edge_feats = torch.randn(672447, 172)
+    node_feats = torch.randn(10985, 172)
+
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
 
-    if args.model == "SAGE":
+    if args.model == "GRAPHSAGE":
         model = SAGE(dim_node, model_config['dim_embed'])
     elif args.model == 'GAT':
         model = GAT(dim_node, model_config['dim_embed'])

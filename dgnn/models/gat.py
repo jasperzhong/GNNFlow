@@ -54,7 +54,7 @@ class GAT(nn.Module):
             nn.ReLU(),
             nn.Linear(dim_out, 1))
 
-    def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1):
+    def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1, *args, **kwargs):
         for l in range(self.num_layers):
             key = 'l' + str(l) + 'h' + str(0)
             h = self.layers[key](mfgs[l][0], mfgs[l][0].srcdata['h'])

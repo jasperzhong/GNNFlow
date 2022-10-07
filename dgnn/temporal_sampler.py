@@ -47,6 +47,11 @@ class TemporalSampler:
             snapshot_time_window, prop_time, seed)
         self._num_snapshots = num_snapshots
 
+        if 'is_static' in kwargs and kwargs['is_static'] == True:
+            self._is_static = True
+        else:
+            self._is_static = False
+
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
@@ -59,8 +64,14 @@ class TemporalSampler:
             list of message flow graphs (# of graphs = # of snapshots) for
             each layer.
         """
-        sampling_results = self._sampler.sample(
-            target_vertices, timestamps)
+        if self._is_static:
+            sampling_results = self._sampler.sample(
+                target_vertices,
+                np.full(target_vertices.shape,
+                        np.finfo(np.float32).max))
+        else:
+            sampling_results = self._sampler.sample(
+                target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
 
     def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray, layer: int, snapshot: int) -> DGLBlock:
@@ -101,7 +112,7 @@ class TemporalSampler:
     def _to_dgl_block_layer_snapshot(self, sampling_result: SamplingResult) -> DGLBlock:
         mfg = dgl.create_block(
             (sampling_result.col(),
-            sampling_result.row()),
+             sampling_result.row()),
             num_src_nodes=sampling_result.num_src_nodes(),
             num_dst_nodes=sampling_result.num_dst_nodes())
         mfg.srcdata['ID'] = torch.from_numpy(sampling_result.all_nodes())
