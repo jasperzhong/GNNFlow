@@ -1,19 +1,25 @@
-from dgnn.distributed.partition import get_partitioner
-import torch
-import unittest
+import itertools
 import time
-import pandas as pd
+import unittest
+
 import numpy as np
+import pandas as pd
+import torch
+from parameterized import parameterized
+
+from dgnn.distributed.partition import get_partitioner
 
 
 class TestPartition(unittest.TestCase):
 
-    def test_partition_graph(self):
+    @parameterized.expand(
+        itertools.product(["hash", "roundrobin", "edgecount", "timestampsum", "ldg"], [100000]))
+    def test_partition_graph(self, partition_strategy, batch_size):
 
         dataset_name = 'WIKI'
-        p_stgy = 'hash'
+        p_stgy = partition_strategy
         num_p = 4
-        ingestion_batch_size = 100000
+        ingestion_batch_size = batch_size
         undirected = True
         dataset = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))  # LINUX
         dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
