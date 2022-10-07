@@ -25,7 +25,7 @@ class Partitioner:
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, enable_neighbor_memory = False):
         """
         Initialize the partitioner.
 
@@ -42,6 +42,7 @@ class Partitioner:
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
         self._partition_table[:] = self.UNASSIGNED
 
+        self._enable_neighbor_memory = enable_neighbor_memory
 
 
     def get_num_partitions(self) -> int:
@@ -309,7 +310,6 @@ class LDGPartitioner(Partitioner):
         super().__init__(num_partitions, assign_with_dst_node)
 
         # key: NID -> value: List[num_partitions]
-        self._enable_neighbor_memory = True
         self._neighbor_memory = {}
         # ideal partition capacity
         self._partition_capacity = 0
