@@ -25,7 +25,7 @@ class Partitioner:
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, enable_neighbor_memory = False):
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, enable_neighbor_memory: bool = False):
         """
         Initialize the partitioner.
 
@@ -307,7 +307,7 @@ class LDGPartitioner(Partitioner):
     """
 
     def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, assign_with_dst_node)
+        super().__init__(num_partitions, assign_with_dst_node, True)
 
         # key: NID -> value: List[num_partitions]
         self._neighbor_memory = {}
