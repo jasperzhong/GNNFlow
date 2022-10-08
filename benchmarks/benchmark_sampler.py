@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import build_dynamic_graph, load_dataset
+from gnnflow.config import get_default_config
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="REDDIT")
@@ -22,15 +23,6 @@ args = parser.parse_args()
 
 MB = 1 << 20
 GB = 1 << 30
-
-default_config = {
-    "initial_pool_size": 20 * MB,
-    "maximum_pool_size": 50 * MB,
-    "mem_resource_type": "cuda",
-    "minimum_block_size": 64,
-    "blocks_to_preallocate": 1024,
-    "insertion_policy": "insert",
-}
 
 
 def set_seed(seed):
@@ -57,9 +49,10 @@ class NegLinkSampler:
 def main():
     # Create a dynamic graph
     _, _, _, df = load_dataset(args.dataset)
-    config = default_config.copy()
-    config["mem_resource_type"] = args.mem_resource_type
-    dgraph = build_dynamic_graph(df, **config, add_reverse=True)
+    _, dataset_config = get_default_config(args.model, args.dataset)
+    dataset_config["mem_resource_type"] = args.mem_resource_type
+    dgraph = build_dynamic_graph(
+        **dataset_config, dataset_df=df)
 
     # Create a temporal sampler
     if args.model == "tgn":
