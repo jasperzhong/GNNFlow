@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
-project(libdgnn CXX)
+project(libgnnflow CXX)
 enable_language(CUDA)
 
-set(TARGET_LIB "libdgnn")
+set(TARGET_LIB "libgnnflow")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,27 +22,24 @@ find_package(PythonLibs REQUIRED)
 add_subdirectory(third_party/pybind11)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${PROJECT_SOURCE_DIR}/dgnn/csrc)
+include_directories(${PROJECT_SOURCE_DIR}/gnnflow/csrc)
 include_directories(/usr/local/cuda/include)
 include_directories(third_party/pybind11/include)
 include_directories(third_party/spdlog/include)
 include_directories(third_party/rmm/include)
 
 
-file(GLOB_RECURSE DGNN_SRC_FILES ${PROJECT_SOURCE_DIR}/dgnn/csrc/*.cc)
-set_source_files_properties(${PROJECT_SOURCE_DIR}/dgnn/csrc/api.cc PROPERTIES LANGUAGE CUDA)
-file(GLOB_RECURSE DGNN_SRC_CUDA_FILES ${PROJECT_SOURCE_DIR}/dgnn/csrc/*.cu)
-set_source_files_properties(${DGNN_SRC_CUDA_FILES} PROPERTIES LANGUAGE CUDA)
-list(APPEND DGNN_SRC_FILES ${DGNN_SRC_CUDA_FILES})
+file(GLOB_RECURSE GNNFLOW_SRC_FILES ${PROJECT_SOURCE_DIR}/gnnflow/csrc/*.cc)
+set_source_files_properties(${PROJECT_SOURCE_DIR}/gnnflow/csrc/api.cc PROPERTIES LANGUAGE CUDA)
+file(GLOB_RECURSE GNNFLOW_SRC_CUDA_FILES ${PROJECT_SOURCE_DIR}/gnnflow/csrc/*.cu)
+set_source_files_properties(${GNNFLOW_SRC_CUDA_FILES} PROPERTIES LANGUAGE CUDA)
+list(APPEND GNNFLOW_SRC_FILES ${GNNFLOW_SRC_CUDA_FILES})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fPIC -Wall -ftree-vectorize")
 set(ARCH_FLAGS "-march=native -mtune=native")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDGNN_DEBUG")
-set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -DDGNN_DEBUG")
-
-pybind11_add_module(${TARGET_LIB} ${DGNN_SRC_FILES})
+pybind11_add_module(${TARGET_LIB} ${GNNFLOW_SRC_FILES})
 
 target_compile_options(${TARGET_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
     --generate-line-info

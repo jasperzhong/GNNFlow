@@ -5,8 +5,8 @@ import sys
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 
-dgnn_lib = Extension(
-    "libdgnn", sources=[]
+gnnflow_lib = Extension(
+    "libgnnflow", sources=[]
 )
 
 curdir = os.path.dirname(os.path.abspath(__file__))
@@ -66,13 +66,13 @@ require_list = ["torch", "numpy"]
 test_require_list = ["unittest", "parameterized"]
 
 setup(
-    name="dgnn",
+    name="gnnflow",
     version="0.0.1",
-    description="A framework for dynamic graph neural networks",
+    description="A comprehensive framework for dynamic graph neural networks",
     license="Apache 2.0",
-    url="https://github.com/yuchenzhong/dynamic-graph-neural-networks",
+    url="https://github.com/jasperzhong/GNNFlow",
     packages=find_packages(exclude=("tests")),
-    ext_modules=[dgnn_lib],
+    ext_modules=[gnnflow_lib],
     cmdclass={"build_ext": CustomBuildExt},
     classifiers=[
         "Programming Language :: Python :: 3",

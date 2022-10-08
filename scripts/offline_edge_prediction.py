@@ -14,15 +14,15 @@ import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 
-import dgnn.cache as caches
-from dgnn.config import get_default_config
-from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
+import gnnflow.cache as caches
+from gnnflow.config import get_default_config
+from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
-from dgnn.models.dgnn import DGNN
-from dgnn.models.gat import GAT
-from dgnn.models.graphsage import SAGE
-from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
+from gnnflow.models.dgnn import DGNN
+from gnnflow.models.gat import GAT
+from gnnflow.models.graphsage import SAGE
+from gnnflow.temporal_sampler import TemporalSampler
+from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
                         get_pinned_buffers, get_project_root_dir, load_dataset,
                         load_feat, mfgs_to_cuda)
 

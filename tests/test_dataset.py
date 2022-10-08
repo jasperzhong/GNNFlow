@@ -4,9 +4,9 @@ import unittest
 import numpy as np
 from torch.utils.data import BatchSampler, DataLoader, SequentialSampler
 
-from dgnn.data import (EdgePredictionDataset, RandomStartBatchSampler,
+from gnnflow.data import (EdgePredictionDataset, RandomStartBatchSampler,
                        default_collate_ndarray)
-from dgnn.utils import get_batch, load_dataset
+from gnnflow.utils import get_batch, load_dataset
 
 
 class TestDataset(unittest.TestCase):

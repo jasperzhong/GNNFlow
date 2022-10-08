@@ -2,12 +2,12 @@ import unittest
 
 import torch
 import numpy as np
-from dgnn.config import get_default_config
-from dgnn.models.dgnn import DGNN
-from dgnn.models.gat import GAT
-from dgnn.models.graphsage import SAGE
-from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import (build_dynamic_graph, get_batch, load_dataset,
+from gnnflow.config import get_default_config
+from gnnflow.models.dgnn import DGNN
+from gnnflow.models.gat import GAT
+from gnnflow.models.graphsage import SAGE
+from gnnflow.temporal_sampler import TemporalSampler
+from gnnflow.utils import (build_dynamic_graph, get_batch, load_dataset,
                         load_feat, mfgs_to_cuda, prepare_input)
 
 
@@ -42,7 +42,7 @@ class TestModel(unittest.TestCase):
         node_feats = torch.randn(7144, 172)
         train_df, val_df, test_df, df = load_dataset('MOOC')
         model_config, data_config = get_default_config('TGN', 'MOOC')
-        dgraph = build_dynamic_graph(df, **data_config)
+        dgraph = build_dynamic_graph(**data_config, dataset_df=df)
         gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
         batch_size = 600
         device = torch.device("cuda:0")
@@ -64,7 +64,7 @@ class TestModel(unittest.TestCase):
         node_feats = torch.randn(7144, 172)
         train_df, val_df, test_df, df = load_dataset('MOOC')
         model_config, data_config = get_default_config('TGN', 'MOOC')
-        dgraph = build_dynamic_graph(df, **data_config)
+        dgraph = build_dynamic_graph(**data_config, dataset_df=df)
         gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
         batch_size = 600
         device = torch.device("cuda:0")
