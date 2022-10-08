@@ -1,12 +1,11 @@
 import itertools
-from re import T
 import unittest
 
 import numpy as np
 from parameterized import parameterized
 
-from dgnn import DynamicGraph, TemporalSampler
-from dgnn.utils import build_dynamic_graph, load_dataset
+from gnnflow import DynamicGraph, TemporalSampler
+from gnnflow.utils import build_dynamic_graph, load_dataset
 
 MB = 1 << 20
 GB = 1 << 30

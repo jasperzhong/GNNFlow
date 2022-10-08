@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 from parameterized import parameterized
 
-from dgnn import DynamicGraph
+from gnnflow import DynamicGraph
 
 MB = 1 << 20
 GB = 1 << 30

@@ -2,7 +2,7 @@ import argparse
 
 import time
 
-from dgnn.utils import build_dynamic_graph, load_dataset
+from gnnflow.utils import build_dynamic_graph, load_dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="REDDIT")

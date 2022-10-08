@@ -5,8 +5,8 @@ import random
 import torch
 from tqdm import tqdm
 
-from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import build_dynamic_graph, load_dataset
+from gnnflow.temporal_sampler import TemporalSampler
+from gnnflow.utils import build_dynamic_graph, load_dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="REDDIT")
