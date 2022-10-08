@@ -2,6 +2,8 @@
 
 A comprehensive framework for training graph neural networks on dynamic graphs.
 
+NB: this is an ongoing work.
+
 ## Install
 
 Our development environment:
@@ -45,3 +47,4 @@ Training TGN model on the REDDIT dataset with LRU feature cache (cache ratio=0.2
 ```sh
 ./scripts/run_offline.sh TGN REDDIT LRUCache 0.2 hash 
 ```
+
