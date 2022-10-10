@@ -156,9 +156,6 @@ class KVStoreClient:
 
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
-            logging.info("num_partitions: {}".format(self._num_partitions))
-            logging.info("_num_workers_per_machine: {}".format(
-                self._num_workers_per_machine))
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.pull_tensors, args=(partition_keys, mode)))
             masks.append(partition_mask)
