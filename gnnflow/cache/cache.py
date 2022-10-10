@@ -321,7 +321,7 @@ class Cache:
                         src_eid_index = torch.unique_consecutive(
                             uncached_edge_id_unique_index)
                         uncached_eid_to_nid = src_nid[uncached_mask]
-                        uncached_eid_to_nid_unique = uncached_eid_to_nid[uncached_edge_id_unique_index]
+                        uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index]
                         # src_nid = b.srcdata['ID'][uncached_mask][b.edges()[
                         #     1][uncached_mask][src_eid_index]]
                         if self.pinned_efeat_buffs is not None:
