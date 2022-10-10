@@ -38,13 +38,13 @@ class KVStoreServer:
 
         if mode == 'node':
             for key, tensor in zip(keys, tensors):
-                self._node_feat_map[key] = tensor
+                self._node_feat_map[int(key)] = tensor
         elif mode == 'edge':
             for key, tensor in zip(keys, tensors):
-                self._edge_feat_map[key] = tensor
+                self._edge_feat_map[int(key)] = tensor
         elif mode == 'memory':
             for key, tensor in zip(keys, tensors):
-                self._memory_map[key] = tensor
+                self._memory_map[int(key)] = tensor
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -59,13 +59,11 @@ class KVStoreServer:
             List[torch.Tensor]: The tensors.
         """
         if mode == 'node':
-            return [self._node_feat_map[key] for key in keys]
+            return [self._node_feat_map[int(key)] for key in keys]
         elif mode == 'edge':
-            logging.debug("edge_feat_map: {}".format(
-                self._edge_feat_map.keys()))
-            return [self._edge_feat_map[key] for key in keys]
+            return [self._edge_feat_map[int(key)] for key in keys]
         elif mode == 'memory':
-            return [self._memory_map[key] for key in keys]
+            return [self._memory_map[int(key)] for key in keys]
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
