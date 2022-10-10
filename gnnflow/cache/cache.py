@@ -326,8 +326,14 @@ class Cache:
                             src_nid.shape))
                         src_eid_index = torch.unique_consecutive(
                             uncached_edge_id_unique_index)
+                        logging.info("uncached_edge_id_unique_index: {}".format(
+                            uncached_edge_id_unique_index.shape))
+                        logging.info("uncached_edge_id_unique_index: {}".format(
+                            uncached_edge_id_unique_index))
                         logging.info("src_eid_index: {}".format(
                             src_eid_index.shape))
+                        logging.info("src_eid_index: {}".format(
+                            src_eid_index))
                         uncached_eid_to_nid = src_nid[uncached_mask]
                         logging.info("uncached_eid_to_nid: {}".format(
                             uncached_eid_to_nid.shape))
