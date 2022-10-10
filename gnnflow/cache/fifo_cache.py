@@ -50,6 +50,8 @@ class FIFOCache(Cache):
         """
         Init the cache with features
         """
+        if self.distributed:
+            return 
         super(FIFOCache, self).init_cache(*args, **kwargs)
         if self.node_feats is not None:
             self.cache_node_pointer = self.node_capacity - 1

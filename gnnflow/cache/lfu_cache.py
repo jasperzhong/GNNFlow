@@ -68,6 +68,8 @@ class LFUCache(Cache):
         """
         Init the caching with features
         """
+        if self.distributed:
+            return 
         super(LFUCache, self).init_cache(*args, **kwargs)
         if self.dim_node_feat != 0:
             self.cache_node_count[self.cache_index_to_node_id] += 1

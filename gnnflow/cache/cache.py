@@ -135,6 +135,9 @@ class Cache:
         """
         Init the cache with features
         """
+        if self.distributed:
+            return 
+
         if self.dim_node_feat != 0:
             cache_node_id = torch.arange(
                 self.node_capacity, dtype=torch.int64, device=self.device)
