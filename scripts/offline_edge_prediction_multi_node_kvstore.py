@@ -96,7 +96,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
-                mfgs, eid, target_edge_features=model.use_memory)
+                mfgs, eid, target_edge_features=args.use_memory)
             pred_pos, pred_neg = model(
                 mfgs, edge_feats=cache.target_edge_features)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
@@ -220,6 +220,7 @@ def main():
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed)
     model.to(device)
+    args.use_memory = model.has_memory()
 
     if args.distributed:
         assert isinstance(dgraph, DistributedDynamicGraph)
@@ -299,7 +300,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Feature
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
-                mfgs, eid, target_edge_features=model.use_memory)
+                mfgs, eid, target_edge_features=args.use_memory)
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(

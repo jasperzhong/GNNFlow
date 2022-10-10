@@ -211,6 +211,7 @@ def main():
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=max_node_id,
                  memory_device=device, memory_shared=args.local_world_size > 1)
     model.to(device)
+    args.use_memory = model.has_memory()
 
     if args.partition:
         assert isinstance(dgraph, DistributedDynamicGraph)
