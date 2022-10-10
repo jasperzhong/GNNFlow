@@ -21,7 +21,8 @@ class Cache:
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
-                 distributed: Optional[bool] = False):
+                 distributed: Optional[bool] = False,
+                 neg_sample_ratio: Optional[int] = 1):
         """
         Initialize the cache
 
@@ -81,6 +82,9 @@ class Cache:
         # so that we can only use one fetch feature function
         self.distributed = distributed
         self.target_edge_features = None
+
+        # used to extract src_node id of input eid
+        self.neg_sample_ratio = neg_sample_ratio
 
         # stores node's features
         if self.dim_node_feat != 0:
@@ -362,8 +366,11 @@ class Cache:
             if target_edge_features:
                 if self.distributed:
                     # TODO: maybe there are some edge_features is in the memory now
+                    num_edges = mfgs[-1][0].num_dst_nodes() // (
+                        self.neg_sample_ratio + 2)
+                    nid = mfgs[-1][0].srcdata['ID'][:num_edges]
                     self.target_edge_features = self.kvstore_client.pull(
-                        eid, mode='edge', nid=mfgs[-1][0].srcdata['ID'][:mfgs[-1][0].num_dst_nodes()])
+                        eid, mode='edge', nid=nid)
                 else:
                     self.target_edge_features = self.edge_feats[eid]
 

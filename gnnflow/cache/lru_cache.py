@@ -1,3 +1,4 @@
+from operator import neg
 from typing import Optional, Union
 
 import torch
@@ -10,6 +11,7 @@ class LRUCache(Cache):
     """
     Least-recently-used (LRU) cache 
     """
+
     def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
@@ -19,7 +21,8 @@ class LRUCache(Cache):
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
-                 distributed: Optional[bool] = False):
+                 distributed: Optional[bool] = False,
+                 neg_sample_ratio: Optional[int] = 1):
         """
         Initialize the cache
 
@@ -42,7 +45,7 @@ class LRUCache(Cache):
                                        edge_feats, dim_node_feat,
                                        dim_edge_feat, pinned_nfeat_buffs,
                                        pinned_efeat_buffs, kvstore_client,
-                                       distributed)
+                                       distributed, neg_sample_ratio)
         self.name = 'lru'
 
         if self.dim_node_feat != 0:

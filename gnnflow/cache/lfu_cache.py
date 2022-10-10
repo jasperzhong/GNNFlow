@@ -20,7 +20,8 @@ class LFUCache(Cache):
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
-                 distributed: Optional[bool] = False):
+                 distributed: Optional[bool] = False,
+                 neg_sample_ratio: Optional[int] = 1):
         """
         Initialize the cache
 
@@ -43,7 +44,7 @@ class LFUCache(Cache):
                                        edge_feats, dim_node_feat,
                                        dim_edge_feat, pinned_nfeat_buffs,
                                        pinned_efeat_buffs, kvstore_client,
-                                       distributed)
+                                       distributed, neg_sample_ratio)
         self.name = 'lfu'
 
         if self.dim_node_feat != 0:
@@ -69,7 +70,7 @@ class LFUCache(Cache):
         Init the caching with features
         """
         if self.distributed:
-            return 
+            return
         super(LFUCache, self).init_cache(*args, **kwargs)
         if self.dim_node_feat != 0:
             self.cache_node_count[self.cache_index_to_node_id] += 1

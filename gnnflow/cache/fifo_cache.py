@@ -10,6 +10,7 @@ class FIFOCache(Cache):
     """
     First-in-first-out cache
     """
+
     def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
@@ -19,7 +20,8 @@ class FIFOCache(Cache):
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
-                 distributed: Optional[bool] = False):
+                 distributed: Optional[bool] = False,
+                 neg_sample_ratio: Optional[int] = 1):
         """
         Initialize the cache
 
@@ -40,7 +42,7 @@ class FIFOCache(Cache):
         super(FIFOCache, self).__init__(cache_ratio, num_nodes, num_edges, device,
                                         node_feats, edge_feats, dim_node_feat, dim_edge_feat,
                                         pinned_nfeat_buffs, pinned_efeat_buffs,
-                                        kvstore_client, distributed)
+                                        kvstore_client, distributed, neg_sample_ratio)
         self.name = 'fifo'
         # pointer to the last entry for the recent cached nodes
         self.cache_node_pointer = 0
@@ -51,7 +53,7 @@ class FIFOCache(Cache):
         Init the cache with features
         """
         if self.distributed:
-            return 
+            return
         super(FIFOCache, self).init_cache(*args, **kwargs)
         if self.node_feats is not None:
             self.cache_node_pointer = self.node_capacity - 1
