@@ -1,7 +1,7 @@
-dgnn
+gnnflow
 ====
 
 .. toctree::
    :maxdepth: 4
 
-   dgnn
+   gnnflow

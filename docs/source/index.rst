@@ -14,8 +14,7 @@ Welcome to Dynamic Graph Neural Networks's documentation!
    modules
 
 
-Dynamic Graph Neural Networks (DGNN) is a Python package for building and training
-dynamic graph neural networks. 
+GNNFlow is a Python package for building and training dynamic graph neural networks. 
 
 
 Installation
@@ -34,16 +33,10 @@ Python dependencies:
 - `pytorch`
 - `dgl`
 
-C++ dependencies:
-
-- `rmm` (how_to_install_)
-
-.. _how_to_install: https://github.com/yuchenzhong/cs-notes/blob/main/CUDA/rmm/README.md
-
 .. code:: bash
 
-    git clone --recursive https://github.com/yuchenzhong/dynamic-graph-neural-network.git
-    cd dynamic-graph-neural-network
+    git clone --recursive https://github.com/jasperzhong/GNNFlow.git
+    cd GNNFlow
     pip install -e .
 
 

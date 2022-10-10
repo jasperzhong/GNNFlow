@@ -14,17 +14,17 @@ import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 
-import dgnn.cache as caches
-import dgnn.distributed
-import dgnn.distributed.graph_services as graph_services
-from dgnn import DynamicGraph
-from dgnn.config import get_default_config
-from dgnn.data import (DistributedBatchSampler, EdgePredictionDataset,
+import gnnflow.cache as caches
+import gnnflow.distributed
+import gnnflow.distributed.graph_services as graph_services
+from gnnflow import DynamicGraph
+from gnnflow.config import get_default_config
+from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
                        RandomStartBatchSampler, default_collate_ndarray)
-from dgnn.distributed.dist_graph import DistributedDynamicGraph
-from dgnn.models.dgnn import DGNN
-from dgnn.temporal_sampler import TemporalSampler
-from dgnn.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
+from gnnflow.distributed.dist_graph import DistributedDynamicGraph
+from gnnflow.models.dgnn import DGNN
+from gnnflow.temporal_sampler import TemporalSampler
+from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
                         get_pinned_buffers, get_project_root_dir, load_dataset,
                         load_feat, mfgs_to_cuda)
 
@@ -187,7 +187,7 @@ def main():
             **data_config, device=args.local_rank)
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
-        dgnn.distributed.initialize(args.rank, args.world_size, full_data,
+        gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
                                     args.ingestion_batch_size, args.partition_strategy,
                                     args.num_nodes, data_config["undirected"])
     else:

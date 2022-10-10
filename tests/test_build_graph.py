@@ -4,8 +4,8 @@ import unittest
 import numpy as np
 from parameterized import parameterized
 
-from dgnn.config import get_default_config
-from dgnn.utils import build_dynamic_graph, load_dataset
+from gnnflow.config import get_default_config
+from gnnflow.utils import build_dynamic_graph, load_dataset
 
 MB = 1 << 20
 GB = 1 << 30
@@ -34,7 +34,7 @@ class TestBuildGraph(unittest.TestCase):
         dsts = np.array(df['dst'][:train_edge_end], dtype=int)
         dsts = np.unique(dsts)
 
-        self.assertEqual(dgraph.num_vertices() - 1,
+        self.assertEqual(dgraph.max_vertex_id(),
                          max(np.max(srcs), np.max(dsts)))
 
         # Test edges
@@ -70,7 +70,7 @@ class TestBuildGraph(unittest.TestCase):
 
         srcs = np.concatenate((srcs, dsts))
 
-        self.assertEqual(dgraph.num_vertices() - 1,
+        self.assertEqual(dgraph.max_vertex_id(),
                          max(np.max(srcs), np.max(dsts)))
 
         # Test edges
