@@ -135,7 +135,7 @@ class Cache:
         """
         Init the cache with features
         """
-        if self.node_feats is not None:
+        if self.dim_node_feat != 0:
             cache_node_id = torch.arange(
                 self.node_capacity, dtype=torch.int64, device=self.device)
 
@@ -146,7 +146,7 @@ class Cache:
             self.cache_index_to_node_id = cache_node_id
             self.cache_node_map[cache_node_id] = cache_node_id
 
-        if self.edge_feats is not None:
+        if self.dim_edge_feat != 0:
             cache_edge_id = torch.arange(
                 self.edge_capacity, dtype=torch.int64, device=self.device)
 
@@ -229,7 +229,7 @@ class Cache:
         Returns:
             mfgs: message-passing flow graphs with node/edge features
         """
-        if self.node_feats is not None:
+        if self.dim_node_feat != 0:
             i = 0
             hit_ratio_sum = 0
             for b in mfgs[0]:
@@ -286,7 +286,7 @@ class Cache:
             self.cache_node_ratio = hit_ratio_sum / i if i > 0 else 0
 
         # Edge feature
-        if self.edge_feats is not None:
+        if self.dim_edge_feat != 0:
             i = 0
             hit_ratio_sum = 0
             for mfg in mfgs:
@@ -366,7 +366,7 @@ class Cache:
         Returns:
             mfgs: message-passing flow graphs with node/edge features
         """
-        if self.node_feats is not None:
+        if self.dim_edge_feat != 0:
             i = 0
             hit_ratio_sum = 0
             for b in mfgs[0]:
@@ -415,7 +415,7 @@ class Cache:
             self.cache_node_ratio = hit_ratio_sum / i if i > 0 else 0
 
         # Edge feature
-        if self.edge_feats is not None:
+        if self.dim_edge_feat != 0:
             i = 0
             hit_ratio_sum = 0
             for mfg in mfgs:
