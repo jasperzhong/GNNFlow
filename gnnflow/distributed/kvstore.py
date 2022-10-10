@@ -157,7 +157,7 @@ class KVStoreClient:
             worker_rank = partition_id * self._num_workers_per_machine
 
             _edge_map = rpc.rpc_sync('worker{}'.format(worker_rank),
-                                     graph_services.pull_tensors, args=(partition_keys, mode))
+                                     graph_services.pull_maps, args=(partition_keys, mode))
             logging.info("edge_map: {}".format(_edge_map.keys()))
 
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
