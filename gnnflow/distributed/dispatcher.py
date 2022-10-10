@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 import numpy as np
@@ -83,6 +84,8 @@ class Dispatcher:
                                              args=(keys, features, 'node')))
             if edge_feats is not None:
                 keys = edges[3]
+                logging.info(
+                    "keys: {}, is assigned to kvstore_rank: {}".format(keys, kvstore_rank))
                 features = edge_feats[keys]
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, features, 'edge')))
