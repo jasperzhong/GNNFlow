@@ -325,11 +325,12 @@ class Cache:
                         src_nid = b.srcdata['ID'][b.edges()[1]]
                         logging.info("src_nid: {}".format(
                             src_nid.shape))
-                        # TODO: torch doesn't keep order when using unique                     
+                        # TODO: torch doesn't keep order when using unique
                         _, idx = np.unique(
                             uncached_edge_id_unique_index.cpu().numpy(), return_index=True)
                         src_eid_index = uncached_edge_id_unique_index[np.sort(
                             idx)]
+                        src_eid_index = torch.tensor(src_eid_index).cuda()
                         # src_eid_index = torch.unique_consecutive(
                         #     uncached_edge_id_unique_index)
                         logging.info("uncached_edge_id_unique_index: {}".format(
