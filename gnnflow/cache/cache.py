@@ -313,19 +313,16 @@ class Cache:
                     # fetch the uncached features
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
-                    uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
-                        uncached_edge_id, return_inverse=True)
 
                     if self.distributed:
                         # edge_features need to convert to nid first.
+                        _, uncached_edge_id_unique_index = torch.unique(
+                            uncached_edge_id, return_inverse=True)
+                        src_eid_index = torch.unique(
+                            uncached_edge_id_unique_index)
+                        uncached_edge_id_unique = uncached_edge_id[src_eid_index]
                         src_nid = b.srcdata['ID'][b.edges()[1]]
-                        logging.info("src_nid: {}".format(
-                            src_nid.shape))
-                        # TODO: torch doesn't keep order when using unique
-                        _, idx = np.unique(
-                            uncached_edge_id_unique_index.cpu().numpy(), return_index=True)
-                        src_eid_index = uncached_edge_id_unique_index[np.sort(
-                            idx)]
+
                         uncached_eid_to_nid = src_nid[uncached_mask]
                         uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index].cpu(
                         )
@@ -339,6 +336,8 @@ class Cache:
                             uncached_edge_feature = self.kvstore_client.pull(
                                 uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
                     else:
+                        uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
+                            uncached_edge_id, return_inverse=True)
                         if self.pinned_efeat_buffs is not None:
                             torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
                                                out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
