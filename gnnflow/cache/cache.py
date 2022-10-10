@@ -313,13 +313,9 @@ class Cache:
                     # fetch the uncached features
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
-                    logging.info("uncached_mask: {}".format(uncached_mask))
-                    logging.info("uncached_edge_id: {}".format(
-                        uncached_edge_id.shape))
                     uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                         uncached_edge_id, return_inverse=True)
-                    logging.info("uncached_edge_id_unique: {}".format(
-                        uncached_edge_id_unique.shape))
+
                     if self.distributed:
                         # edge_features need to convert to nid first.
                         src_nid = b.srcdata['ID'][b.edges()[1]]
@@ -333,8 +329,6 @@ class Cache:
                         uncached_eid_to_nid = src_nid[uncached_mask]
                         uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index].cpu(
                         )
-                        logging.info("uncached_eid_to_nid_unique: {}".format(
-                            uncached_eid_to_nid_unique))
                         if self.pinned_efeat_buffs is not None:
                             self.pinned_efeat_buffs[
                                 i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
