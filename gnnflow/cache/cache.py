@@ -312,6 +312,7 @@ class Cache:
                     # fetch the uncached features
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
+                    logging.info("uncached_mask: {}".format(uncached_mask))
                     logging.info("uncached_edge_id: {}".format(
                         uncached_edge_id.shape))
                     uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
@@ -325,6 +326,8 @@ class Cache:
                             src_nid.shape))
                         src_eid_index = torch.unique_consecutive(
                             uncached_edge_id_unique_index)
+                        logging.info("src_eid_index: {}".format(
+                            src_eid_index.shape))
                         uncached_eid_to_nid = src_nid[uncached_mask]
                         logging.info("uncached_eid_to_nid: {}".format(
                             uncached_eid_to_nid.shape))
