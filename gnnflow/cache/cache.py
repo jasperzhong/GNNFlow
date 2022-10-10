@@ -331,7 +331,8 @@ class Cache:
                         src_eid_index = uncached_edge_id_unique_index[np.sort(
                             idx)]
                         uncached_eid_to_nid = src_nid[uncached_mask]
-                        uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index]
+                        uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index].cpu(
+                        )
                         logging.info("uncached_eid_to_nid_unique: {}".format(
                             uncached_eid_to_nid_unique))
                         if self.pinned_efeat_buffs is not None:
