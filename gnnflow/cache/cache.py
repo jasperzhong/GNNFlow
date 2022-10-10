@@ -320,11 +320,11 @@ class Cache:
 
                     if self.distributed:
                         # edge_features need to convert to nid first.
-                        _, uncached_edge_id_unique_index = torch.unique(
+                        uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                             uncached_edge_id, return_inverse=True)
                         src_eid_index = torch.unique(
                             uncached_edge_id_unique_index)
-                        uncached_edge_id_unique = uncached_edge_id[src_eid_index]
+                        uncached_edge_id_unique = uncached_edge_id_unique[src_eid_index]
                         src_nid = b.srcdata['ID'][b.edges()[1]]
 
                         uncached_eid_to_nid = src_nid[uncached_mask]
