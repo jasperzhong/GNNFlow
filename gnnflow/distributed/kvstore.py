@@ -146,6 +146,7 @@ class KVStoreClient:
             partition_ids = partition_table[keys]
 
         futures = []
+        masks = []
         for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
@@ -158,10 +159,38 @@ class KVStoreClient:
 
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.pull_tensors, args=(partition_keys, mode)))
+            masks.append(partition_mask)
 
         # collect pull results
         pull_results = []
         for future in futures:
             pull_results.append(future.wait())
 
-        return pull_results
+        return self._merge_pull_results(pull_results, masks)
+
+    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Merge pull results from different partitions.
+
+        Args:
+            pull_results: pull results from different partitions.
+            masks: masks for each partition.
+
+        Returns:
+            merged pull result.
+        """
+        assert len(pull_results) > 0
+        assert len(pull_results) == len(masks)
+
+        all_pull_results = 0
+        for pull_result in pull_results:
+            all_pull_results += len(pull_result)
+
+        all_pull_results = torch.zeros(
+            (all_pull_results, pull_result[0].shape[1]), dtype=torch.float32)
+
+        for mask, pull_result in (masks, pull_results):
+            idx = mask.nonzero().squeeze()
+            all_pull_results[idx] = pull_result
+
+        return all_pull_results
