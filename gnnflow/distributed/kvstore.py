@@ -187,7 +187,7 @@ class KVStoreClient:
             all_pull_results += len(pull_result)
 
         all_pull_results = torch.zeros(
-            (all_pull_results, pull_result[0].shape[1]), dtype=torch.float32)
+            (all_pull_results, pull_results[0].shape[1]), dtype=torch.float32)
 
         for mask, pull_result in (masks, pull_results):
             idx = mask.nonzero().squeeze()
