@@ -312,15 +312,22 @@ class Cache:
                     # fetch the uncached features
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
+                    logging.info("uncached_edge_id: {}".format(
+                        uncached_edge_id.shape))
                     uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                         uncached_edge_id, return_inverse=True)
-
+                    logging.info("uncached_edge_id_unique: {}".format(
+                        uncached_edge_id_unique.shape))
                     if self.distributed:
                         # edge_features need to convert to nid first.
                         src_nid = b.srcdata['ID'][b.edges()[1]]
+                        logging.info("src_nid: {}".format(
+                            src_nid.shape))
                         src_eid_index = torch.unique_consecutive(
                             uncached_edge_id_unique_index)
                         uncached_eid_to_nid = src_nid[uncached_mask]
+                        logging.info("uncached_eid_to_nid: {}".format(
+                            uncached_eid_to_nid.shape))
                         uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index]
                         logging.info("uncached_eid_to_nid_unique: {}".format(
                             uncached_eid_to_nid_unique.shape))
