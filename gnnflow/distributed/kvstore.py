@@ -156,7 +156,9 @@ class KVStoreClient:
 
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
-
+            logging.info("num_partitions: {}".format(self._num_partitions))
+            logging.info("_num_workers_per_machine: {}".format(
+                self._num_workers_per_machine))
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.pull_tensors, args=(partition_keys, mode)))
             masks.append(partition_mask)
@@ -191,8 +193,6 @@ class KVStoreClient:
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
-            # logging.info("idx: {}".format(idx))
-            # logging.info("pull_result: {}".format(pull_result))
             all_pull_results[idx] = torch.stack(pull_result)
 
         return all_pull_results
