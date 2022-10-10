@@ -323,9 +323,9 @@ class Cache:
                         uncached_eid_to_nid = src_nid[uncached_mask]
                         uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index]
                         logging.info("uncached_eid_to_nid_unique: {}".format(
-                            uncached_eid_to_nid_unique))
+                            uncached_eid_to_nid_unique.shape))
                         logging.info("uncached_edge_id_unique: {}".format(
-                            uncached_edge_id_unique))
+                            uncached_edge_id_unique.shape))
                         # src_nid = b.srcdata['ID'][uncached_mask][b.edges()[
                         #     1][uncached_mask][src_eid_index]]
                         if self.pinned_efeat_buffs is not None:
