@@ -327,7 +327,7 @@ class Cache:
                             src_nid.shape))
                         # TODO: torch doesn't keep order when using unique
                         _, idx = np.unique(
-                            uncached_edge_id_unique_index.to_numpy(), return_index=True)
+                            uncached_edge_id_unique_index.numpy(), return_index=True)
                         src_eid_index = uncached_edge_id_unique_index[np.sort(
                             idx)]
                         # src_eid_index = torch.unique_consecutive(
