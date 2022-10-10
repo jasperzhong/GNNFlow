@@ -79,6 +79,7 @@ class Cache:
         # we can add a flag to indicate whether it's distributed
         # so that we can only use one fetch feature function
         self.distributed = distributed
+        self.target_edge_features = None
 
         # stores node's features
         if self.dim_node_feat != 0:
@@ -215,7 +216,7 @@ class Cache:
         raise NotImplementedError
 
     def fetch_feature(self, mfgs: List[List[DGLBlock]],
-                      eid: torch.Tensor = None, update_cache: bool = True,
+                      eid: Optional[torch.Tensor] = None, update_cache: bool = True,
                       target_edge_features: bool = True):
         """Fetching the node/edge features of input_node_ids
 
