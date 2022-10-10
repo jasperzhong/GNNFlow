@@ -2,9 +2,8 @@ from typing import List, Optional, Union
 
 import torch
 from dgl.heterograph import DGLBlock
-from dgnn.distributed import kvstore
 
-from dgnn.distributed.kvstore import KVStoreClient
+from gnnflow.distributed.kvstore import KVStoreClient
 
 
 class Cache:
