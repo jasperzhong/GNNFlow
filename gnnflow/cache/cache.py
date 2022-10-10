@@ -330,27 +330,10 @@ class Cache:
                             uncached_edge_id_unique_index.cpu().numpy(), return_index=True)
                         src_eid_index = uncached_edge_id_unique_index[np.sort(
                             idx)]
-                        src_eid_index = torch.tensor(src_eid_index).cuda()
-                        # src_eid_index = torch.unique_consecutive(
-                        #     uncached_edge_id_unique_index)
-                        logging.info("uncached_edge_id_unique_index: {}".format(
-                            uncached_edge_id_unique_index.shape))
-                        logging.info("uncached_edge_id_unique_index: {}".format(
-                            uncached_edge_id_unique_index))
-                        logging.info("src_eid_index: {}".format(
-                            src_eid_index.shape))
-                        logging.info("src_eid_index: {}".format(
-                            src_eid_index))
                         uncached_eid_to_nid = src_nid[uncached_mask]
-                        logging.info("uncached_eid_to_nid: {}".format(
-                            uncached_eid_to_nid.shape))
                         uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index]
                         logging.info("uncached_eid_to_nid_unique: {}".format(
-                            uncached_eid_to_nid_unique.shape))
-                        logging.info("uncached_edge_id_unique: {}".format(
-                            uncached_edge_id_unique.shape))
-                        # src_nid = b.srcdata['ID'][uncached_mask][b.edges()[
-                        #     1][uncached_mask][src_eid_index]]
+                            uncached_eid_to_nid_unique))
                         if self.pinned_efeat_buffs is not None:
                             self.pinned_efeat_buffs[
                                 i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
