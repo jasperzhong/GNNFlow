@@ -3,36 +3,46 @@ from typing import Optional, Union
 import torch
 
 from gnnflow.cache.cache import Cache
+from gnnflow.distributed.kvstore import KVStoreClient
 
 
 class LRUCache(Cache):
     """
     Least-recently-used (LRU) cache 
     """
-
     def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
+                 dim_node_feat: Optional[int] = 0,
+                 dim_edge_feat: Optional[int] = 0,
                  pinned_nfeat_buffs: Optional[torch.Tensor] = None,
-                 pinned_efeat_buffs: Optional[torch.Tensor] = None):
+                 pinned_efeat_buffs: Optional[torch.Tensor] = None,
+                 kvstore_client: Optional[KVStoreClient] = None,
+                 distributed: Optional[bool] = False):
         """
         Initialize the cache
 
         Args:
             cache_ratio: The ratio of the cache size to the total number of nodes or edges
+                    range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
             device: The device to use
             node_feats: The node features
             edge_feats: The edge features
+            dim_node_feat: The dimension of node features
+            dim_edge_feat: The dimension of edge features
             pinned_nfeat_buffs: The pinned memory buffers for node features
             pinned_efeat_buffs: The pinned memory buffers for edge features
+            kvstore_client: The KVStore_Client for fetching features when using distributed
         """
         super(LRUCache, self).__init__(cache_ratio, num_nodes,
                                        num_edges, device, node_feats,
-                                       edge_feats, pinned_nfeat_buffs,
-                                       pinned_efeat_buffs)
+                                       edge_feats, dim_node_feat,
+                                       dim_edge_feat, pinned_nfeat_buffs,
+                                       pinned_efeat_buffs, kvstore_client,
+                                       distributed)
         self.name = 'lru'
 
         if self.dim_node_feat != 0:
