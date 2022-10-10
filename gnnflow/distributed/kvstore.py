@@ -61,8 +61,6 @@ class KVStoreServer:
         if mode == 'node':
             return [self._node_feat_map[key] for key in keys]
         elif mode == 'edge':
-            logging.info("edge_feat_map: {}".format(
-                self._edge_feat_map.keys()))
             return [self._edge_feat_map[key] for key in keys]
         elif mode == 'memory':
             return [self._memory_map[key] for key in keys]
@@ -157,6 +155,10 @@ class KVStoreClient:
 
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
+
+            _edge_map = rpc.rpc_sync('worker{}'.format(worker_rank),
+                                     graph_services.pull_tensors, args=(partition_keys, mode))
+            logging.info("edge_map: {}".format(_edge_map.keys()))
 
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.pull_tensors, args=(partition_keys, mode)))

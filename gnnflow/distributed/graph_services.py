@@ -266,6 +266,21 @@ def pull_tensors(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
     return kvstore_server.pull(keys, mode)
 
 
+def pull_maps(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
+    """
+    Pull tensors from the remote workers for KVStore servers.
+
+    Args:
+        keys (torch.Tensor): The key of the tensors.
+        mode (str): The mode of the pull operation.
+
+    Returns:
+        List[torch.Tensor]: The pulled tensors.
+    """
+    kvstore_server = get_kvstore_server()
+    return kvstore_server._edge_feat_map
+
+
 def set_dim_node(dim_node: int):
     """
     Set the dim node.
