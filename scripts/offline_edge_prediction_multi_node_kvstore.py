@@ -216,6 +216,7 @@ def main():
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
+    logging.debug("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed)
