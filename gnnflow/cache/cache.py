@@ -338,12 +338,12 @@ class Cache:
                         if self.pinned_efeat_buffs is not None:
                             self.pinned_efeat_buffs[
                                 i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
-                                    uncached_edge_id_unique, mode='edge', nid=uncached_eid_to_nid_unique)
+                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
                             uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
                                 self.device, non_blocking=True)
                         else:
                             uncached_edge_feature = self.kvstore_client.pull(
-                                uncached_edge_id_unique, mode='edge', nid=uncached_eid_to_nid_unique)
+                                uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
                     else:
                         if self.pinned_efeat_buffs is not None:
                             torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
