@@ -136,7 +136,7 @@ class Cache:
         Init the cache with features
         """
         if self.distributed:
-            return 
+            return
 
         if self.dim_node_feat != 0:
             cache_node_id = torch.arange(
@@ -317,7 +317,10 @@ class Cache:
 
                     if self.distributed:
                         # edge_features need to convert to nid first.
-                        src_nid = b.srcdata['ID'][b.edges()[1]]
+                        src_eid_index = torch.unique_consecutive(
+                            uncached_edge_id_unique_index)
+                        src_nid = b.srcdata['ID'][uncached_mask][b.edges()[
+                            1][uncached_mask][src_eid_index]]
                         if self.pinned_efeat_buffs is not None:
                             self.pinned_efeat_buffs[
                                 i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
