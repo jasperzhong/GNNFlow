@@ -363,7 +363,7 @@ class Cache:
                 if self.distributed:
                     # TODO: maybe there are some edge_features is in the memory now
                     self.target_edge_features = self.kvstore_client.pull(
-                        eid, mode='edge')
+                        eid, mode='edge', nid=mfgs[-1][0].srcdata['ID'][:mfgs[-1][0].num_dst_nodes()])
                 else:
                     self.target_edge_features = self.edge_feats[eid]
 
