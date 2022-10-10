@@ -4,6 +4,7 @@ import torch
 from dgl.heterograph import DGLBlock
 
 from gnnflow.distributed.kvstore import KVStoreClient
+import numpy as np
 
 
 class Cache:
@@ -324,8 +325,13 @@ class Cache:
                         src_nid = b.srcdata['ID'][b.edges()[1]]
                         logging.info("src_nid: {}".format(
                             src_nid.shape))
-                        src_eid_index = torch.unique_consecutive(
-                            uncached_edge_id_unique_index)
+                        # TODO: torch doesn't keep order when using unique
+                        _, idx = np.unique(
+                            uncached_edge_id_unique_index.to_numpy(), return_index=True)
+                        src_eid_index = uncached_edge_id_unique_index[np.sort(
+                            idx)]
+                        # src_eid_index = torch.unique_consecutive(
+                        #     uncached_edge_id_unique_index)
                         logging.info("uncached_edge_id_unique_index: {}".format(
                             uncached_edge_id_unique_index.shape))
                         logging.info("uncached_edge_id_unique_index: {}".format(
