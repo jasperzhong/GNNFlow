@@ -198,7 +198,7 @@ def main():
         # every worker will have a kvstore_client
         kvstore_client = KVStoreClient(
             dgraph.get_partition_table(),
-            dgraph.num_partitions(), args.world_size)
+            dgraph.num_partitions(), args.local_world_size)
         dim_node, dim_edge = graph_services.get_dim_node_edge()
     else:
         dgraph = build_dynamic_graph(
