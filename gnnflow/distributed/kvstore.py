@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 import torch
@@ -60,6 +61,8 @@ class KVStoreServer:
         if mode == 'node':
             return [self._node_feat_map[key] for key in keys]
         elif mode == 'edge':
+            logging.info("edge_feat_map: {}".format(
+                self._edge_feat_map.keys()))
             return [self._edge_feat_map[key] for key in keys]
         elif mode == 'memory':
             return [self._memory_map[key] for key in keys]
