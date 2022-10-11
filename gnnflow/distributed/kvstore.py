@@ -36,8 +36,6 @@ class KVStoreServer:
             keys (torch.Tensor): The keys.
             tensors (List[torch.Tensor]): The tensors.
         """
-        logging.info("keys: {}".format(keys.shape))
-        logging.info("tensors: {}".format(tensors.shape))
         assert len(keys) == len(
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
