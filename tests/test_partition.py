@@ -67,10 +67,10 @@ class TestPartition(unittest.TestCase):
 
             for idx in range(len(partitions)):
                 pt = partitions[idx]
-                print("Test Partition; Dataset Name:{}; Partition ID:{}; num_edges:{}\n"
-                      .format(dataset_name, idx, len(pt.eids)))
+                # print("Test Partition; Dataset Name:{}; Partition ID:{}; num_edges:{}\n"
+                #       .format(dataset_name, idx, len(pt.eids)))
 
-            print("Current Partition Table size is :{}\n".format(len(test_partitioner.get_partition_table())))
+            # print("Current Partition Table size is :{}\n".format(len(test_partitioner.get_partition_table())))
 
             print("====== Dataset Range {} to {} finished ======\n".format(i, i + ingestion_batch_size))
 
