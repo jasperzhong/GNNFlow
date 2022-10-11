@@ -411,6 +411,10 @@ class LDGPartitioner(Partitioner):
         for i in range(len(unique_src_nodes)):
             pid = self.LDG(int(unique_src_nodes[i]))
             partition_table[i] = pid
+
+            if unique_src_nodes[i].item() == 0:
+                print("First node find and its ptable is: {}\n".format(pid))
+
             self._partition_table[int(unique_src_nodes[i])] = pid
 
             for dst_nid in dst_nodes_list[i]:
