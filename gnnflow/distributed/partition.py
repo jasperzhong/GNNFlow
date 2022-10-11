@@ -168,7 +168,7 @@ class Partitioner:
         partition_table = partition_table[inverse_idx]
         partition_table = partition_table.gather(0, sorted_idx.argsort(0))
 
-        logging.debug("Partition Table is :{}".format(partition_table))
+        logging.warning("Partition Table is :{}".format(partition_table))
 
         return partition_table
 
@@ -403,8 +403,6 @@ class LDGPartitioner(Partitioner):
         partition_score = np.array(partition_score)
 
         pvt = np.random.choice(np.where(partition_score == partition_score.max())[0])
-        if pvt >= self._num_partitions:
-            print("Incorrect pt: pvt:{} partition_score:{},  vid:{}\n".format(pvt, partition_score, vid))
 
         return pvt
         # return np.argmax(partition_score)
@@ -417,9 +415,6 @@ class LDGPartitioner(Partitioner):
         for i in range(len(unique_src_nodes)):
             pid = self.LDG(int(unique_src_nodes[i]))
             partition_table[i] = pid
-
-            if unique_src_nodes[i].item() == 0:
-                logging.warning("First node find and its ptable is: {}\n".format(pid))
 
             self._partition_table[int(unique_src_nodes[i])] = pid
 
