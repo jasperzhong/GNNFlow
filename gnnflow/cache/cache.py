@@ -318,51 +318,52 @@ class Cache:
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
 
-                    if self.distributed:
-                        # edge_features need to convert to nid first.
-                        # get the first_indices of the origin tensor in unique
-                        # pytorch should have this option like numpy !!
-                        uncached_edge_id_unique, uncached_edge_id_unique_index, counts = torch.unique(
-                            uncached_edge_id, return_inverse=True, return_counts=True)
-                        _, ind_sorted = torch.sort(
-                            uncached_edge_id_unique_index, stable=True)
-                        cum_sum = counts.cumsum(0)
-                        cum_sum = torch.cat(
-                            (torch.tensor([0]).cuda(), cum_sum[:-1]))
-                        first_indicies = ind_sorted[cum_sum]
+                    if len(uncached_edge_id) > 0:
+                        if self.distributed:
+                            # edge_features need to convert to nid first.
+                            # get the first_indices of the origin tensor in unique
+                            # pytorch should have this option like numpy !!
+                            uncached_edge_id_unique, uncached_edge_id_unique_index, counts = torch.unique(
+                                uncached_edge_id, return_inverse=True, return_counts=True)
+                            _, ind_sorted = torch.sort(
+                                uncached_edge_id_unique_index, stable=True)
+                            cum_sum = counts.cumsum(0)
+                            cum_sum = torch.cat(
+                                (torch.tensor([0]).cuda(), cum_sum[:-1]))
+                            first_indicies = ind_sorted[cum_sum]
 
-                        src_nid = b.srcdata['ID'][b.edges()[1]]
-                        uncached_eid_to_nid = src_nid[uncached_mask]
-                        # use the same indices as eid when unique
-                        uncached_eid_to_nid_unique = uncached_eid_to_nid[first_indicies].cpu(
-                        )
-                        if self.pinned_efeat_buffs is not None:
-                            self.pinned_efeat_buffs[
-                                i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
+                            src_nid = b.srcdata['ID'][b.edges()[1]]
+                            uncached_eid_to_nid = src_nid[uncached_mask]
+                            # use the same indices as eid when unique
+                            uncached_eid_to_nid_unique = uncached_eid_to_nid[first_indicies].cpu(
+                            )
+                            if self.pinned_efeat_buffs is not None:
+                                self.pinned_efeat_buffs[
+                                    i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
+                                        uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
+                                uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
+                                    self.device, non_blocking=True)
+                            else:
+                                uncached_edge_feature = self.kvstore_client.pull(
                                     uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
-                            uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
-                                self.device, non_blocking=True)
                         else:
-                            uncached_edge_feature = self.kvstore_client.pull(
-                                uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
-                    else:
-                        uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
-                            uncached_edge_id, return_inverse=True)
-                        if self.pinned_efeat_buffs is not None:
-                            torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
-                                               out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
-                            uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
-                                self.device, non_blocking=True)
-                        else:
-                            uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
-                                self.device, non_blocking=True)
+                            uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
+                                uncached_edge_id, return_inverse=True)
+                            if self.pinned_efeat_buffs is not None:
+                                torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
+                                                   out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
+                                uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
+                                    self.device, non_blocking=True)
+                            else:
+                                uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
+                                    self.device, non_blocking=True)
 
-                    edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
+                        edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
 
                     i += 1
                     b.edata['f'] = edge_feature
 
-                    if update_cache:
+                    if update_cache and len(uncached_edge_id) > 0:
                         self.update_edge_cache(cached_edge_index=cached_edge_index,
                                                uncached_edge_id=uncached_edge_id_unique,
                                                uncached_edge_feature=uncached_edge_feature)
