@@ -163,11 +163,11 @@ class Partitioner:
             unique_src_nodes, dst_nodes_list, timestamps_list, eids_list)
 
         # restore partition table to the original src_nodes's size
-        logging.debug("before inverse_idx, the partitiontable is {}\n".format(partition_table))
+        logging.info("before inverse_idx, the partitiontable is {}\n".format(partition_table))
         partition_table = partition_table[inverse_idx]
-        logging.debug("before the gather, the partition table is {}\n".format(partition_table))
+        logging.info("before the gather, the partition table is {}\n".format(partition_table))
         partition_table = partition_table.gather(0, sorted_idx.argsort(0))
-        logging.debug("finally the partititon table is {}\n".format(partition_table))
+        logging.info("finally the partititon table is {}\n".format(partition_table))
 
         return partition_table
 
