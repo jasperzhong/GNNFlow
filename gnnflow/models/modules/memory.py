@@ -197,12 +197,6 @@ class Memory:
             last_updated_ts: new timestamp of the nodes
         """
         if self.partition:
-            logging.info("last_updated_nid: {}".format(
-                last_updated_nid.device))
-            logging.info("last_updated_memory: {}".format(
-                last_updated_memory.device))
-            logging.info("last_updated_ts: {}".format(
-                last_updated_ts.device))
             self.kvstore_client.push(
                 last_updated_nid.cpu(), last_updated_memory.cpu(), mode='memory')
             self.kvstore_client.push(
@@ -263,8 +257,6 @@ class Memory:
 
         # update mailbox
         if self.partition:
-            logging.info("nid: {}".format(nid.device))
-            logging.info("mail: {}".format(mail.device))
             self.kvstore_client.push(nid, mail, mode='mailbox')
             self.kvstore_client.push(nid, mail_ts, mode='mailbox_ts')
         else:
