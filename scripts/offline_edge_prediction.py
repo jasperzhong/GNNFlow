@@ -172,15 +172,12 @@ def main():
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank, dataset_df=full_data)
 
-    num_nodes = dgraph.num_vertices()
-    num_edges = dgraph.num_edges()
+    num_nodes = dgraph.num_vertices() + 1
+    num_edges = dgraph.num_edges() 
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
         args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
-
-    edge_feats = torch.randn(672447, 172)
-    node_feats = torch.randn(10985, 172)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
