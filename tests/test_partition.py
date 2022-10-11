@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from parameterized import parameterized
 
-from dgnn.distributed.partition import get_partitioner
+from gnnflow.distributed.partition import get_partitioner
 
 logging.basicConfig(level=logging.DEBUG)
 
