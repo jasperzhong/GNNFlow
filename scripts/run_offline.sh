@@ -18,6 +18,7 @@ else
 fi
 
 echo $cmd
-#OMP_NUM_THREADS=8 exec $cmd > $MODEL-$DATA-$CACHE-$CACHE_RATIO-$NPROC_PER_NODE.log 2>&1
+OMP_NUM_THREADS=8 exec $cmd
+# > $MODEL-$DATA-$CACHE-$CACHE_RATIO-$NPROC_PER_NODE.log 2>&1
 
 
