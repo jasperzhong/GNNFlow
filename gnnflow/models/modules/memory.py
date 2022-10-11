@@ -4,6 +4,7 @@ This code is based on the implementation of TGL's memory module.
 Implementation at:
     https://github.com/amazon-research/tgl/blob/main/memorys.py
 """
+import logging
 from typing import Dict, Optional, Union
 
 import torch
@@ -256,6 +257,8 @@ class Memory:
 
         # update mailbox
         if self.partition:
+            logging.info("nid: {}".format(nid.shape))
+            logging.info("mail: {}".format(mail.shape))
             self.kvstore_client.push(nid, mail, mode='mailbox')
             self.kvstore_client.push(nid, mail_ts, mode='mailbox_ts')
         else:
