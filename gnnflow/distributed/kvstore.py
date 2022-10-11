@@ -77,8 +77,7 @@ class KVStoreServer:
         elif mode == 'memory':
             return [self._memory_map[int(key)] for key in keys]
         elif mode == 'memory_ts':
-            memory_ts = [self._memory_ts_map[int(key)] for key in keys]
-            logging.info("memory_ts: {}".format(memory_ts))
+            return [self._memory_ts_map[int(key)] for key in keys]
         elif mode == 'mailbox':
             return [self._mailbox_map[int(key)] for key in keys]
         elif mode == 'mailbox_ts':
