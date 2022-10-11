@@ -70,7 +70,7 @@ class Partitioner:
         Returns:
             A list of partitions.
         """
-        logging.warning("I am IN!!!!!!!!\n")
+        print("I am IN!!!!!!!!\n")
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
