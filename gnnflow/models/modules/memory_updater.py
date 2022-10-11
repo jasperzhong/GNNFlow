@@ -56,39 +56,32 @@ class GRUMemeoryUpdater(torch.nn.Module):
                 "last_updated_ts": timestamp of the target nodes
             }
         """
-        num_dst_nodes = b.num_dst_nodes()
         device = b.device
 
         if self.use_time_enc:
-            target_node_ts = b.srcdata['ts'][:num_dst_nodes]
-            time_feat = self.time_enc(target_node_ts - b.dstdata['mem_ts'])
-        else:
-            # dummy time features
-            time_feat = torch.zeros(num_dst_nodes, 0, device=device)
+            time_feat = self.time_enc(b.srcdata['ts'] - b.srcdata['mem_ts'])
+            b.srcdata['mem_input'] = torch.cat(
+                [b.srcdata['mem_input'], time_feat], dim=1)
 
-        b.dstdata['mem_input'] = torch.cat(
-            [b.dstdata['mem_input'], time_feat], dim=1)
-
-        target_node_memory_input = b.dstdata['mem_input']
-        target_node_memory = b.srcdata['mem'][:num_dst_nodes]
         updated_memory = self.updater(
-            target_node_memory_input, target_node_memory)
+            b.srcdata['mem_input'], b.srcdata['mem'])
 
-        last_updated_nid = b.srcdata['ID'][:num_dst_nodes].to(device)
-        last_updated_memory = updated_memory.detach().clone().to(device)
-        last_updated_ts = b.srcdata['ts'][:num_dst_nodes].to(device)
-
-        new_memory = torch.cat(
-            (updated_memory, b.srcdata['mem'][num_dst_nodes:]), dim=0)
+        num_dst_nodes = b.num_dst_nodes()
+        last_updated_nid = b.srcdata['ID'][:num_dst_nodes].clone(
+        ).detach().to(device)
+        last_updated_memory = updated_memory[:num_dst_nodes].clone(
+        ).detach().to(device)
+        last_updated_ts = b.srcdata['ts'][:num_dst_nodes].clone(
+        ).detach().to(device)
 
         if self.dim_node > 0:
             if self.dim_node == self.dim_embed:
-                b.srcdata['h'] += new_memory
+                b.srcdata['h'] += updated_memory
             else:
-                b.srcdata['h'] = new_memory + \
+                b.srcdata['h'] = updated_memory + \
                     self.node_feat_proj(b.srcdata['h'])
         else:
-            b.srcdata['h'] = new_memory
+            b.srcdata['h'] = updated_memory
 
         return {
             "last_updated_nid": last_updated_nid,
