@@ -396,7 +396,11 @@ class LDGPartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
-        return np.random.choice(np.where(partition_score == partition_score.max())[0])
+        pvt = np.random.choice(np.where(partition_score == partition_score.max())[0])
+        if pvt >= self._num_partitions:
+            print("Incorrect pt: pvt:{} partition_score:{},  vid:{}\n".format(pvt, partition_score, vid))
+
+        return pvt
         # return np.argmax(partition_score)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
