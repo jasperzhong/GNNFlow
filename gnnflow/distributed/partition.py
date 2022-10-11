@@ -415,7 +415,7 @@ class LDGPartitioner(Partitioner):
             partition_table[i] = pid
 
             if unique_src_nodes[i].item() == 0:
-                print("First node find and its ptable is: {}\n".format(pid))
+                logging.warning("First node find and its ptable is: {}\n".format(pid))
 
             self._partition_table[int(unique_src_nodes[i])] = pid
 
