@@ -318,6 +318,8 @@ class Cache:
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
 
+                    assert len(uncached_edge_id) > 0 or (len(
+                        uncached_edge_id) == 0 and cache_mask.sum() == len(edges)), "BUG!!!"
                     if len(uncached_edge_id) > 0:
                         if self.distributed:
                             # edge_features need to convert to nid first.
