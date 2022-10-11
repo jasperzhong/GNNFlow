@@ -143,7 +143,7 @@ class KVStoreClient:
             if partition_mask.sum() == 0:
                 continue
             partition_keys = keys[partition_mask]
-
+            partition_tensors = tensors[partition_mask]
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
 
