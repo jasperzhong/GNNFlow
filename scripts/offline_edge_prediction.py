@@ -17,14 +17,14 @@ from torch.utils.data import BatchSampler, SequentialSampler
 import gnnflow.cache as caches
 from gnnflow.config import get_default_config
 from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
-                       RandomStartBatchSampler, default_collate_ndarray)
+                          RandomStartBatchSampler, default_collate_ndarray)
 from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
-                        get_pinned_buffers, get_project_root_dir, load_dataset,
-                        load_feat, mfgs_to_cuda)
+                           get_pinned_buffers, get_project_root_dir, load_dataset,
+                           load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -83,9 +83,10 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
         for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
-            mfgs = cache.fetch_feature(mfgs)
+            mfgs = cache.fetch_feature(
+                mfgs, eid)
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs, edge_feats=cache.target_edge_features)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -173,7 +174,7 @@ def main():
         **data_config, device=args.local_rank, dataset_df=full_data)
 
     num_nodes = dgraph.num_vertices() + 1
-    num_edges = dgraph.num_edges() 
+    num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
         args.data, shared_memory=args.distributed,
@@ -202,14 +203,17 @@ def main():
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
-        node_feats, edge_feats)
+        dim_node, dim_edge)
 
     # Cache
     cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,
+                                        dim_node, dim_edge,
                                         pinned_nfeat_buffs,
-                                        pinned_efeat_buffs)
+                                        pinned_efeat_buffs,
+                                        None,
+                                        False)
 
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
@@ -261,12 +265,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
-            mfgs = cache.fetch_feature(mfgs)
+            mfgs = cache.fetch_feature(
+                mfgs, eid)
 
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs, edge_feats=cache.target_edge_features)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))

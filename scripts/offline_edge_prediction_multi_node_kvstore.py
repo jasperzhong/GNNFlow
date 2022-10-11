@@ -292,7 +292,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
-        cache.reset()
+        # cache.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
