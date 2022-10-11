@@ -77,7 +77,8 @@ class KVStoreServer:
         elif mode == 'memory':
             return [self._memory_map[int(key)] for key in keys]
         elif mode == 'memory_ts':
-            return [self._memory_ts_map[int(key)] for key in keys]
+            memory_ts = [self._memory_ts_map[int(key)] for key in keys]
+            logging.info("memory_ts: {}".format(memory_ts))
         elif mode == 'mailbox':
             return [self._mailbox_map[int(key)] for key in keys]
         elif mode == 'mailbox_ts':
@@ -215,11 +216,13 @@ class KVStoreClient:
         for pull_result in pull_results:
             all_pull_results += len(pull_result)
 
-        logging.info("pull_results {}".format(pull_results))
-        logging.info("pull_results {}".format(pull_results[0][0].shape))
-        logging.info("pull_results {}".format(pull_results[0][0].shape))
-        all_pull_results = torch.zeros(
-            (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
+        # torch scalar
+        if pull_results[0][0].shape == torch.Size([]):
+            all_pull_results = torch.zeros(
+                (all_pull_results,), dtype=torch.float32)
+        else:
+            all_pull_results = torch.zeros(
+                (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
