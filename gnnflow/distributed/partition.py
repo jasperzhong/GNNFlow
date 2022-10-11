@@ -307,6 +307,7 @@ class LDGPartitioner(Partitioner):
     # LDG Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
+        print("I am INNNNNNN LDG!\n")
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
