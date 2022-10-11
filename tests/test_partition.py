@@ -2,12 +2,16 @@ import itertools
 import time
 import unittest
 
+import logging
+
 import numpy as np
 import pandas as pd
 import torch
 from parameterized import parameterized
 
 from dgnn.distributed.partition import get_partitioner
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class TestPartition(unittest.TestCase):
