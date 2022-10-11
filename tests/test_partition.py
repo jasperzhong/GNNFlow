@@ -102,6 +102,7 @@ class TestPartition(unittest.TestCase):
             if ptable[i].item() >= num_p:
                 print("Incorrect Partition Table in vid {} is:{}\n".format(i, ptable[i].item()))
 
+        print("Ptable is {}".format(ptable))
         # print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
         # print("Load factor is:{} \n".format(load_factor))
         # print("Edge Cut Percentage is :{}%; Number of Edge Cut: {}; Number of Total Edge: {}\n"
