@@ -215,6 +215,9 @@ class KVStoreClient:
         for pull_result in pull_results:
             all_pull_results += len(pull_result)
 
+        logging.info("pull_results {}".format(pull_results))
+        logging.info("pull_results {}".format(pull_results[0][0].shape))
+        logging.info("pull_results {}".format(pull_results[0][0].shape))
         all_pull_results = torch.zeros(
             (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
 
