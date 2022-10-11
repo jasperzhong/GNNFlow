@@ -98,7 +98,9 @@ class TestPartition(unittest.TestCase):
         print("========== All Batch Finished =========\n")
 
         # Print Partition Table
-        print("Partition Table is:{}".format(ptable))
+        for i in range(len(ptable)):
+            if ptable[i].item() >= num_p:
+                print("Incorrect Partition Table in vid {} is:{}\n".format(i, ptable[i].item()))
 
         # print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
         # print("Load factor is:{} \n".format(load_factor))
