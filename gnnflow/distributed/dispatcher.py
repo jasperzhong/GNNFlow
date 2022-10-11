@@ -109,7 +109,7 @@ class Dispatcher:
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, mailbox, 'mail')))
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, mailbox_ts, 'mail_ts')))
+                                             args=(keys, mailbox_ts, 'mailbox_ts')))
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:
