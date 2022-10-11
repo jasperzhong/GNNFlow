@@ -33,7 +33,6 @@ cmd="torchrun \
     --partition --ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY"
 
-
 echo $cmd
 NCCL_IB_DISABLE=1 NCCL_DEBUG=INFO CUDA_LAUNCH_BLOCKING=1 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
 

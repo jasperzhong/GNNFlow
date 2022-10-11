@@ -9,8 +9,9 @@ from typing import Dict, Optional, Union
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
-
 from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
+
+from gnnflow.utils import local_rank, local_world_size
 
 
 class Memory:
@@ -41,8 +42,8 @@ class Memory:
         self.device = device
 
         if shared_memory:
-            local_world_size = torch.cuda.device_count()
-            local_rank = torch.distributed.get_rank() % local_world_size
+            local_world_size = local_world_size()
+            local_rank = local_rank()
         else:
             local_world_size = 1
             local_rank = 0
