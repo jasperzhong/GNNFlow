@@ -37,7 +37,7 @@ class KVStoreServer:
             tensors (List[torch.Tensor]): The tensors.
         """
         logging.info("keys: {}".format(keys.shape))
-        logging.info("keys: {}".format(keys.shape))
+        logging.info("tensors: {}".format(tensors.shape))
         assert len(keys) == len(
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
@@ -148,7 +148,7 @@ class KVStoreClient:
             worker_rank = partition_id * self._num_workers_per_machine
 
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
-                                         graph_services.push_tensors, args=(partition_keys, tensors, mode)))
+                                         graph_services.push_tensors, args=(partition_keys, partition_tensors, mode)))
 
         for future in futures:
             future.wait()
