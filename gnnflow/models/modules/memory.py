@@ -166,8 +166,6 @@ class Memory:
                 `b.srcdata['ts']` is the time stamps of all nodes.
         """
         device = b.device
-        num_dst_nodes = b.num_dst_nodes()
-        target_nodes = b.srcdata['ID'][:num_dst_nodes]
         all_nodes = b.srcdata['ID']
         assert isinstance(all_nodes, torch.Tensor)
 
@@ -182,9 +180,9 @@ class Memory:
                 all_nodes.cpu(), mode='mailbox').to(device)
         else:
             b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
-            b.dstdata['mem_ts'] = self.node_memory_ts[target_nodes].to(device)
-            b.dstdata['mail_ts'] = self.mailbox_ts[target_nodes].to(device)
-            b.dstdata['mem_input'] = self.mailbox[target_nodes].to(device)
+            b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
+            b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
+            b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
 
     def update_memory(self, last_updated_nid: torch.Tensor,
                       last_updated_memory: torch.Tensor,
