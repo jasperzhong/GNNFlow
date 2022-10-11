@@ -24,6 +24,9 @@ class KVStoreServer:
         self._node_feat_map = {}
         self._edge_feat_map = {}
         self._memory_map = {}
+        self._memory_ts_map = {}
+        self._mailbox_map = {}
+        self._mailbox_ts_map = {}
 
     def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
         """
@@ -45,6 +48,15 @@ class KVStoreServer:
         elif mode == 'memory':
             for key, tensor in zip(keys, tensors):
                 self._memory_map[int(key)] = tensor
+        elif mode == 'memory_ts':
+            for key, tensor in zip(keys, tensors):
+                self._memory_ts_map[int(key)] = tensor
+        elif mode == 'mailbox':
+            for key, tensor in zip(keys, tensors):
+                self._mailbox_map[int(key)] = tensor
+        elif mode == 'mailbox_ts':
+            for key, tensor in zip(keys, tensors):
+                self._mailbox_ts_map[int(key)] = tensor
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -64,8 +76,24 @@ class KVStoreServer:
             return [self._edge_feat_map[int(key)] for key in keys]
         elif mode == 'memory':
             return [self._memory_map[int(key)] for key in keys]
+        elif mode == 'memory_ts':
+            return [self._memory_ts_map[int(key)] for key in keys]
+        elif mode == 'mailbox':
+            return [self._mailbox_map[int(key)] for key in keys]
+        elif mode == 'mailbox_ts':
+            return [self._mailbox_ts_map[int(key)] for key in keys]
         else:
             raise ValueError(f"Unknown mode: {mode}")
+
+    def reset_memory(self):
+        for mem, mem_ts, mail, mail_ts in zip(self._memory_map.values(),
+                                              self._memory_ts_map.values(),
+                                              self._mailbox_map.values(),
+                                              self._mailbox_ts_map.values()):
+            mem.fill_(0)
+            mem_ts.fill_(0)
+            mail.fill_(0)
+            mail_ts.fill_(0)
 
 
 class KVStoreClient:
@@ -77,10 +105,12 @@ class KVStoreClient:
 
     def __init__(self, partition_table: torch.Tensor,
                  num_partitions: int,
-                 num_workers_per_machine: int):
+                 num_workers_per_machine: int,
+                 local_rank: int):
         self._partition_table = partition_table
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
+        self._local_rank = local_rank
 
     def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str, nid: Optional[torch.Tensor] = None):
         """
@@ -193,3 +223,8 @@ class KVStoreClient:
             all_pull_results[idx] = torch.stack(pull_result)
 
         return all_pull_results
+
+    # only reset the memory on its machine
+    def reset_memory(self):
+        if self._local_rank == 0:
+            graph_services.reset_memory()

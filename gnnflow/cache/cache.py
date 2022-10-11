@@ -318,26 +318,6 @@ class Cache:
                     uncached_mask = ~cache_mask
                     uncached_edge_id = edges[uncached_mask]
 
-                    # get the first_indices of the origin tensor in unique
-                    # pytorch should have this option like numpy !!
-                    uncached_edge_id_unique, uncached_edge_id_unique_index, counts = torch.unique(
-                        uncached_edge_id, return_inverse=True, return_counts=True)
-                    _, ind_sorted = torch.sort(
-                        uncached_edge_id_unique_index, stable=True)
-                    cum_sum = counts.cumsum(0)
-                    cum_sum = torch.cat(
-                        (torch.tensor([0]).cuda(), cum_sum[:-1]))
-                    first_indicies = ind_sorted[cum_sum]
-
-                    # uncached_edge_id_unique_index.sort()
-                    src_eid_index = torch.unique(
-                        uncached_edge_id_unique_index)
-                    uncached_edge_id_unique = uncached_edge_id_unique[src_eid_index]
-                    src_nid = b.srcdata['ID'][b.edges()[1]]
-
-                    uncached_eid_to_nid = src_nid[uncached_mask]
-                    uncached_eid_to_nid_unique = uncached_eid_to_nid[src_eid_index].cpu(
-                    )
                     if self.distributed:
                         # edge_features need to convert to nid first.
                         # get the first_indices of the origin tensor in unique

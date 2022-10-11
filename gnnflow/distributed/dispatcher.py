@@ -33,7 +33,8 @@ class Dispatcher:
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor, node_feats: Optional[torch.Tensor] = None,
-                       edge_feats: Optional[torch.Tensor] = None, defer_sync: bool = False):
+                       edge_feats: Optional[torch.Tensor] = None, defer_sync: bool = False,
+                       dim_memory: Optional[int] = 0):
         """
         Dispatch the edges to the workers.
 
@@ -45,6 +46,7 @@ class Dispatcher:
             node_feats (torch.Tensor): The node features of the edges.
             edge_feats (torch.Tensor): The edge features of the edges.
             defer_sync (bool): Whether to defer the synchronization.
+            dim_memory (int): Dimension of the memory.
         """
         self._nodes.update(src_nodes)
         self._nodes.update(dst_nodes)
@@ -54,6 +56,9 @@ class Dispatcher:
             src_nodes, dst_nodes, timestamps, eids)
 
         self._max_node = self._partitioner._max_node
+
+        dim_node = 0 if node_feats is None else node_feats.shape[1]
+        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
         # Dispatch the partitions to the workers.
         futures = []
@@ -87,7 +92,24 @@ class Dispatcher:
                 features = edge_feats[keys]
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, features, 'edge')))
-
+            if dim_memory > 0:
+                keys = torch.cat((edges[0], edges[1])).unique()
+                # use None as value and just init keys here.
+                memory = torch.zeros(
+                    (len(keys), dim_memory), dtype=torch.float32)
+                memory_ts = torch.zeros(len(keys), dtype=torch.float32)
+                dim_raw_message = 2 * dim_memory + dim_edge
+                mailbox = torch.zeros(
+                    (len(keys), dim_raw_message), dtype=torch.float32)
+                mailbox_ts = torch.zeros((len(keys), ), dtype=torch.float32)
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                             args=(keys, memory, 'memory')))
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                             args=(keys, memory_ts, 'memory_ts')))
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                             args=(keys, mailbox, 'mail')))
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                             args=(keys, mailbox_ts, 'mail_ts')))
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:
@@ -95,15 +117,14 @@ class Dispatcher:
 
             self.broadcast_graph_metadata()
             self.broadcast_partition_table()
-            dim_node = 0 if node_feats is None else node_feats.shape[1]
-            dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
             self.broadcast_node_edge_dim(dim_node, dim_edge)
 
         return futures
 
     def partition_graph(self, dataset: pd.DataFrame, ingestion_batch_size: int,
                         undirected: bool, node_feats: Optional[torch.Tensor] = None,
-                        edge_feats: Optional[torch.Tensor] = None):
+                        edge_feats: Optional[torch.Tensor] = None,
+                        dim_memory: Optional[int] = 0):
         """
         partition the dataset to the workers.
 
@@ -113,6 +134,7 @@ class Dispatcher:
             undirected (bool): Whether the graph is undirected.
             node_feats (torch.Tensor): The node features of the dataset.
             edge_feats (torch.Tensor): The edge features of the dataset.
+            dim_memory (int): Dimension of the memory.
         """
         # Partition the dataset.
         futures = []
@@ -137,7 +159,8 @@ class Dispatcher:
             eids = torch.from_numpy(eids)
 
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
-                           timestamps, eids, node_feats, edge_feats, defer_sync=True))
+                           timestamps, eids, node_feats, edge_feats,
+                           defer_sync=True, dim_memory=dim_memory))
 
             # Wait for the workers to finish.
             for future in futures:

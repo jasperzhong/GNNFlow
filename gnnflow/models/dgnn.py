@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Union
 
 import torch
 from dgl.heterograph import DGLBlock
+from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.models.modules.layers import EdgePredictor, TransfomerAttentionLayer
 from gnnflow.models.modules.memory import Memory
 from gnnflow.models.modules.memory_updater import GRUMemeoryUpdater
@@ -24,7 +25,9 @@ class DGNN(torch.nn.Module):
                  use_memory: bool, dim_memory: Optional[int] = None,
                  num_nodes: Optional[int] = None,
                  memory_device: Union[torch.device, str] = 'cpu',
-                 memory_shared: bool = False, *args, **kwargs):
+                 memory_shared: bool = False,
+                 kvstore_client: Optional[KVStoreClient] = None,
+                 *args, **kwargs):
         """
         Args:
             dim_node: dimension of node features/embeddings
@@ -41,6 +44,7 @@ class DGNN(torch.nn.Module):
             num_nodes: number of nodes in the graph
             memory_device: device of the memory
             memory_shared: whether to share memory across local workers
+            kvstore_client: The KVStore_Client for fetching memorys when using partition
         """
         super(DGNN, self).__init__()
         self.dim_node = dim_node
@@ -61,7 +65,8 @@ class DGNN(torch.nn.Module):
             assert num_nodes is not None, 'num_nodes is required when using memory'
 
             self.memory = Memory(num_nodes, dim_edge, dim_memory,
-                                 memory_device, memory_shared)
+                                 memory_device, memory_shared,
+                                 kvstore_client)
 
             self.memory_updater = GRUMemeoryUpdater(
                 dim_node, dim_edge, dim_time, dim_memory)

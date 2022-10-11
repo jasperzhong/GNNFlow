@@ -266,6 +266,14 @@ def pull_tensors(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
     return kvstore_server.pull(keys, mode)
 
 
+def reset_memory():
+    """
+    Reset all the values in the memory & mailbox.
+    """
+    kvstore_server = get_kvstore_server()
+    kvstore_server.reset_memory()
+
+
 def set_dim_node(dim_node: int):
     """
     Set the dim node.

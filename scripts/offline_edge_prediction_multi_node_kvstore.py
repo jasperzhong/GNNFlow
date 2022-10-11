@@ -187,6 +187,7 @@ def main():
     node_feats = None
     edge_feats = None
     kvstore_client = None
+    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
     if args.partition:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank)
@@ -194,11 +195,13 @@ def main():
         dgraph = graph_services.get_dgraph()
         gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
                                        args.ingestion_batch_size, args.partition_strategy,
-                                       args.num_nodes, data_config["undirected"], args.data)
+                                       args.num_nodes, data_config["undirected"], args.data,
+                                       args.dim_memory)
         # every worker will have a kvstore_client
         kvstore_client = KVStoreClient(
             dgraph.get_partition_table(),
-            dgraph.num_partitions(), args.local_world_size)
+            dgraph.num_partitions(), args.local_world_size,
+            args.local_rank)
         dim_node, dim_edge = graph_services.get_dim_node_edge()
     else:
         dgraph = build_dynamic_graph(
@@ -219,7 +222,8 @@ def main():
     logging.debug("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.distributed)
+                 memory_device=device, memory_shared=args.distributed,
+                 kvstore_client=kvstore_client)
     model.to(device)
     args.use_memory = model.has_memory()
     logging.info("use memory: {}".format(args.use_memory))
