@@ -108,3 +108,6 @@ def test_partition_graph(partition_strategy, batch_size):
 
 def main():
     test_partition_graph("hash", 10000)
+
+if __name__ == '__main__':
+    main()
