@@ -292,6 +292,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
+        # TODO: now reset do nothing when using distributed
         cache.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0

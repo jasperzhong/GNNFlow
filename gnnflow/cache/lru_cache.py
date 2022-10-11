@@ -71,6 +71,7 @@ class LRUCache(Cache):
         Reset the cache
         """
         # NB: only edge cache is reset
+        # TODO: reset logic may need some design for distributed
         if self.edge_feats is not None:
             cache_edge_id = torch.arange(
                 self.edge_capacity, dtype=torch.int64, device=self.device)
