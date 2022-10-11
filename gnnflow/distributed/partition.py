@@ -163,8 +163,8 @@ class Partitioner:
             unique_src_nodes, dst_nodes_list, timestamps_list, eids_list)
 
         # restore partition table to the original src_nodes's size
-        partition_table[1:] = partition_table[inverse_idx]
-        partition_table[1:] = partition_table.gather(0, sorted_idx.argsort(0))
+        partition_table[1:] = partition_table[1:][inverse_idx]
+        partition_table[1:] = partition_table[1:].gather(0, sorted_idx.argsort(0))
 
         return partition_table
 
