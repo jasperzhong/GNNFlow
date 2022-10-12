@@ -198,9 +198,9 @@ class Memory:
         """
         if self.partition:
             self.kvstore_client.push(
-                last_updated_nid.cpu(), last_updated_memory.cpu(), mode='memory')
+                last_updated_nid.cpu(), [last_updated_memory.cpu()], mode='memory')
             self.kvstore_client.push(
-                last_updated_nid.cpu(), last_updated_ts.cpu(), mode='memory_ts')
+                last_updated_nid.cpu(), [last_updated_ts.cpu()], mode='memory_ts')
         else:
             last_updated_nid = last_updated_nid.to(self.device)
             last_updated_memory = last_updated_memory.to(self.device)
@@ -257,8 +257,8 @@ class Memory:
 
         # update mailbox
         if self.partition:
-            self.kvstore_client.push(nid, mail, mode='mailbox')
-            self.kvstore_client.push(nid, mail_ts, mode='mailbox_ts')
+            self.kvstore_client.push(nid, [mail], mode='mailbox')
+            self.kvstore_client.push(nid, [mail_ts], mode='mailbox_ts')
         else:
             self.mailbox[nid] = mail
             self.mailbox_ts[nid] = mail_ts
