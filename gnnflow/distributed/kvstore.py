@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 import torch
@@ -124,6 +125,8 @@ class KVStoreClient:
                 use nid to get the partition ids
 
         """
+        logging.info("tensors: {}".format(tensors))
+        logging.info("tensors type: {}".format(type(tensors)))
         # dispatch different keys to different partitions
         partition_table = self._partition_table
         if mode == 'edge':
@@ -223,6 +226,8 @@ class KVStoreClient:
             all_pull_results = torch.zeros(
                 (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
 
+        logging.info("pull_request types: {}".format(pull_results))
+        logging.info("pull_request types: {}".format(type(pull_results)))
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
             all_pull_results[idx] = pull_results
