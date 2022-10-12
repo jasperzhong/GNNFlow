@@ -150,7 +150,7 @@ class KVStoreClient:
         for future in futures:
             future.wait()
 
-    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
+    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
@@ -161,7 +161,7 @@ class KVStoreClient:
                 use nid to get the partition ids
 
         Returns:
-            List[torch.Tensor]: The tensors.
+            torch.Tensor: The tensors.
         """
         # dispatch different keys to different partitions
         partition_table = self._partition_table
