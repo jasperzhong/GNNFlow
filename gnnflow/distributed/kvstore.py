@@ -129,7 +129,7 @@ class KVStoreClient:
                 use nid to get the partition ids
 
         """
-        logging.info("tensors: {}".format(tensors))
+        # logging.info("tensors: {}".format(tensors))
         logging.info("tensors type: {}".format(type(tensors)))
         # dispatch different keys to different partitions
         partition_table = self._partition_table
