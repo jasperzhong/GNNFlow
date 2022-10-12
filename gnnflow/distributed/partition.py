@@ -109,12 +109,18 @@ class Partitioner:
         assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
         )
 
+        if self._partition_table[0] != -1:
+            print("Incorrect pt: {}".format(self._partition_table))
+
         # merge the partitions
         for i in range(self._num_partitions):
             mask = partition_table_for_unseen_nodes == i
 
             # update the partition table
             self._partition_table[src_nodes[unassigned_mask][mask]] = i
+
+            if self._partition_table[0] != -1:
+                print("Incorrect pt under lopp: {}".format(self._partition_table))
 
             # no need to sort edges here
             partitions[i] = Partition(
@@ -167,8 +173,6 @@ class Partitioner:
         # restore partition table to the original src_nodes's size
         partition_table = partition_table[inverse_idx]
         partition_table = partition_table.gather(0, sorted_idx.argsort(0))
-
-        logging.warning("Partition Table is :{}".format(partition_table))
 
         return partition_table
 
