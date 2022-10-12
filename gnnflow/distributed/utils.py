@@ -1,22 +1,6 @@
-import os
 from collections import defaultdict
 from enum import Enum
 from threading import Lock
-
-import torch
-import torch.distributed
-
-
-def local_world_size():
-    return int(os.environ["LOCAL_WORLD_SIZE"])
-
-
-def local_rank():
-    return int(os.environ["LOCAL_RANK"])
-
-
-def rank():
-    return torch.distributed.get_rank()
 
 
 class WorkStatus(Enum):

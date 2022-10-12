@@ -81,10 +81,6 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   CHECK_EQ(src_nodes.size(), timestamps.size());
   CHECK_EQ(src_nodes.size(), eids.size());
 
-  int device;
-  CUDA_CALL(cudaGetDevice(&device));
-  LOG(DEBUG) << "device: " << device << " graph device: " << device_;
-
   // NB: it seems to be necessary to set the device again.
   CUDA_CALL(cudaSetDevice(device_));
 

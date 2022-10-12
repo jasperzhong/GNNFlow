@@ -13,6 +13,18 @@ from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 from .dynamic_graph import DynamicGraph
 
 
+def local_world_size():
+    return int(os.environ["LOCAL_WORLD_SIZE"])
+
+
+def local_rank():
+    return int(os.environ["LOCAL_RANK"])
+
+
+def rank():
+    return torch.distributed.get_rank()
+
+
 def get_project_root_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
