@@ -39,7 +39,7 @@ parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0005)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",

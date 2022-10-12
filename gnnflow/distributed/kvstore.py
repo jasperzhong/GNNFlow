@@ -28,7 +28,7 @@ class KVStoreServer:
         self._mailbox_map = {}
         self._mailbox_ts_map = {}
 
-    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
+    def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
         Push tensors to the server.
 
@@ -72,17 +72,17 @@ class KVStoreServer:
             List[torch.Tensor]: The tensors.
         """
         if mode == 'node':
-            return [self._node_feat_map[int(key)] for key in keys]
+            return torch.stack([self._node_feat_map[int(key)] for key in keys])
         elif mode == 'edge':
-            return [self._edge_feat_map[int(key)] for key in keys]
+            return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            return [self._memory_map[int(key)] for key in keys]
+            return torch.stack([self._memory_map[int(key)] for key in keys])
         elif mode == 'memory_ts':
-            return [self._memory_ts_map[int(key)] for key in keys]
+            return torch.stack([self._memory_ts_map[int(key)] for key in keys])
         elif mode == 'mailbox':
-            return [self._mailbox_map[int(key)] for key in keys]
+            return torch.stack([self._mailbox_map[int(key)] for key in keys])
         elif mode == 'mailbox_ts':
-            return [self._mailbox_ts_map[int(key)] for key in keys]
+            return torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -226,7 +226,7 @@ class KVStoreClient:
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
-            all_pull_results[idx] = torch.stack(pull_result)
+            all_pull_results[idx] = pull_results
 
         return all_pull_results
 
