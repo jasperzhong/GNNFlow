@@ -1,10 +1,9 @@
 from typing import List, Optional, Union
-import logging
+
 import torch
 from dgl.heterograph import DGLBlock
 
 from gnnflow.distributed.kvstore import KVStoreClient
-import numpy as np
 
 
 class Cache:
@@ -39,6 +38,9 @@ class Cache:
             pinned_nfeat_buffs: The pinned memory buffers for node features
             pinned_efeat_buffs: The pinned memory buffers for edge features
             kvstore_client: The KVStore_Client for fetching features when using distributed
+                    training
+            distributed: Whether to use distributed training
+            neg_sample_ratio: The ratio of negative samples to positive samples
         """
         if device == 'cpu' or device == torch.device('cpu'):
             raise ValueError('Cache must be on GPU')

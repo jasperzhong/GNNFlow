@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 
 import torch
@@ -140,8 +139,8 @@ class KVStoreClient:
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue
-            partition_keys = keys[partition_mask]
-            partition_tensors = tensors[partition_mask]
+            partition_keys = keys[partition_mask].contiguous()
+            partition_tensors = tensors[partition_mask].contiguous()
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
 
@@ -183,7 +182,7 @@ class KVStoreClient:
             if partition_mask.sum() == 0:
                 continue
             # nid and keys are in the same positions
-            partition_keys = keys[partition_mask]
+            partition_keys = keys[partition_mask].contiguous()
 
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
