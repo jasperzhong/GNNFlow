@@ -76,8 +76,8 @@ class KVStoreServer:
             return torch.stack([self._node_feat_map[int(key)] for key in keys])
         elif mode == 'edge':
             for key in keys:
-                logging.info("type edge: {}").format(
-                    self._edge_feat_map[int(key)])
+                logging.info("type edge: {}".format(
+                    self._edge_feat_map[int(key)]))
             return [self._edge_feat_map[int(key)] for key in keys]
         elif mode == 'memory':
             return torch.stack([self._memory_map[int(key)] for key in keys])
