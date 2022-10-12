@@ -22,7 +22,7 @@ from gnnflow.config import get_default_config
 from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
                           RandomStartBatchSampler, default_collate_ndarray)
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
-from gnnflow.distributed.kvstore import KVStoreClient, KVStoreServer
+from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.models.dgnn import DGNN
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,

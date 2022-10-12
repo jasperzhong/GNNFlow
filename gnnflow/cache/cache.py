@@ -1,5 +1,6 @@
 from typing import List, Optional, Union
 
+import numpy as np
 import torch
 from dgl.heterograph import DGLBlock
 
@@ -21,7 +22,7 @@ class Cache:
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
                  distributed: Optional[bool] = False,
-                 neg_sample_ratio: Optional[int] = 1):
+                 neg_sample_ratio: int = 1):
         """
         Initialize the cache
 
@@ -58,6 +59,11 @@ class Cache:
             raise ValueError(
                 'The number of edges in edge_feats {} does not match num_edges {}'.format(
                     edge_feats.shape[0], num_edges))
+
+        if distributed:
+            assert kvstore_client is not None, 'kvstore_client must be provided when using ' \
+                'distributed training'
+            assert neg_sample_ratio > 0, 'neg_sample_ratio must be positive'
 
         # NB: cache_ratio == 0 means no cache
         assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
@@ -226,7 +232,7 @@ class Cache:
         raise NotImplementedError
 
     def fetch_feature(self, mfgs: List[List[DGLBlock]],
-                      eid: Optional[torch.Tensor] = None, update_cache: bool = True,
+                      eid: Optional[np.ndarray] = None, update_cache: bool = True,
                       target_edge_features: bool = True):
         """Fetching the node/edge features of input_node_ids
 
@@ -378,7 +384,7 @@ class Cache:
                         self.neg_sample_ratio + 2)
                     nid = mfgs[-1][0].srcdata['ID'][:num_edges]
                     self.target_edge_features = self.kvstore_client.pull(
-                        eid, mode='edge', nid=nid)
+                        torch.from_numpy(eid), mode='edge', nid=nid)
                 else:
                     self.target_edge_features = self.edge_feats[eid]
 
