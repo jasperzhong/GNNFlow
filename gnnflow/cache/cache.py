@@ -22,7 +22,7 @@ class Cache:
                  pinned_efeat_buffs: Optional[torch.Tensor] = None,
                  kvstore_client: Optional[KVStoreClient] = None,
                  distributed: Optional[bool] = False,
-                 neg_sample_ratio: int = 1):
+                 neg_sample_ratio: Optional[int] = 1):
         """
         Initialize the cache
 

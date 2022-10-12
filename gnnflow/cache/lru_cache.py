@@ -1,4 +1,3 @@
-from operator import neg
 from typing import Optional, Union
 
 import torch
@@ -39,6 +38,9 @@ class LRUCache(Cache):
             pinned_nfeat_buffs: The pinned memory buffers for node features
             pinned_efeat_buffs: The pinned memory buffers for edge features
             kvstore_client: The KVStore_Client for fetching features when using distributed
+                    training
+            distributed: Whether to use distributed training
+            neg_sample_ratio: The ratio of negative samples to positive samples
         """
         super(LRUCache, self).__init__(cache_ratio, num_nodes,
                                        num_edges, device, node_feats,
