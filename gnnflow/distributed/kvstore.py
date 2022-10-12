@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 
 import torch
@@ -39,8 +38,7 @@ class KVStoreServer:
         assert len(keys) == len(
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
-        # logging.info("tensors: {}".format(tensors))
-        logging.info("tensors type: {}".format(type(tensors)))
+
         if mode == 'node':
             for key, tensor in zip(keys, tensors):
                 self._node_feat_map[int(key)] = tensor
@@ -225,8 +223,6 @@ class KVStoreClient:
             all_pull_results = torch.zeros(
                 (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
 
-        # logging.info("pull_request types: {}".format(pull_results))
-        logging.info("pull_request types: {}".format(type(pull_result)))
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
             all_pull_results[idx] = pull_result
