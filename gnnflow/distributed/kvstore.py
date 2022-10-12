@@ -62,7 +62,7 @@ class KVStoreServer:
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
-    def pull(self, keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
+    def pull(self, keys: torch.Tensor, mode: str) -> torch.Tensor:
         """
         Pull tensors from the server.
 
@@ -114,7 +114,7 @@ class KVStoreClient:
         self._num_workers_per_machine = num_workers_per_machine
         self._local_rank = local_rank
 
-    def push(self, keys: torch.Tensor, tensors: List[torch.Tensor], mode: str, nid: Optional[torch.Tensor] = None):
+    def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Push tensors to the corresponding KVStore servers according to the partition table.
 
@@ -126,8 +126,6 @@ class KVStoreClient:
                 use nid to get the partition ids
 
         """
-        # logging.info("tensors: {}".format(tensors))
-        logging.info("tensors type: {}".format(type(tensors)))
         # dispatch different keys to different partitions
         partition_table = self._partition_table
         if mode == 'edge':
