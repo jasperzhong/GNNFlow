@@ -9,7 +9,7 @@ import torch.distributed.rpc as rpc
 
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.partition import get_partitioner
-from gnnflow.distributed.utils import local_world_size
+from gnnflow.utils import local_world_size
 
 global dispatcher
 dispatcher = None

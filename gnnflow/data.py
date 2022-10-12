@@ -10,7 +10,7 @@ import torch.distributed
 from torch._six import string_classes
 from torch.utils.data import BatchSampler, Dataset, Sampler
 
-from gnnflow.utils import RandEdgeSampler
+from gnnflow.utils import RandEdgeSampler, local_rank
 
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
@@ -133,7 +133,7 @@ class DistributedBatchSampler(BatchSampler):
                                                       drop_last)
         self.rank = rank
         self.world_size = world_size
-        self.local_rank = rank % torch.cuda.device_count()
+        self.local_rank = local_rank()
         self.device = torch.device('cuda', self.local_rank)
         assert 0 < num_chunks < batch_size, "num_chunks must be in (0, batch_size)"
 

@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 
 import torch
@@ -140,8 +139,8 @@ class KVStoreClient:
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
                 continue
-            partition_keys = keys[partition_mask]
-            partition_tensors = tensors[partition_mask]
+            partition_keys = keys[partition_mask].clone()
+            partition_tensors = tensors[partition_mask].clone()
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
 
@@ -151,7 +150,7 @@ class KVStoreClient:
         for future in futures:
             future.wait()
 
-    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
+    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
@@ -162,7 +161,7 @@ class KVStoreClient:
                 use nid to get the partition ids
 
         Returns:
-            List[torch.Tensor]: The tensors.
+            torch.Tensor: The tensors.
         """
         # dispatch different keys to different partitions
         partition_table = self._partition_table
@@ -183,7 +182,7 @@ class KVStoreClient:
             if partition_mask.sum() == 0:
                 continue
             # nid and keys are in the same positions
-            partition_keys = keys[partition_mask]
+            partition_keys = keys[partition_mask].clone()
 
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine

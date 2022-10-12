@@ -1,10 +1,10 @@
 from typing import List, Optional, Union
-import logging
+
+import numpy as np
 import torch
 from dgl.heterograph import DGLBlock
 
 from gnnflow.distributed.kvstore import KVStoreClient
-import numpy as np
 
 
 class Cache:
@@ -39,6 +39,9 @@ class Cache:
             pinned_nfeat_buffs: The pinned memory buffers for node features
             pinned_efeat_buffs: The pinned memory buffers for edge features
             kvstore_client: The KVStore_Client for fetching features when using distributed
+                    training
+            distributed: Whether to use distributed training
+            neg_sample_ratio: The ratio of negative samples to positive samples
         """
         if device == 'cpu' or device == torch.device('cpu'):
             raise ValueError('Cache must be on GPU')
@@ -56,6 +59,11 @@ class Cache:
             raise ValueError(
                 'The number of edges in edge_feats {} does not match num_edges {}'.format(
                     edge_feats.shape[0], num_edges))
+
+        if distributed:
+            assert kvstore_client is not None, 'kvstore_client must be provided when using ' \
+                'distributed training'
+            assert neg_sample_ratio > 0, 'neg_sample_ratio must be positive'
 
         # NB: cache_ratio == 0 means no cache
         assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
@@ -224,7 +232,7 @@ class Cache:
         raise NotImplementedError
 
     def fetch_feature(self, mfgs: List[List[DGLBlock]],
-                      eid: Optional[torch.Tensor] = None, update_cache: bool = True,
+                      eid: Optional[np.ndarray] = None, update_cache: bool = True,
                       target_edge_features: bool = True):
         """Fetching the node/edge features of input_node_ids
 
@@ -376,7 +384,7 @@ class Cache:
                         self.neg_sample_ratio + 2)
                     nid = mfgs[-1][0].srcdata['ID'][:num_edges]
                     self.target_edge_features = self.kvstore_client.pull(
-                        eid, mode='edge', nid=nid)
+                        torch.from_numpy(eid), mode='edge', nid=nid)
                 else:
                     self.target_edge_features = self.edge_feats[eid]
 
