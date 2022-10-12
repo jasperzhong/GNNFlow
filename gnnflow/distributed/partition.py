@@ -44,8 +44,6 @@ class Partitioner:
         self._max_node = 0
         # NID -> partition ID, maximum 128 partitions
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
-        self._partition_table[:] = self.UNASSIGNED
-
 
     def get_num_partitions(self) -> int:
         """
@@ -74,7 +72,11 @@ class Partitioner:
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
             self._partition_table.resize_(max_node + 1)
-            self._partition_table[self._max_node + 1:] = self.UNASSIGNED
+            if self._max_node == 0:
+                # init
+                self._partition_table[:] = self.UNASSIGNED
+            else:
+                self._partition_table[self._max_node + 1:] = self.UNASSIGNED
             self._max_node = max_node
         # dispatch edges to already assigned source nodes
         partitions = []
