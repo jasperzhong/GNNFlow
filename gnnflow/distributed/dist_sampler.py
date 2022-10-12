@@ -1,5 +1,4 @@
 import logging
-import os
 import threading
 import time
 from queue import Queue
@@ -16,7 +15,7 @@ import gnnflow.distributed.graph_services as graph_services
 from gnnflow import TemporalSampler
 from gnnflow.distributed.common import SamplingResultTorch
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
-from gnnflow.distributed.utils import local_rank, local_world_size
+from gnnflow.utils import local_rank, local_world_size
 from libgnnflow import SamplingResult
 
 
@@ -137,6 +136,7 @@ class DistributedTemporalSampler:
                 timestamps[partition_mask]).contiguous()
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
+            logging.debug("call remote sample_layer_local on worker %d", worker_rank)
             if worker_rank == self._rank:
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))

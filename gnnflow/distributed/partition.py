@@ -1,4 +1,3 @@
-import logging
 from typing import List, NamedTuple
 
 import numpy as np
