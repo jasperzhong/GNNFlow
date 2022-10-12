@@ -89,15 +89,15 @@ class TestPartition(unittest.TestCase):
         overall_end = time.time()
 
         # edge cut
-        # edge_cut = 0
-        # tt = 0
-        # for idx, row in dataset.iterrows():
-        #     u = int(row['src'])
-        #     v = int(row['dst'])
-        #     if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
-        #         edge_cut += 1
+        edge_cut = 0
+        tt = 0
+        for idx, row in dataset.iterrows():
+            u = int(row['src'])
+            v = int(row['dst'])
+            if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
+                edge_cut += 1
 
-        # cut_percentage = float(100.0 * float(edge_cut) / float(len(dataset)))
+        cut_percentage = float(100.0 * float(edge_cut) / float(len(dataset)))
 
         print("========== All Batch Finished =========\n")
 
@@ -107,8 +107,8 @@ class TestPartition(unittest.TestCase):
                 print("Incorrect Partition Table in vid {} is:{}\n".format(i, ptable[i].item()))
 
         print("Ptable is {}".format(ptable))
-        # print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
-        # print("Load factor is:{} \n".format(load_factor))
-        # print("Edge Cut Percentage is :{}%; Number of Edge Cut: {}; Number of Total Edge: {}\n"
-        #       .format(cut_percentage, edge_cut, len(dataset)))
-        # print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size))
+        print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
+        print("Load factor is:{} \n".format(load_factor))
+        print("Edge Cut Percentage is :{}%; Number of Edge Cut: {}; Number of Total Edge: {}\n"
+              .format(cut_percentage, edge_cut, len(dataset)))
+        print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size))
