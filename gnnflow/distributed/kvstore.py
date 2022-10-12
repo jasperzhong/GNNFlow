@@ -39,7 +39,8 @@ class KVStoreServer:
         assert len(keys) == len(
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
-
+        logging.info("tensors: {}".format(tensors))
+        logging.info("tensors type: {}".format(type(tensors)))
         if mode == 'node':
             for key, tensor in zip(keys, tensors):
                 self._node_feat_map[int(key)] = tensor
@@ -74,7 +75,7 @@ class KVStoreServer:
         if mode == 'node':
             return torch.stack([self._node_feat_map[int(key)] for key in keys])
         elif mode == 'edge':
-            return torch.stack([self._edge_feat_map[int(key)] for key in keys])
+            return [self._edge_feat_map[int(key)] for key in keys]
         elif mode == 'memory':
             return torch.stack([self._memory_map[int(key)] for key in keys])
         elif mode == 'memory_ts':
