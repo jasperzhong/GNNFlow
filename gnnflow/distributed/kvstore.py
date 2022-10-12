@@ -77,7 +77,7 @@ class KVStoreServer:
         elif mode == 'edge':
             for key in keys:
                 logging.info("type edge: {}".format(
-                    self._edge_feat_map[int(key)]))
+                    type(self._edge_feat_map[int(key)])))
             return [self._edge_feat_map[int(key)] for key in keys]
         elif mode == 'memory':
             return torch.stack([self._memory_map[int(key)] for key in keys])
@@ -230,7 +230,7 @@ class KVStoreClient:
             all_pull_results = torch.zeros(
                 (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
 
-        logging.info("pull_request types: {}".format(pull_results))
+        # logging.info("pull_request types: {}".format(pull_results))
         logging.info("pull_request types: {}".format(type(pull_results)))
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
