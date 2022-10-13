@@ -66,6 +66,7 @@ class Partitioner:
         """
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
+
         if max_node > self._max_node:
             self._partition_table.resize_(max_node + 1)
             if self._max_node == 0:
@@ -148,6 +149,7 @@ class Partitioner:
         Returns:
             partition table (torch.Tensor): The partition table for the unseen source nodes.
         """
+
         # group by src_nodes
         sorted_idx = torch.argsort(src_nodes)
         unique_src_nodes, inverse_idx, counts = torch.unique(
@@ -452,6 +454,5 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
             num_partitions, assign_with_dst_node)
     elif partition_strategy == "ldg":
         return LDGPartitioner(num_partitions, assign_with_dst_node)
-
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)

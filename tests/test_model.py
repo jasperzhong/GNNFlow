@@ -8,7 +8,8 @@ from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (build_dynamic_graph, get_batch, load_dataset,
-                        load_feat, mfgs_to_cuda, prepare_input)
+                           load_feat, mfgs_to_cuda, prepare_input)
+from gnnflow.cache import LFUCache
 
 
 class TestModel(unittest.TestCase):
@@ -54,8 +55,16 @@ class TestModel(unittest.TestCase):
         mfgs = sampler.sample(target_nodes, np.full(
             target_nodes.shape, np.finfo(np.float32).max))
 
-        mfgs = prepare_input(mfgs, node_feats, edge_feats)
+        cache = LFUCache(0.0005, 7144,
+                         dgraph.num_edges(), device,
+                         node_feats, edge_feats,
+                         172, 172,
+                         None,
+                         None,
+                         None, False, 0)
         mfgs_to_cuda(mfgs, device)
+        mfgs = cache.fetch_feature(mfgs, eid)
+        mfgs = prepare_input(mfgs, node_feats, edge_feats)
 
         pred_pos, pred_neg = model(mfgs, neg_sample_ratio=0)
 

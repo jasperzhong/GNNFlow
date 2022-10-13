@@ -11,6 +11,7 @@ import torch.distributed
 from dgl.heterograph import DGLBlock
 from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
+from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.utils import local_rank, local_world_size
 
 
@@ -21,7 +22,8 @@ class Memory:
 
     def __init__(self, num_nodes: int, dim_edge: int, dim_memory: int,
                  device: Union[torch.device, str] = 'cpu',
-                 shared_memory: bool = False):
+                 shared_memory: bool = False,
+                 kvstore_client: Optional[KVStoreClient] = None):
         """
         Args:
             num_nodes: number of nodes in the graph
@@ -30,6 +32,7 @@ class Memory:
             dim_memory: dimension of the output of the memory
             device: device to store the memory
             shared_memory: whether to store in shared memory (for multi-GPU training)
+            kvstore_client: The KVStore_Client for fetching memorys when using partition
         """
         if shared_memory:
             device = 'cpu'
@@ -41,62 +44,70 @@ class Memory:
         self.dim_raw_message = 2 * dim_memory + dim_edge
         self.device = device
 
-        if shared_memory:
-            local_world_size = local_world_size()
-            local_rank = local_rank()
-        else:
-            local_world_size = 1
-            local_rank = 0
+        self.kvstore_client = kvstore_client
+        self.partition = self.kvstore_client != None
 
-        if not shared_memory:
-            self.node_memory = torch.zeros(
-                (num_nodes, dim_memory), dtype=torch.float32, device=device)
-            self.node_memory_ts = torch.zeros(
-                num_nodes, dtype=torch.float32, device=device)
-            self.mailbox = torch.zeros(
-                (num_nodes, self.dim_raw_message),
-                dtype=torch.float32, device=device)
-            self.mailbox_ts = torch.zeros(
-                (num_nodes,), dtype=torch.float32, device=device)
-        else:
-            if local_rank == 0:
-                self.node_memory = create_shared_mem_array(
-                    'node_memory', (num_nodes, dim_memory), dtype=torch.float32)
-                self.node_memory_ts = create_shared_mem_array(
-                    'node_memory_ts', (num_nodes,), dtype=torch.float32)
-                self.mailbox = create_shared_mem_array(
-                    'mailbox', (num_nodes, self.dim_raw_message),
-                    dtype=torch.float32)
-                self.mailbox_ts = create_shared_mem_array(
-                    'mailbox_ts', (num_nodes,), dtype=torch.float32)
+        # if not partition, not need to use kvstore_client
+        if not self.partition:
+            if shared_memory:
+                local_world_size = local_world_size()
+                local_rank = local_rank()
+            else:
+                local_world_size = 1
+                local_rank = 0
 
-                self.node_memory.zero_()
-                self.node_memory_ts.zero_()
-                self.mailbox.zero_()
-                self.mailbox_ts.zero_()
+            if not shared_memory:
+                self.node_memory = torch.zeros(
+                    (num_nodes, dim_memory), dtype=torch.float32, device=device)
+                self.node_memory_ts = torch.zeros(
+                    num_nodes, dtype=torch.float32, device=device)
+                self.mailbox = torch.zeros(
+                    (num_nodes, self.dim_raw_message),
+                    dtype=torch.float32, device=device)
+                self.mailbox_ts = torch.zeros(
+                    (num_nodes,), dtype=torch.float32, device=device)
+            else:
+                if local_rank == 0:
+                    self.node_memory = create_shared_mem_array(
+                        'node_memory', (num_nodes, dim_memory), dtype=torch.float32)
+                    self.node_memory_ts = create_shared_mem_array(
+                        'node_memory_ts', (num_nodes,), dtype=torch.float32)
+                    self.mailbox = create_shared_mem_array(
+                        'mailbox', (num_nodes, self.dim_raw_message),
+                        dtype=torch.float32)
+                    self.mailbox_ts = create_shared_mem_array(
+                        'mailbox_ts', (num_nodes,), dtype=torch.float32)
 
-            torch.distributed.barrier()
+                    self.node_memory.zero_()
+                    self.node_memory_ts.zero_()
+                    self.mailbox.zero_()
+                    self.mailbox_ts.zero_()
 
-            if local_rank != 0:
-                # NB: `num_nodes` should be same for all local processes because
-                # they share the same local graph
-                self.node_memory = get_shared_mem_array(
-                    'node_memory', (num_nodes, dim_memory), torch.float32)
-                self.node_memory_ts = get_shared_mem_array(
-                    'node_memory_ts', (num_nodes,), torch.float32)
-                self.mailbox = get_shared_mem_array(
-                    'mailbox', (num_nodes, self.dim_raw_message), torch.float32)
-                self.mailbox_ts = get_shared_mem_array(
-                    'mailbox_ts', (num_nodes,), torch.float32)
+                torch.distributed.barrier()
+
+                if local_rank != 0:
+                    # NB: `num_nodes` should be same for all local processes because
+                    # they share the same local graph
+                    self.node_memory = get_shared_mem_array(
+                        'node_memory', (num_nodes, dim_memory), torch.float32)
+                    self.node_memory_ts = get_shared_mem_array(
+                        'node_memory_ts', (num_nodes,), torch.float32)
+                    self.mailbox = get_shared_mem_array(
+                        'mailbox', (num_nodes, self.dim_raw_message), torch.float32)
+                    self.mailbox_ts = get_shared_mem_array(
+                        'mailbox_ts', (num_nodes,), torch.float32)
 
     def reset(self):
         """
         Reset the memory and the mailbox.
         """
-        self.node_memory.fill_(0)
-        self.node_memory_ts.fill_(0)
-        self.mailbox.fill_(0)
-        self.mailbox_ts.fill_(0)
+        if self.partition:
+            self.kvstore_client.reset_memory()
+        else:
+            self.node_memory.fill_(0)
+            self.node_memory_ts.fill_(0)
+            self.mailbox.fill_(0)
+            self.mailbox_ts.fill_(0)
 
     def resize(self, num_nodes):
         """
@@ -150,18 +161,28 @@ class Memory:
 
         Args:
           b: sampled message flow graph (mfg), where
-                `b.num_dst_nodes()` is the number of target nodes to sample, 
-                `b.srcdata['ID']` is the node IDs of all nodes, and 
+                `b.num_dst_nodes()` is the number of target nodes to sample,
+                `b.srcdata['ID']` is the node IDs of all nodes, and
                 `b.srcdata['ts']` is the time stamps of all nodes.
         """
         device = b.device
         all_nodes = b.srcdata['ID']
         assert isinstance(all_nodes, torch.Tensor)
 
-        b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
-        b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
-        b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
-        b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
+        if self.partition:
+            b.srcdata['mem'] = self.kvstore_client.pull(
+                all_nodes.cpu(), mode='memory').to(device)
+            b.srcdata['mem_ts'] = self.kvstore_client.pull(
+                all_nodes.cpu(), mode='memory_ts').to(device)
+            b.srcdata['mail_ts'] = self.kvstore_client.pull(
+                all_nodes.cpu(), mode='mailbox_ts').to(device)
+            b.srcdata['mem_input'] = self.kvstore_client.pull(
+                all_nodes.cpu(), mode='mailbox').to(device)
+        else:
+            b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
+            b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
+            b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
+            b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
 
     def update_memory(self, last_updated_nid: torch.Tensor,
                       last_updated_memory: torch.Tensor,
@@ -174,11 +195,17 @@ class Memory:
             last_updated_memory: new memory of the nodes
             last_updated_ts: new timestamp of the nodes
         """
-        last_updated_nid = last_updated_nid.to(self.device)
-        last_updated_memory = last_updated_memory.to(self.device)
-        last_updated_ts = last_updated_ts.to(self.device)
-        self.node_memory[last_updated_nid] = last_updated_memory
-        self.node_memory_ts[last_updated_nid] = last_updated_ts
+        if self.partition:
+            self.kvstore_client.push(
+                last_updated_nid.cpu(), last_updated_memory.cpu(), mode='memory')
+            self.kvstore_client.push(
+                last_updated_nid.cpu(), last_updated_ts.cpu(), mode='memory_ts')
+        else:
+            last_updated_nid = last_updated_nid.to(self.device)
+            last_updated_memory = last_updated_memory.to(self.device)
+            last_updated_ts = last_updated_ts.to(self.device)
+            self.node_memory[last_updated_nid] = last_updated_memory
+            self.node_memory_ts[last_updated_nid] = last_updated_ts
 
     def update_mailbox(self, last_updated_nid: torch.Tensor,
                        last_updated_memory: torch.Tensor,
@@ -228,5 +255,9 @@ class Memory:
         mail_ts = mail_ts[perm]
 
         # update mailbox
-        self.mailbox[nid] = mail
-        self.mailbox_ts[nid] = mail_ts
+        if self.partition:
+            self.kvstore_client.push(nid, mail, mode='mailbox')
+            self.kvstore_client.push(nid, mail_ts, mode='mailbox_ts')
+        else:
+            self.mailbox[nid] = mail
+            self.mailbox_ts[nid] = mail_ts

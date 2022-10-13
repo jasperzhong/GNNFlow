@@ -40,6 +40,27 @@ class DistributedDynamicGraph:
         """
         return self._num_edges
 
+    def num_source_vertices(self) -> int:
+        return self._dgraph.num_source_vertices()
+
+    def nodes(self) -> np.ndarray:
+        """
+        Return the nodes of the graph.
+        """
+        return self._dgraph.nodes()
+
+    def src_nodes(self) -> np.ndarray:
+        """
+        Return the source nodes of the graph.
+        """
+        return self._dgraph.src_nodes()
+
+    def edges(self) -> np.ndarray:
+        """
+        Return the edges of the graph.
+        """
+        return self._dgraph.edges()
+
     def set_num_vertices(self, num_vertices: int):
         """
         Set the number of vertices in the dynamic graph.

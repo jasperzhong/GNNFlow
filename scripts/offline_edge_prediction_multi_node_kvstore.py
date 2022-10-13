@@ -15,19 +15,23 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
 
 import gnnflow.cache as caches
+import gnnflow.distributed
+import gnnflow.distributed.graph_services as graph_services
+from gnnflow import DynamicGraph
 from gnnflow.config import get_default_config
 from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
                           RandomStartBatchSampler, default_collate_ndarray)
+from gnnflow.distributed.dist_graph import DistributedDynamicGraph
+from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.models.dgnn import DGNN
-from gnnflow.models.gat import GAT
-from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
-                           get_pinned_buffers, get_project_root_dir, load_dataset,
-                           load_feat, mfgs_to_cuda)
+from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
+                           build_dynamic_graph, get_pinned_buffers,
+                           get_project_root_dir, load_dataset, load_feat,
+                           mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
-model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
+model_names = ['TGN', 'TGAT', 'DySAT']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
                      and callable(caches.__dict__[name]))
@@ -53,9 +57,17 @@ parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
                     '|'.join(cache_names))
 parser.add_argument("--cache-ratio", type=float, default=0,
                     help="cache ratio for feature cache")
+
+# distributed
+parser.add_argument("--partition", action="store_true",
+                    help="whether to partition the graph")
+parser.add_argument("--ingestion-batch-size", type=int, default=1000,
+                    help="ingestion batch size")
+parser.add_argument("--partition-strategy", type=str, default="roundrobin",
+                    help="partition strategy for distributed training")
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
@@ -84,7 +96,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
-                mfgs, eid)
+                mfgs, eid, target_edge_features=args.use_memory)
             pred_pos, pred_neg = model(
                 mfgs, edge_feats=cache.target_edge_features)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
@@ -109,9 +121,11 @@ def main():
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group('nccl')
+        torch.distributed.init_process_group('gloo')
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
+        args.num_nodes = args.world_size // args.local_world_size
+        args.partition &= args.num_nodes > 1
     else:
         args.local_rank = args.rank = 0
         args.local_world_size = args.world_size = 1
@@ -170,32 +184,58 @@ def main():
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
-    dgraph = build_dynamic_graph(
-        **data_config, device=args.local_rank, dataset_df=full_data)
+    node_feats = None
+    edge_feats = None
+    kvstore_client = None
+    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
+    if args.partition:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank)
+        graph_services.set_dgraph(dgraph)
+        dgraph = graph_services.get_dgraph()
+        gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
+                                       args.ingestion_batch_size, args.partition_strategy,
+                                       args.num_nodes, data_config["undirected"], args.data,
+                                       args.dim_memory)
+        # every worker will have a kvstore_client
+        kvstore_client = KVStoreClient(
+            dgraph.get_partition_table(),
+            dgraph.num_partitions(), args.local_world_size,
+            args.local_rank)
+        dim_node, dim_edge = graph_services.get_dim_node_edge()
+    else:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank, dataset_df=full_data)
+        # put the features in shared memory when using distributed training
+        node_feats, edge_feats = load_feat(
+            args.data, shared_memory=args.distributed,
+            local_rank=args.local_rank, local_world_size=args.local_world_size)
 
-    num_nodes = dgraph.num_vertices() + 1
+        dim_node = 0 if node_feats is None else node_feats.shape[1]
+        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+
+    num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
-    # put the features in shared memory when using distributed training
-    node_feats, edge_feats = load_feat(
-        args.data, shared_memory=args.distributed,
-        local_rank=args.local_rank, local_world_size=args.local_world_size)
-
-    dim_node = 0 if node_feats is None else node_feats.shape[1]
-    dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
+    logging.debug("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
 
-    if args.model == "GRAPHSAGE":
-        model = SAGE(dim_node, model_config['dim_embed'])
-    elif args.model == 'GAT':
-        model = GAT(dim_node, model_config['dim_embed'])
-    else:
-        model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                     memory_device=device, memory_shared=args.distributed)
+    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
+                 memory_device=device, memory_shared=args.distributed,
+                 kvstore_client=kvstore_client)
     model.to(device)
+    args.use_memory = model.has_memory()
+    logging.info("use memory: {}".format(args.use_memory))
 
-    sampler = TemporalSampler(dgraph, **model_config)
+    if args.distributed:
+        assert isinstance(dgraph, DistributedDynamicGraph)
+        sampler = TemporalSampler(dgraph._dgraph, **model_config)
+        graph_services.set_dsampler(sampler)
+        sampler = graph_services.get_dsampler()
+    else:
+        assert isinstance(dgraph, DynamicGraph)
+        sampler = TemporalSampler(dgraph, **model_config)
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
@@ -212,8 +252,8 @@ def main():
                                         dim_node, dim_edge,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs,
-                                        None,
-                                        False)
+                                        kvstore_client,
+                                        args.partition)
 
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
@@ -252,6 +292,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
+        # TODO: now reset do nothing when using distributed
         cache.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
@@ -266,8 +307,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Feature
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
-                mfgs, eid)
-
+                mfgs, eid, target_edge_features=args.use_memory)
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
