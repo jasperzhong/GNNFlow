@@ -270,8 +270,8 @@ def init_cache(capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
     kvstore_server = get_kvstore_server()
     keys = torch.tensor(list(kvstore_server._edge_feat_map.keys()))
     logging.info("keys: {}".format(keys.shape))
-    cache_node_id = keys[:capacity]
-    feats = kvstore_server.pull(cache_node_id)
+    cache_edge_id = keys[:capacity]
+    feats = kvstore_server.pull(cache_edge_id, mode='edge')
     logging.info("feats: {}".format(feats.shape))
     return keys, feats
 
