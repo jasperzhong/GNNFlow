@@ -16,12 +16,10 @@ logging.basicConfig(level=logging.DEBUG)
 
 class TestPartition(unittest.TestCase):
 
-    @parameterized.expand(
-        itertools.product(["hash"], [10000]))
-    def test_partition_graph(self, partition_strategy):
+    def test_partition_graph(self):
 
         dataset_name = 'WIKI'
-        p_stgy = partition_strategy
+        p_stgy = "hash"
         num_p = 4
         undirected = True
         dataset = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))  # LINUX
