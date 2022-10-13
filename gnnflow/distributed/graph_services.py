@@ -273,7 +273,7 @@ def init_cache(capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
     cache_edge_id = keys[:capacity]
     feats = kvstore_server.pull(cache_edge_id, mode='edge')
     logging.info("feats: {}".format(feats.shape))
-    return keys, feats
+    return cache_edge_id, feats
 
 
 def reset_memory():
