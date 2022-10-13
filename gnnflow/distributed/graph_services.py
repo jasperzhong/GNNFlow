@@ -266,14 +266,12 @@ def pull_tensors(keys: torch.Tensor, mode: str) -> torch.Tensor:
     return kvstore_server.pull(keys, mode)
 
 
-def init_cache(capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def init_cache(capacity: int) -> torch.Tensor:
     kvstore_server = get_kvstore_server()
     keys = torch.tensor(list(kvstore_server._edge_feat_map.keys()))
-    logging.info("keys: {}".format(keys.shape))
     cache_edge_id = keys[:capacity]
     feats = kvstore_server.pull(cache_edge_id, mode='edge')
-    logging.info("feats: {}".format(feats.shape))
-    return cache_edge_id, feats
+    return torch.cat((cache_edge_id, feats))
 
 
 def reset_memory():

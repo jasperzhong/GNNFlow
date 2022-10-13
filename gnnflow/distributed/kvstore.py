@@ -203,11 +203,17 @@ class KVStoreClient:
         world_size = local_world_size()
         kvstore_rank = (global_rank // world_size) * world_size
         if kvstore_rank == global_rank:
-            keys, feats = graph_services.init_cache(capacity)
+            init = graph_services.init_cache(capacity)
+            # return value is tensor
+            keys = init[:, 0]
+            feats = init[:, 1:]
         else:
             future = rpc.rpc_async('worker{}'.format(
                 kvstore_rank), graph_services.init_cache, args=(capacity))
-            keys, feats = future.wait()
+            init = future.wait()
+            # return value is tensor
+            keys = init[:, 0]
+            feats = init[:, 1:]
         return keys, feats
 
     def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
