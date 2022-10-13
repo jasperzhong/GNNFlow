@@ -255,12 +255,12 @@ def main():
                                         kvstore_client,
                                         args.partition)
 
-    # only gnnlab static need to pass param
-    if args.cache == 'GNNLabStaticCache':
-        cache.init_cache(sampler=sampler, train_df=train_data,
-                         pre_sampling_rounds=2)
-    else:
-        cache.init_cache()
+    # # only gnnlab static need to pass param
+    # if args.cache == 'GNNLabStaticCache':
+    #     cache.init_cache(sampler=sampler, train_df=train_data,
+    #                      pre_sampling_rounds=2)
+    # else:
+    #     cache.init_cache()
 
     logging.info("cache mem size: {:.2f} MB".format(
         cache.get_mem_size() / 1000 / 1000))
