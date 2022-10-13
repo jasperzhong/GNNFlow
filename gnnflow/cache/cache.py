@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Union
 
 import numpy as np
@@ -156,6 +157,7 @@ class Cache:
                 if len(keys) >= self.edge_capacity:
                     # if local edge feats is larger than capacity
                     # fill out the cache edge buffer
+                    logging.info("keys equals to edge_capacity")
                     cache_edge_id = torch.arange(
                         self.edge_capacity, dtype=torch.int64, device=self.device)
                     self.cache_edge_buffer[cache_edge_id] = feats.to(
