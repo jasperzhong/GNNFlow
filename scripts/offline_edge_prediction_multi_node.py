@@ -20,13 +20,13 @@ import gnnflow.distributed.graph_services as graph_services
 from gnnflow import DynamicGraph
 from gnnflow.config import get_default_config
 from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
-                       RandomStartBatchSampler, default_collate_ndarray)
+                          RandomStartBatchSampler, default_collate_ndarray)
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.models.dgnn import DGNN
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
-                        get_pinned_buffers, get_project_root_dir, load_dataset,
-                        load_feat, mfgs_to_cuda)
+                           get_pinned_buffers, get_project_root_dir, load_dataset,
+                           load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT']
@@ -187,8 +187,9 @@ def main():
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
         gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
-                                    args.ingestion_batch_size, args.partition_strategy,
-                                    args.num_nodes, data_config["undirected"])
+                                       args.ingestion_batch_size, args.partition_strategy,
+                                       args.num_nodes, data_config["undirected"], args.data,
+                                       args.dim_memory)
     else:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
@@ -205,7 +206,6 @@ def main():
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
-
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=max_node_id,
                  memory_device=device, memory_shared=args.local_world_size > 1)
