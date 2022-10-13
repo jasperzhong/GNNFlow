@@ -19,7 +19,7 @@ class TestPartition(unittest.TestCase):
     def test_partition_graph(self):
 
         dataset_name = 'WIKI'
-        p_stgy = "hash"
+        p_stgy = "ldg"
         num_p = 4
         undirected = True
         dataset = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))  # LINUX
