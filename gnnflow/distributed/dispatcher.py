@@ -65,7 +65,7 @@ class Dispatcher:
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
             logging.info("partition: {}'s edges {}".format(
-                partition_id, len(edges)))
+                partition_id, len(edges[0])))
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
                 # TODO: the communication is duplicated for each worker in the remote machine.
