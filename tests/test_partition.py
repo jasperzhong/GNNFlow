@@ -46,7 +46,7 @@ class TestPartition(unittest.TestCase):
                 j = j + 1
 
 
-            print("Round:{} ****** Dataset Range {} to {} Begin ******".format(round, i, j))
+            # print("Round:{} ****** Dataset Range {} to {} Begin ******".format(round, i, j))
 
             batch = dataset[i: j]
             src_nodes = batch["src"].values.astype(np.int64)
@@ -76,10 +76,10 @@ class TestPartition(unittest.TestCase):
             partitions = test_partitioner.partition(src_nodes, dst_nodes, timestamps, eids)
             partition_end = time.time()
 
-            print("Test Partition. Time usage: {} seconds; Speed: {} edges per sec\n"
-                  .format(partition_end - partition_start, (j - i) / (partition_end - partition_start)))
+            # print("Test Partition. Time usage: {} seconds; Speed: {} edges per sec\n"
+            #       .format(partition_end - partition_start, (j - i) / (partition_end - partition_start)))
 
-            print("Round:{} ====== Dataset Range {} to {} length:{} finished ======\n".format(round, i, j, j - i))
+            # print("Round:{} ====== Dataset Range {} to {} length:{} finished ======\n".format(round, i, j, j - i))
 
             i = j
 

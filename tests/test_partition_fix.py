@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["ldg"], [1000]))
+        itertools.product(["ldg"], [100]))
     def test_partition_graph(self, partition_strategy, batch_size):
 
         dataset_name = 'WIKI'
