@@ -269,12 +269,10 @@ def pull_tensors(keys: torch.Tensor, mode: str) -> torch.Tensor:
 def init_cache(capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
     kvstore_server = get_kvstore_server()
     keys = kvstore_server._edge_feat_map.keys()
-    logging.info("keys: {}".format(keys.shape))
-    logging.info("keys tyep: {}".format(type(keys)))
+    logging.info("keys: {}".format(torch.tensor(list(keys)).shape))
     cache_node_id = keys[:capacity]
     feats = kvstore_server.pull(cache_node_id)
     logging.info("feats: {}".format(feats.shape))
-    logging.info("feats tyep: {}".format(type(feats)))
     return keys, feats
 
 
