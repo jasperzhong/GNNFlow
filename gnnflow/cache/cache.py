@@ -149,8 +149,16 @@ class Cache:
         Init the cache with features
         """
         if self.distributed:
-            return
-
+            # the edge map is ordered my insertion order, which is the order of ts
+            if self.dim_edge_feat != 0:
+                keys, feats = self.kvstore_client.init_cache(
+                    self.edge_capacity)
+                cache_edge_id = torch.arange(
+                    self.edge_capacity, dtype=torch.int64)
+                self.cache_edge_buffer[cache_edge_id] = feats
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_index_to_edge_id = keys
+                self.cache_edge_map[keys] = cache_edge_id
         if self.dim_node_feat != 0:
             cache_node_id = torch.arange(
                 self.node_capacity, dtype=torch.int64, device=self.device)
