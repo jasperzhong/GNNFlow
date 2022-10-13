@@ -293,7 +293,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs, edge_feats=cache.edge_feats[eid])
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
