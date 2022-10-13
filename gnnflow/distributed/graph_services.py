@@ -271,7 +271,7 @@ def init_cache(capacity: int) -> torch.Tensor:
     keys = torch.tensor(list(kvstore_server._edge_feat_map.keys()))
     cache_edge_id = keys[:capacity]
     feats = kvstore_server.pull(cache_edge_id, mode='edge')
-    return torch.cat((cache_edge_id, feats))
+    return torch.cat((cache_edge_id.unsqueeze(dim=1), feats), dim=1)
 
 
 def reset_memory():
