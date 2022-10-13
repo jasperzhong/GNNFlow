@@ -172,7 +172,7 @@ class Cache:
                         self.device)
                     self.cache_edge_flag[cache_edge_id] = True
                     self.cache_index_to_edge_id[cache_edge_id] = keys.to(
-                        self.device())
+                        self.device)
                     self.cache_edge_map[keys] = cache_edge_id
         else:
             if self.dim_node_feat != 0:
