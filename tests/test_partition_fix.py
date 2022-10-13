@@ -33,6 +33,8 @@ class TestPartition(unittest.TestCase):
 
         test_partitioner = get_partitioner(p_stgy, num_p)
 
+        cut_ratio_list = []
+
         overall_start = time.time()
         for i in range(0, len(dataset), ingestion_batch_size):
 
@@ -69,6 +71,19 @@ class TestPartition(unittest.TestCase):
             print("Test Partition. Time usage: {} seconds; Speed: {} edges per sec\n"
                   .format(partition_end - partition_start, ingestion_batch_size / (partition_end - partition_start)))
 
+            ppa = test_partitioner.get_partition_table()
+            # edge cut
+            edge_cut = 0
+            tt = 0
+            for idx, row in batch.iterrows():
+                u = int(row['src'])
+                v = int(row['dst'])
+                if ppa[u] != -1 and ppa[v] != -1 and (ppa[u] != ppa[v]):
+                    edge_cut += 1
+
+            cut_percentage = float(100.0 * float(edge_cut) / float(len(batch)))
+            cut_ratio_list.append(cut_percentage)
+
             print("====== Dataset Range {} to {} finished ======\n".format(i, i + ingestion_batch_size))
 
         # load balance
@@ -81,21 +96,13 @@ class TestPartition(unittest.TestCase):
 
         overall_end = time.time()
 
-        # edge cut
-        edge_cut = 0
-        tt = 0
-        for idx, row in dataset.iterrows():
-            u = int(row['src'])
-            v = int(row['dst'])
-            if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
-                edge_cut += 1
-
-        cut_percentage = float(100.0 * float(edge_cut) / float(len(dataset)))
+        avg_cut_p = np.average(cut_ratio_list)
 
         print("========== All Batch Finished =========\n")
 
         print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
         print("Load factor is:{} \n".format(load_factor))
-        print("Edge Cut Percentage is :{}%; Number of Edge Cut: {}; Number of Total Edge: {}\n"
-              .format(cut_percentage, edge_cut, len(dataset)))
+        print("Edge Cut List is :{}".format(cut_ratio_list))
+        print("Edge Cut Percentage is :{}%;\n"
+              .format(avg_cut_p))
         print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size))
