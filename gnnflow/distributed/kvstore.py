@@ -198,7 +198,7 @@ class KVStoreClient:
 
         return self._merge_pull_results(pull_results, masks)
 
-    def init_cache(self, capacity: int) -> Tuple[torch.Tensor, torch.Tenosr]:
+    def init_cache(self, capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
         global_rank = rank()
         world_size = local_world_size()
         kvstore_rank = (global_rank // world_size) * world_size
