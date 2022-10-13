@@ -116,4 +116,4 @@ class TestPartition(unittest.TestCase):
         print("Load factor is:{} \n".format(load_factor))
         print("Edge Cut Percentage is :{}%; Number of Edge Cut: {}; Number of Total Edge: {}\n"
               .format(cut_percentage, edge_cut, len(dataset)))
-        print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size))
+        print("========== Test Finished (DataSet:{}, Method:{}) =========\n\n".format(dataset_name, p_stgy))
