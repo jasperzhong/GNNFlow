@@ -202,8 +202,8 @@ def main():
         args.data, shared_memory=args.local_world_size > 1,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
-    dim_node = 0 if node_feats is None else node_feats.shape[1]
-    dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+    dim_node = 0 if node_feats is None else int(node_feats.shape[1])
+    dim_edge = 0 if edge_feats is None else int(edge_feats.shape[1])
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
@@ -228,7 +228,7 @@ def main():
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
-        node_feats, edge_feats)
+        dim_node, dim_edge)
 
     # Cache
     cache = caches.__dict__[args.cache](args.cache_ratio, max_node_id,
