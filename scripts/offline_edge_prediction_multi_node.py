@@ -181,6 +181,7 @@ def main():
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
+    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
     if args.partition:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank)
