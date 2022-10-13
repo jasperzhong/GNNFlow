@@ -136,11 +136,14 @@ class DistributedTemporalSampler:
                 timestamps[partition_mask]).contiguous()
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
-            logging.debug("worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
             if worker_rank == self._rank:
+                logging.debug(
+                    "worker %d call local sample_layer_local", self._rank)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
             else:
+                logging.debug(
+                    "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
                 futures.append(rpc.rpc_async(
                     'worker{}'.format(worker_rank),
                     graph_services.sample_layer_local,
