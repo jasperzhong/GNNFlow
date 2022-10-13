@@ -234,6 +234,7 @@ def main():
     cache = caches.__dict__[args.cache](args.cache_ratio, max_node_id,
                                         max_edge_id, device,
                                         node_feats, edge_feats,
+                                        dim_node, dim_edge,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)
 
