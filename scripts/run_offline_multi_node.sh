@@ -23,11 +23,7 @@ export NCCL_SOCKET_IFNAME=${INTERFACE}
 export GLOO_SOCKET_IFNAME=${INTERFACE}
 export TP_SOCKET_IFNAME=${INTERFACE}
 
-cmd="torchrun \
-    --nnodes=$NNODES --nproc_per_node=$NPROC_PER_NODE \
-    --rdzv_id=1234 --rdzv_backend=c10d \
-    --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
-    --rdzv_conf is_host=$IS_HOST \
+cmd="LOCAL_RANK=0 LOCAL_WORLD_SIZE=1 RANK=0 WORLD_SIZE=2 MASTER_ADDR=$HOST_NODE_ADDR MASTER_PORT=$HOST_NODE_PORT python \
     offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
