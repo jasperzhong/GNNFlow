@@ -25,11 +25,10 @@ export NCCL_SOCKET_IFNAME=${INTERFACE}
 export GLOO_SOCKET_IFNAME=${INTERFACE}
 export TP_SOCKET_IFNAME=${INTERFACE}
 
-cmd="LOCAL_RANK=$RANK LOCAL_WORLD_SIZE=1 RANK=$RANK WORLD_SIZE=2 MASTER_ADDR=$HOST_NODE_ADDR MASTER_PORT=$HOST_NODE_PORT \
-    python offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
+cmd="python offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY"
 
 echo $cmd
-TP_VERBOSE_LOGGING=9 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 exec $cmd
+TP_VERBOSE_LOGGING=9 LOGLEVEL=DEBUG OMP_NUM_THREADS=8 LOCAL_RANK=$RANK LOCAL_WORLD_SIZE=1 RANK=$RANK WORLD_SIZE=2 MASTER_ADDR=$HOST_NODE_ADDR MASTER_PORT=$HOST_NODE_PORT exec $cmd
