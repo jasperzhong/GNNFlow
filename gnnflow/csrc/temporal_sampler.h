@@ -40,7 +40,7 @@ class TemporalSampler {
 
  private:
   constexpr static std::size_t per_node_size =
-      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) + sizeof(TimestampType) + 
       sizeof(uint32_t);
 
   const DynamicGraph& graph_;
