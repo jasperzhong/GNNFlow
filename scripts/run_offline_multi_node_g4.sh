@@ -6,6 +6,7 @@ DATA=$2
 CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${5:-hash}"
+RANK="${6:-0}"
 
 HOST_NODE_ADDR=172.31.33.18
 HOST_NODE_PORT=29400
@@ -23,17 +24,13 @@ export NCCL_SOCKET_IFNAME=${INTERFACE}
 export GLOO_SOCKET_IFNAME=${INTERFACE}
 export TP_SOCKET_IFNAME=${INTERFACE}
 
-cmd="torchrun \
-    --nnodes=$NNODES --nproc_per_node=$NPROC_PER_NODE \
-    --rdzv_id=1234 --rdzv_backend=c10d \
-    --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
-    --rdzv_conf is_host=$IS_HOST \
-    offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
+cmd="python offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \
     --num-workers 8"
 
+
 echo $cmd
-NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
+LOGLEVEL=INFO OMP_NUM_THREADS=8 RANK=${RANK} LOCAL_RANK=0 WORLD_SIZE=4 LOCAL_WORLD_SIZE=1 MASTER_ADDR=$HOST_NODE_ADDR MASTER_PORT=$HOST_NODE_PORT gdb -ex run --args $cmd
 
