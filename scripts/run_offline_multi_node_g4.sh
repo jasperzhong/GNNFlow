@@ -7,9 +7,9 @@ CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${5:-hash}"
 
-HOST_NODE_ADDR=172.31.27.41
+HOST_NODE_ADDR=172.31.33.18
 HOST_NODE_PORT=29400
-NNODES=2
+NNODES=4
 NPROC_PER_NODE=1
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
@@ -32,8 +32,8 @@ cmd="torchrun \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 4"
+    --num-workers 8"
 
 echo $cmd
-NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=4 exec $cmd
+NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
 
