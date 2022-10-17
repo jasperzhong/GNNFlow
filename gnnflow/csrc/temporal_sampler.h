@@ -6,9 +6,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 #include "common.h"
 #include "dynamic_graph.h"
+#include "stream_holder.h"
 
 namespace gnnflow {
 
@@ -39,11 +41,11 @@ class TemporalSampler {
   void FreeBuffer();
 
  private:
-  constexpr static std::size_t per_node_size =
-      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) + sizeof(TimestampType) + 
-      sizeof(uint32_t);
+  constexpr static std::size_t kPerNodeBufferSize =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
+      sizeof(TimestampType) + sizeof(uint32_t);
 
-  const DynamicGraph& graph_;
+  const DynamicGraph& graph_;  // sampling does not modify the graph
   std::vector<uint32_t> fanouts_;
   SamplingPolicy sampling_policy_;
   uint32_t num_snapshots_;
@@ -52,8 +54,9 @@ class TemporalSampler {
   uint32_t num_layers_;
   uint64_t seed_;
   std::size_t shared_memory_size_;
+  int device_;
 
-  cudaStream_t* streams_;
+  std::unique_ptr<StreamHolder[]> stream_holders_;
   char* cpu_buffer_;
   char* gpu_input_buffer_;
   char* gpu_output_buffer_;
@@ -61,7 +64,6 @@ class TemporalSampler {
 
   std::size_t maximum_sampled_nodes_;
 
-  int device_;
 };
 
 }  // namespace gnnflow

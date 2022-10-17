@@ -10,7 +10,8 @@ namespace gnnflow {
   {                                                                  \
     cudaError_t e = (func);                                          \
     if (e != cudaSuccess && e != cudaErrorCudartUnloading)           \
-      throw thrust::system_error(e, thrust::cuda_category(), #func); \
+      LOG(FATAL) << "CUDA error " << cudaGetErrorString(e) << " at " \
+                 << __FILE__ << ":" << __LINE__;                     \
   }
 
 enum class LogLevel { TRACE, DEBUG, INFO, WARNING, ERROR, FATAL };
@@ -34,8 +35,9 @@ class LogMessageFatal : public LogMessage {
   ~LogMessageFatal();
 };
 
-#define CHECK(x) \
-  if (!(x)) gnnflow::LogMessageFatal(__FILE__, __LINE__) << "Check failed: " #x
+#define CHECK(x)                                                     \
+  if (!(x)) gnnflow::LogMessageFatal(__FILE__, __LINE__) << "Check " \
+                                                            "failed: " #x
 
 #define CHECK_EQ(x, y) CHECK((x) == (y))
 #define CHECK_NE(x, y) CHECK((x) != (y))
@@ -45,7 +47,8 @@ class LogMessageFatal : public LogMessage {
 #define CHECK_LE(x, y) CHECK((x) <= (y))
 #define CHECK_NOTNULL(x) CHECK((x) != nullptr)
 
-#define LOG(level) gnnflow::LogMessage(__FILE__, __LINE__, gnnflow::LogLevel::level)
+#define LOG(level) \
+  gnnflow::LogMessage(__FILE__, __LINE__, gnnflow::LogLevel::level)
 }  // namespace gnnflow
 
 #endif  // GNNFLOW_LOGGING_H_
