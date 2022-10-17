@@ -7,9 +7,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <tuple>
 
 #include "common.h"
 #include "dynamic_graph.h"
+#include "gpu_buffer.h"
+#include "pin_memory_buffer.h"
 #include "stream_holder.h"
 
 namespace gnnflow {
@@ -36,15 +39,30 @@ class TemporalSampler {
                              uint32_t layer, uint32_t snapshot);
 
  private:
-  void InitBuffer(std::size_t maximum_sampled_nodes);
+  constexpr static std::size_t kPerNodeInputBufferSize =
+      sizeof(NIDType) + sizeof(TimestampType);
+
+  constexpr static std::size_t kPerNodeOutputBufferSize =
+      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
+      sizeof(TimestampType) + sizeof(uint32_t);
+
+  typedef std::tuple<NIDType*, TimestampType*> InputBufferTuple;
+  InputBufferTuple GetInputBufferTuple(const Buffer& buffer,
+                                       std::size_t num_root_nodes) const;
+
+  typedef std::tuple<NIDType*, EIDType*, TimestampType*, TimestampType*,
+                     uint32_t*>
+      OutputBufferTuple;
+  OutputBufferTuple GetOutputBufferTuple(
+      const Buffer& buffer, std::size_t num_root_nodes,
+      std::size_t maximum_sampled_nodes) const;
+
+  void InitBuffer(std::size_t num_root_nodes,
+                  std::size_t maximum_sampled_nodes);
 
   void FreeBuffer();
 
  private:
-  constexpr static std::size_t kPerNodeBufferSize =
-      sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
-      sizeof(TimestampType) + sizeof(uint32_t);
-
   const DynamicGraph& graph_;  // sampling does not modify the graph
   std::vector<uint32_t> fanouts_;
   SamplingPolicy sampling_policy_;
@@ -57,13 +75,12 @@ class TemporalSampler {
   int device_;
 
   std::unique_ptr<StreamHolder[]> stream_holders_;
-  char* cpu_buffer_;
-  char* gpu_input_buffer_;
-  char* gpu_output_buffer_;
+  std::unique_ptr<PinMemoryBuffer> cpu_buffer_;
+  std::unique_ptr<GPUBuffer> gpu_input_buffer_;
+  std::unique_ptr<GPUBuffer> gpu_output_buffer_;
   curandState_t* rand_states_;
 
   std::size_t maximum_sampled_nodes_;
-
 };
 
 }  // namespace gnnflow

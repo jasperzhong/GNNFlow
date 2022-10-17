@@ -70,19 +70,6 @@ std::size_t GetSharedMemoryMaxSize() {
   return max_size;
 }
 
-void Copy(void* dst, const void* src, std::size_t size) {
-  auto in = (float*)src;
-  auto out = (float*)dst;
-#pragma omp parallel for simd num_threads(4)
-  for (size_t i = 0; i < size / 4; ++i) {
-    out[i] = in[i];
-  }
-
-  if (size % 4) {
-    std::memcpy(out + size / 4, in + size / 4, size % 4);
-  }
-}
-
 __global__ void InitCuRandStates(curandState_t* states, uint64_t seed) {
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
   curand_init(seed, tid, 0, &states[tid]);
