@@ -60,7 +60,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
   block->start_timestamp =
       std::min(block->start_timestamp, timestamps[start_idx]);
   block->end_timestamp = timestamps[start_idx + num_edges - 1];
-}  // namespace gnnflow
+}
 
 std::size_t GetSharedMemoryMaxSize() {
   std::size_t max_size = 0;
@@ -68,6 +68,21 @@ std::size_t GetSharedMemoryMaxSize() {
   cudaGetDeviceProperties(&prop, 0);
   max_size = prop.sharedMemPerBlock;
   return max_size;
+}
+
+void Copy(void* dst, const void* src, std::size_t size) {
+  auto in = (long long*)src;
+  auto out = (long long*)dst;
+  constexpr std::size_t kUnitSize = sizeof(long long);
+#pragma omp parallel for simd num_threads(4) schedule(static)
+  for (size_t i = 0; i < size / kUnitSize; ++i) {
+    out[i] = in[i];
+  }
+
+  if (size % kUnitSize) {
+    std::memcpy(out + size / kUnitSize, in + size / kUnitSize,
+                size % kUnitSize);
+  }
 }
 
 __global__ void InitCuRandStates(curandState_t* states, uint64_t seed) {

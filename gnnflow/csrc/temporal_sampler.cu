@@ -9,6 +9,8 @@
 #include <numeric>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 #include <vector>
 
 #include "common.h"
@@ -99,6 +101,15 @@ SamplingResult TemporalSampler::SampleLayer(
   std::size_t num_root_nodes = dst_nodes.size();
   std::size_t maximum_sampled_nodes = fanouts_[layer] * num_root_nodes;
 
+  if (num_root_nodes == 0) {
+    SamplingResult result;
+    result.all_nodes = dst_nodes;
+    result.all_timestamps = dst_timestamps;
+    result.num_dst_nodes = num_root_nodes;
+    result.num_src_nodes = num_root_nodes;
+    return result;
+  }
+
   if (maximum_sampled_nodes > maximum_sampled_nodes_) {
     maximum_sampled_nodes_ = maximum_sampled_nodes;
     InitBuffer(num_root_nodes, maximum_sampled_nodes_);
@@ -106,10 +117,10 @@ SamplingResult TemporalSampler::SampleLayer(
 
   // copy input to pin memory buffer
   auto input_buffer_tuple = GetInputBufferTuple(*cpu_buffer_, num_root_nodes);
-  std::copy(dst_nodes.begin(), dst_nodes.end(),
-            std::get<0>(input_buffer_tuple));
-  std::copy(dst_timestamps.begin(), dst_timestamps.end(),
-            std::get<1>(input_buffer_tuple));
+  Copy(std::get<0>(input_buffer_tuple), dst_nodes.data(),
+       num_root_nodes * sizeof(NIDType));
+  Copy(std::get<1>(input_buffer_tuple), dst_timestamps.data(),
+       num_root_nodes * sizeof(TimestampType));
 
   // copy input to GPU buffer
   CUDA_CALL(cudaMemcpyAsync(
@@ -188,8 +199,9 @@ SamplingResult TemporalSampler::SampleLayer(
   uint32_t* num_sampled = nullptr;
 
   std::tie(src_nodes, eids, timestamps, delta_timestamps, num_sampled) =
-      GetOutputBufferTuple(*cpu_buffer_, num_root_nodes, maximum_sampled_nodes);
+      GetOutputBufferTuple(*cpu_buffer_, num_root_nodes, num_sampled_nodes);
 
+  // copy output to pin memory buffer 
   CUDA_CALL(cudaMemcpyAsync(src_nodes, d_src_nodes,
                             sizeof(NIDType) * num_sampled_nodes,
                             cudaMemcpyDeviceToHost, stream_holders_[snapshot]));
@@ -205,12 +217,8 @@ SamplingResult TemporalSampler::SampleLayer(
                             sizeof(uint32_t) * num_root_nodes,
                             cudaMemcpyDeviceToHost, stream_holders_[snapshot]));
 
+  // copy output to return buffer
   SamplingResult sampling_result;
-  // first copy dst nodes
-  std::copy(dst_nodes.begin(), dst_nodes.end(),
-            std::back_inserter(sampling_result.all_nodes));
-  std::copy(dst_timestamps.begin(), dst_timestamps.end(),
-            std::back_inserter(sampling_result.all_timestamps));
 
   sampling_result.col.resize(num_sampled_nodes);
   std::iota(sampling_result.col.begin(), sampling_result.col.end(),
@@ -219,31 +227,38 @@ SamplingResult TemporalSampler::SampleLayer(
   sampling_result.num_dst_nodes = num_root_nodes;
   sampling_result.num_src_nodes = num_root_nodes + num_sampled_nodes;
 
-  sampling_result.all_nodes.reserve(sampling_result.num_src_nodes);
-  sampling_result.all_timestamps.reserve(sampling_result.num_src_nodes);
-  sampling_result.delta_timestamps.reserve(num_sampled_nodes);
-  sampling_result.eids.reserve(num_sampled_nodes);
+  sampling_result.all_nodes = dst_nodes;
+  sampling_result.all_timestamps = dst_timestamps;
+
+  sampling_result.all_nodes.resize(sampling_result.num_src_nodes);
+  sampling_result.all_timestamps.resize(sampling_result.num_src_nodes);
+  sampling_result.delta_timestamps.resize(num_sampled_nodes);
+  sampling_result.eids.resize(num_sampled_nodes);
+  sampling_result.row.resize(num_sampled_nodes);
 
   // synchronize memcpy
   CUDA_CALL(cudaStreamSynchronize(stream_holders_[snapshot]));
 
-  std::copy(src_nodes, src_nodes + num_sampled_nodes,
-            std::back_inserter(sampling_result.all_nodes));
-  std::copy(timestamps, timestamps + num_sampled_nodes,
-            std::back_inserter(sampling_result.all_timestamps));
-  std::copy(delta_timestamps, delta_timestamps + num_sampled_nodes,
-            std::back_inserter(sampling_result.delta_timestamps));
-  std::copy(eids, eids + num_sampled_nodes,
-            std::back_inserter(sampling_result.eids));
+  Copy(sampling_result.all_nodes.data() + num_root_nodes, src_nodes,
+       num_sampled_nodes * sizeof(NIDType));
+  Copy(sampling_result.all_timestamps.data() + num_root_nodes, timestamps,
+       num_sampled_nodes * sizeof(TimestampType));
+  Copy(sampling_result.delta_timestamps.data(), delta_timestamps,
+       num_sampled_nodes * sizeof(TimestampType));
+  Copy(sampling_result.eids.data(), eids, num_sampled_nodes * sizeof(EIDType));
 
-  sampling_result.row.resize(num_sampled_nodes);
-  uint32_t cumsum = 0;
-  for (uint32_t i = 0; i < num_root_nodes; i++) {
-    std::fill_n(sampling_result.row.begin() + cumsum, num_sampled[i], i);
-    cumsum += num_sampled[i];
+  std::vector<uint32_t> row_offsets(num_root_nodes + 1);
+  row_offsets[0] = 0;
+  for (uint32_t i = 1; i <= num_root_nodes; i++) {
+    row_offsets[i] = row_offsets[i - 1] + num_sampled[i - 1];
   }
+  CHECK_EQ(row_offsets[num_root_nodes], num_sampled_nodes);
 
-  CHECK_EQ(cumsum, num_sampled_nodes);
+#pragma omp parallel for simd num_threads(4) schedule(static)
+  for (uint32_t i = 0; i < num_root_nodes; i++) {
+    std::fill_n(sampling_result.row.begin() + row_offsets[i], num_sampled[i],
+                i);
+  }
 
   return sampling_result;
 }
