@@ -41,8 +41,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")
 
 pybind11_add_module(${TARGET_LIB} ${GNNFLOW_SRC_FILES})
 
-set(CMAKE_VERBOSE_MAKEFILE on)
-
 target_compile_options(${TARGET_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
     --generate-line-info
     --use_fast_math
