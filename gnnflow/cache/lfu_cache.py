@@ -87,28 +87,15 @@ class LFUCache(Cache):
             if self.dim_edge_feat != 0:
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
-                if len(keys) >= self.edge_capacity:
-                    # if local edge feats is larger than capacity
-                    # fill out the cache edge buffer
-                    cache_edge_id = torch.arange(
-                        self.edge_capacity, dtype=torch.int64, device=self.device)
-                    self.cache_edge_buffer[cache_edge_id] = feats.to(
-                        self.device)
-                    self.cache_edge_flag[cache_edge_id] = True
-                    self.cache_index_to_edge_id = keys.to(self.device)
-                    self.cache_edge_map[keys] = cache_edge_id
-                else:
-                    # if local edge feats is smaller than capacity
-                    # use all local edge feats here.
-                    cache_edge_id = torch.arange(
-                        len(keys), dtype=torch.int64, device=self.device)
-                    self.cache_edge_buffer[cache_edge_id] = feats.to(
-                        self.device)
-                    self.cache_edge_flag[cache_edge_id] = True
-                    self.cache_index_to_edge_id[cache_edge_id] = keys.to(
-                        self.device)
-                    self.cache_edge_map[keys] = cache_edge_id
-
+                cache_edge_id = torch.arange(
+                    len(keys), dtype=torch.int64, device=self.device)
+                self.cache_edge_buffer[cache_edge_id] = feats.to(
+                    self.device)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_index_to_edge_id[cache_edge_id] = keys.to(
+                    self.device)
+                self.cache_edge_map[keys] = cache_edge_id
+                
                 self.cache_edge_count[self.cache_index_to_edge_id] += 1
         else:
             if self.edge_feats is not None:
