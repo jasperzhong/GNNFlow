@@ -1,9 +1,10 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import torch
 import torch.distributed.rpc as rpc
 
 from gnnflow.distributed import graph_services
+from gnnflow.utils import local_world_size, rank
 
 
 class KVStoreServer:
@@ -196,6 +197,18 @@ class KVStoreClient:
             pull_results.append(future.wait())
 
         return self._merge_pull_results(pull_results, masks)
+
+    def init_cache(self, capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        global_rank = rank()
+        world_size = local_world_size()
+        kvstore_rank = (global_rank // world_size) * world_size
+        if kvstore_rank == global_rank:
+            keys, feats = graph_services.init_cache(capacity)
+        else:
+            future = rpc.rpc_async('worker{}'.format(
+                kvstore_rank), graph_services.init_cache, args=(capacity))
+            keys, feats = future.wait()
+        return keys, feats
 
     def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
         """

@@ -83,18 +83,33 @@ class LFUCache(Cache):
         Reset the cache
         """
         # NB: only edge cache is reset
-        if self.edge_feats is not None:
-            cache_edge_id = torch.arange(
-                self.edge_capacity, dtype=torch.int64, device=self.device)
+        if self.distributed:
+            if self.dim_edge_feat != 0:
+                keys, feats = self.kvstore_client.init_cache(
+                    self.edge_capacity)
+                cache_edge_id = torch.arange(
+                    len(keys), dtype=torch.int64, device=self.device)
+                self.cache_edge_buffer[cache_edge_id] = feats.to(
+                    self.device)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_index_to_edge_id[cache_edge_id] = keys.to(
+                    self.device)
+                self.cache_edge_map[keys] = cache_edge_id
+                
+                self.cache_edge_count[self.cache_index_to_edge_id] += 1
+        else:
+            if self.edge_feats is not None:
+                cache_edge_id = torch.arange(
+                    self.edge_capacity, dtype=torch.int64, device=self.device)
 
-            # Init parameters related to feature fetching
-            self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_edge_flag[cache_edge_id] = True
-            self.cache_index_to_edge_id = cache_edge_id
-            self.cache_edge_map[cache_edge_id] = cache_edge_id
+                # Init parameters related to feature fetching
+                self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
+                    self.device, non_blocking=True)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_index_to_edge_id = cache_edge_id
+                self.cache_edge_map[cache_edge_id] = cache_edge_id
 
-            self.cache_edge_count[self.cache_index_to_edge_id] += 1
+                self.cache_edge_count[self.cache_index_to_edge_id] += 1
 
     def resize(self, new_num_nodes: int, new_num_edges: int):
         """

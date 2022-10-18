@@ -239,19 +239,19 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     return ret
 
 
-def push_tensors(keys: torch.Tensor, tensors: List[torch.Tensor], mode: str):
+def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
     """
     Push tensors to the remote workers for KVStore servers.
 
     Args:
         keys (torch.Tensor): The key of the tensors.
-        tensors (List[torch.Tensor]): The tensors.
+        tensors (torch.Tensor): The tensors.
     """
     kvstore_server = get_kvstore_server()
     kvstore_server.push(keys, tensors, mode)
 
 
-def pull_tensors(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
+def pull_tensors(keys: torch.Tensor, mode: str) -> torch.Tensor:
     """
     Pull tensors from the remote workers for KVStore servers.
 
@@ -260,10 +260,18 @@ def pull_tensors(keys: torch.Tensor, mode: str) -> List[torch.Tensor]:
         mode (str): The mode of the pull operation.
 
     Returns:
-        List[torch.Tensor]: The pulled tensors.
+        torch.Tensor: The pulled tensors.
     """
     kvstore_server = get_kvstore_server()
     return kvstore_server.pull(keys, mode)
+
+
+def init_cache(capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    kvstore_server = get_kvstore_server()
+    keys = torch.tensor(list(kvstore_server._edge_feat_map.keys()))
+    cache_edge_id = keys[:capacity]
+    feats = kvstore_server.pull(cache_edge_id, mode='edge')
+    return cache_edge_id, feats
 
 
 def reset_memory():
