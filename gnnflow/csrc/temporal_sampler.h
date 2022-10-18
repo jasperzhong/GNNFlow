@@ -22,7 +22,7 @@ class TemporalSampler {
                   SamplingPolicy sample_policy, uint32_t num_snapshots = 1,
                   float snapshot_time_window = 0.0f, bool prop_time = false,
                   uint64_t seed = 1234);
-  ~TemporalSampler();
+  ~TemporalSampler() = default;
 
   std::vector<std::vector<SamplingResult>> Sample(
       const std::vector<NIDType>& dst_nodes,
@@ -58,8 +58,6 @@ class TemporalSampler {
   void InitBuffer(std::size_t num_root_nodes,
                   std::size_t maximum_sampled_nodes);
 
-  void FreeBuffer();
-
  private:
   const DynamicGraph& graph_;  // sampling does not modify the graph
   std::vector<uint32_t> fanouts_;
@@ -76,7 +74,7 @@ class TemporalSampler {
   std::unique_ptr<PinMemoryBuffer> cpu_buffer_;
   std::unique_ptr<GPUBuffer> gpu_input_buffer_;
   std::unique_ptr<GPUBuffer> gpu_output_buffer_;
-  curandState_t* rand_states_;
+  std::unique_ptr<CuRandStateHolder> rand_states_;
 
   std::size_t maximum_sampled_nodes_;
 };

@@ -46,7 +46,7 @@ class ResourceHolder<char*> {
  public:
   ResourceHolder() = default;
   ResourceHolder(std::size_t size) {}
-  virtual ~ResourceHolder();
+  virtual ~ResourceHolder() = default;
 
   operator char*() const& { return resource_; }
   char* operator+(std::size_t offset) const { return resource_ + offset; }
@@ -90,7 +90,10 @@ class CuRandStateResourceHolder : public ResourceHolder<curandState_t*> {
   }
 
   ~CuRandStateResourceHolder() { cudaFree(resource_); }
+
+  operator curandState_t*() const& { return resource_; }
 };
+typedef CuRandStateResourceHolder CuRandStateHolder;
 
 }  // namespace gnnflow
 

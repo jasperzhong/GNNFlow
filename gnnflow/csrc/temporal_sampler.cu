@@ -54,14 +54,6 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
   device_ = graph_.device();
 }
 
-void TemporalSampler::FreeBuffer() {
-  if (rand_states_ != nullptr) {
-    CUDA_CALL(cudaFree(rand_states_));
-  }
-}
-
-TemporalSampler::~TemporalSampler() { FreeBuffer(); }
-
 void TemporalSampler::InitBuffer(std::size_t num_root_nodes,
                                  std::size_t maximum_sampled_nodes) {
   cpu_buffer_.reset(
@@ -72,14 +64,7 @@ void TemporalSampler::InitBuffer(std::size_t num_root_nodes,
       new GPUBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
 
   if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-    CUDA_CALL(cudaMalloc((void**)&rand_states_,
-                         num_root_nodes * sizeof(curandState)));
-    uint32_t num_threads_per_block = 256;
-    uint32_t num_blocks =
-        (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
-
-    InitCuRandStates<<<num_blocks, num_threads_per_block>>>(rand_states_,
-                                                            seed_);
+    rand_states_.reset(new CuRandStateHolder(num_root_nodes, seed_));
   }
 }
 
@@ -115,7 +100,6 @@ SamplingResult TemporalSampler::SampleLayer(
   std::size_t maximum_sampled_nodes = fanouts_[layer] * num_root_nodes;
 
   if (maximum_sampled_nodes > maximum_sampled_nodes_) {
-    FreeBuffer();
     maximum_sampled_nodes_ = maximum_sampled_nodes;
     InitBuffer(num_root_nodes, maximum_sampled_nodes_);
   }
@@ -173,10 +157,10 @@ SamplingResult TemporalSampler::SampleLayer(
                                    sizeof(SamplingRange),
                                stream_holders_[snapshot]>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        rand_states_, seed_, offset_per_thread, d_root_nodes, d_root_timestamps,
-        snapshot, num_snapshots_, snapshot_time_window_, num_root_nodes,
-        fanouts_[layer], d_src_nodes, d_eids, d_timestamps, d_delta_timestamps,
-        d_num_sampled);
+        *rand_states_, seed_, offset_per_thread, d_root_nodes,
+        d_root_timestamps, snapshot, num_snapshots_, snapshot_time_window_,
+        num_root_nodes, fanouts_[layer], d_src_nodes, d_eids, d_timestamps,
+        d_delta_timestamps, d_num_sampled);
   }
 
   // combine
