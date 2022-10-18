@@ -1,5 +1,5 @@
-#ifndef GNNFLOW_STREAM_HOLDER_H
-#define GNNFLOW_STREAM_HOLDER_H
+#ifndef GNNFLOW_RESOURCE_HOLDER_H
+#define GNNFLOW_RESOURCE_HOLDER_H
 
 #include <cuda_runtime_api.h>
 #include <curand_kernel.h>
@@ -97,4 +97,4 @@ typedef CuRandStateResourceHolder CuRandStateHolder;
 
 }  // namespace gnnflow
 
-#endif  // GNNFLOW_STREAM_HOLDER_H
+#endif  // GNNFLOW_RESOURCE_HOLDER_H
