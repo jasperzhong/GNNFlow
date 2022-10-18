@@ -11,9 +11,7 @@
 
 #include "common.h"
 #include "dynamic_graph.h"
-#include "gpu_buffer.h"
-#include "pin_memory_buffer.h"
-#include "stream_holder.h"
+#include "resource_holder.h"
 
 namespace gnnflow {
 
