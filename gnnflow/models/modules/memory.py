@@ -6,6 +6,7 @@ Implementation at:
 """
 from typing import Dict, Optional, Union
 
+import logging
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
@@ -176,15 +177,15 @@ class Memory:
             # b.srcdata['mail_ts'] = mail_ts.to(device)
             # b.srcdata['mem_input'] = mail.to(device)
             # unique all nodes
-            all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
-            mem = torch.take(self.kvstore_client.pull(
-                all_nodes_unique, mode='memory'), inv).to(device)
-            mem_ts = torch.take(self.kvstore_client.pull(
-                all_nodes_unique, mode='memory_ts'), inv).to(device)
-            mail = torch.take(self.kvstore_client.pull(
-                all_nodes_unique, mode='mailbox'), inv).to(device)
-            mail_ts = torch.take(self.kvstore_client.pull(
-                all_nodes_unique, mode='mailbox_ts'), inv).to(device)
+            all_nodes_unique, counts = torch.unique(all_nodes.cpu(), return_counts=True)
+            mem = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='memory'), counts, dim=0).to(device)
+            mem_ts = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='memory_ts'), counts).to(device)
+            mail = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox'), counts).to(device)
+            mail_ts = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox_ts'), counts).to(device)
             b.srcdata['mem'] = mem
             b.srcdata['mem_ts'] = mem_ts
             b.srcdata['mail_ts'] = mail_ts
