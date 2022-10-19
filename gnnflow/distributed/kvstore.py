@@ -279,10 +279,8 @@ class KVStoreClient:
             # TODO: try to concate to tensor and split them
             all_mem[idx] = pull_result[:, 2:102]
             all_mem_ts[idx] = pull_result[:, 0]
-            all_mail[idx] = pull_result[2]
-            logging.info("mail size {}".format(pull_result[:, 102:].shape))
-            logging.info("all shape:{}".format(pull_result.shape))
-            all_mail_ts[idx] = pull_result[:, 102:]
+            all_mail[idx] = pull_result[:, 102:]
+            all_mail_ts[idx] = pull_result[:, 1]
             # all_mem[idx] = pull_result[0]
             # all_mem_ts[idx] = pull_result[1]
             # all_mail[idx] = pull_result[2]
