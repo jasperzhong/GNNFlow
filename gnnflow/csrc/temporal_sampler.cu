@@ -46,7 +46,8 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       gpu_input_buffer_(nullptr),
       gpu_output_buffer_(nullptr),
       rand_states_(nullptr),
-      maximum_sampled_nodes_(0) {
+      maximum_sampled_nodes_(0),
+      maximum_num_root_nodes_(0) {
   if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
