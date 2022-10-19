@@ -20,13 +20,13 @@ import gnnflow.distributed.graph_services as graph_services
 from gnnflow import DynamicGraph
 from gnnflow.config import get_default_config
 from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
-                       RandomStartBatchSampler, default_collate_ndarray)
+                          RandomStartBatchSampler, default_collate_ndarray)
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.models.dgnn import DGNN
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
-                        get_pinned_buffers, get_project_root_dir, load_dataset,
-                        load_feat, mfgs_to_cuda)
+                           get_pinned_buffers, get_project_root_dir, load_dataset,
+                           load_feat, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT']
@@ -131,7 +131,7 @@ def main():
 
     model_config, data_config = get_default_config(args.model, args.data)
 
-    if args.distributed:
+    if args.local_world_size > 1:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
@@ -181,14 +181,16 @@ def main():
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
+    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
     if args.partition:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank)
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
         gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
-                                    args.ingestion_batch_size, args.partition_strategy,
-                                    args.num_nodes, data_config["undirected"])
+                                       args.ingestion_batch_size, args.partition_strategy,
+                                       args.num_nodes, data_config["undirected"], args.data,
+                                       args.dim_memory)
     else:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
@@ -200,12 +202,11 @@ def main():
         args.data, shared_memory=args.local_world_size > 1,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
-    dim_node = 0 if node_feats is None else node_feats.shape[1]
-    dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+    dim_node = 0 if node_feats is None else int(node_feats.shape[1])
+    dim_edge = 0 if edge_feats is None else int(edge_feats.shape[1])
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
-
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=max_node_id,
                  memory_device=device, memory_shared=args.local_world_size > 1)
@@ -227,12 +228,13 @@ def main():
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
-        node_feats, edge_feats)
+        dim_node, dim_edge)
 
     # Cache
     cache = caches.__dict__[args.cache](args.cache_ratio, max_node_id,
                                         max_edge_id, device,
                                         node_feats, edge_feats,
+                                        dim_node, dim_edge,
                                         pinned_nfeat_buffs,
                                         pinned_efeat_buffs)
 
@@ -291,7 +293,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
-                mfgs, eid=eid, edge_feats=cache.edge_feats)
+                mfgs, edge_feats=cache.edge_feats[eid])
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))

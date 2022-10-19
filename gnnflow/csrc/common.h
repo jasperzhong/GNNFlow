@@ -47,7 +47,7 @@ struct TemporalBlock {
   TemporalBlock* next;
 };
 
-/** @brief This POD is used to store the sampling result. */
+/** @brief This struct is used to store the sampling result. */
 struct SamplingResult {
   std::vector<NIDType> row;
   std::vector<NIDType> col;

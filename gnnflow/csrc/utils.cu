@@ -60,7 +60,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
   block->start_timestamp =
       std::min(block->start_timestamp, timestamps[start_idx]);
   block->end_timestamp = timestamps[start_idx + num_edges - 1];
-}  // namespace gnnflow
+}
 
 std::size_t GetSharedMemoryMaxSize() {
   std::size_t max_size = 0;
@@ -71,15 +71,17 @@ std::size_t GetSharedMemoryMaxSize() {
 }
 
 void Copy(void* dst, const void* src, std::size_t size) {
-  auto in = (float*)src;
-  auto out = (float*)dst;
-#pragma omp parallel for simd num_threads(4)
-  for (size_t i = 0; i < size / 4; ++i) {
+  auto in = (long long*)src;
+  auto out = (long long*)dst;
+  constexpr std::size_t kUnitSize = sizeof(long long);
+#pragma omp parallel for simd num_threads(4) schedule(static)
+  for (size_t i = 0; i < size / kUnitSize; ++i) {
     out[i] = in[i];
   }
 
-  if (size % 4) {
-    std::memcpy(out + size / 4, in + size / 4, size % 4);
+  if (size % kUnitSize) {
+    std::memcpy(out + size / kUnitSize, in + size / kUnitSize,
+                size % kUnitSize);
   }
 }
 
