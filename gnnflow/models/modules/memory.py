@@ -175,7 +175,7 @@ class Memory:
             mem = pulled_memory[0][inv].to(device)
             mem_ts = pulled_memory[1][inv].to(device)
             mail = pulled_memory[2][inv].to(device)
-            mail_ts = pull_memory[3][inv].to(device)
+            mail_ts = pulled_memory[3][inv].to(device)
 
             b.srcdata['mem'] = mem
             b.srcdata['mem_ts'] = mem_ts
