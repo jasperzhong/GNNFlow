@@ -170,14 +170,33 @@ class Memory:
         assert isinstance(all_nodes, torch.Tensor)
 
         if self.partition:
-            b.srcdata['mem'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='memory').to(device)
-            b.srcdata['mem_ts'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='memory_ts').to(device)
-            b.srcdata['mail_ts'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='mailbox_ts').to(device)
-            b.srcdata['mem_input'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='mailbox').to(device)
+            # mem, mem_ts, mail_ts, mail = self.kvstore_client.pull(all_nodes.cpu(), mode='memory')
+            # b.srcdata['mem'] = mem.to(device)
+            # b.srcdata['mem_ts'] = mem_ts.to(device)
+            # b.srcdata['mail_ts'] = mail_ts.to(device)
+            # b.srcdata['mem_input'] = mail.to(device)
+            # unique all nodes
+            all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
+            mem = torch.take(self.kvstore_client.pull(
+                all_nodes_unique, mode='memory'), inv).to(device)
+            mem_ts = torch.take(self.kvstore_client.pull(
+                all_nodes_unique, mode='memory_ts'), inv).to(device)
+            mail = torch.take(self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox'), inv).to(device)
+            mail_ts = torch.take(self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox_ts'), inv).to(device)
+            b.srcdata['mem'] = mem
+            b.srcdata['mem_ts'] = mem_ts
+            b.srcdata['mail_ts'] = mail_ts
+            b.srcdata['mem_input'] = mail
+            # b.srcdata['mem'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='memory').to(device)
+            # b.srcdata['mem_ts'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='memory_ts').to(device)
+            # b.srcdata['mail_ts'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='mailbox_ts').to(device)
+            # b.srcdata['mem_input'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='mailbox').to(device)
         else:
             b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
             b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
