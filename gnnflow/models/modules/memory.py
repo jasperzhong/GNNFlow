@@ -177,35 +177,46 @@ class Memory:
             # b.srcdata['mail_ts'] = mail_ts.to(device)
             # b.srcdata['mem_input'] = mail.to(device)
             # unique all nodes
-            all_nodes_unique, counts = torch.unique(all_nodes.cpu(), return_counts=True)
+            all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
             # mem_mail = self.kvstore_client.pull(all_nodes_unique, mode='memory')
             # mem = torch.repeat_interleave(mem_mail[0], counts, dim=0).to(device)
             # mem_ts = torch.repeat_interleave(mem_mail[1], counts, dim=0).to(device)
             # mail = torch.repeat_interleave(mem_mail[2], counts, dim=0).to(device)
             # mail_ts = torch.repeat_interleave(mem_mail[3], counts, dim=0).to(device)
 
-            # mem = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='memory'), counts, dim=0).to(device)
-            # mem_ts = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='memory_ts'), counts, dim=0).to(device)
-            # mail = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='mailbox'), counts, dim=0).to(device)
-            # mail_ts = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='mailbox_ts'), counts, dim=0).to(device)
-            # b.srcdata['mem'] = mem
-            # b.srcdata['mem_ts'] = mem_ts
-            # b.srcdata['mail_ts'] = mail_ts
-            # b.srcdata['mem_input'] = mail
-            b.srcdata['mem'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='memory').to(device)
-            b.srcdata['mem_ts'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='memory_ts').to(device)
-            b.srcdata['mail_ts'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='mailbox_ts').to(device)
-            b.srcdata['mem_input'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='mailbox').to(device)
+            mem = self.kvstore_client.pull(
+                all_nodes_unique, mode='memory')[inv].to(device)
+            # mem_2 = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='memory').to(device)
+            # logging.info("mem: {}".format(mem.shape))
+            # logging.info("mem not unqiue: {}".format(mem_2.shape))
+            # assert torch.allclose(mem, mem_2), "the unique function is error"
+            mem_ts = self.kvstore_client.pull(
+                all_nodes_unique, mode='memory_ts')[inv].to(device)
+            mail = self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox')[inv].to(device)
+            mail_ts = self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox_ts')[inv].to(device)
+            b.srcdata['mem'] = mem
+            b.srcdata['mem_ts'] = mem_ts
+            b.srcdata['mail_ts'] = mail_ts
+            b.srcdata['mem_input'] = mail
+            # b.srcdata['mem'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='memory').to(device)
+            # b.srcdata['mem_ts'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='memory_ts').to(device)
+            # b.srcdata['mail_ts'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='mailbox_ts').to(device)
+            # b.srcdata['mem_input'] = self.kvstore_client.pull(
+            #     all_nodes.cpu(), mode='mailbox').to(device)
         else:
-            b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
+            all_nodes_unique, inv, counts = torch.unique(all_nodes, return_inverse=True, return_counts=True)
+            mem = self.node_memory[all_nodes].to(device)
+            mem_2 = self.node_memory[all_nodes_unique][inv].to(device)
+            # logging.info("mem: {}".format(mem.shape))
+            # logging.info("mem not unqiue: {}".format(mem_2.shape))
+            assert torch.allclose(mem, mem_2), "the unique function is error"
+            b.srcdata['mem'] = mem
             b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
             b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
             b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
