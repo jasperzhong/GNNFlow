@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.distributed.rpc as rpc
@@ -76,7 +76,6 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            # TODO: try to concat to tensor
             mem = torch.stack([self._memory_map[int(key)] for key in keys])
             mem_ts = torch.stack([self._memory_ts_map[int(key)]
                                  for key in keys])
@@ -84,17 +83,12 @@ class KVStoreServer:
             mail_ts = torch.stack(
                 [self._mailbox_ts_map[int(key)] for key in keys])
             # cat them to torch.Tensor
-            all_mem = torch.cat((mem_ts.unsqueeze(dim=1),
+            all_mem = torch.cat((mem,
+                                 mem_ts.unsqueeze(dim=1),
+                                 mail,
                                  mail_ts.unsqueeze(dim=1),
-                                 mem, mail), dim=1)
+                                 ), dim=1)
             return all_mem
-            # return torch.stack([self._memory_map[int(key)] for key in keys])
-        elif mode == 'memory_ts':
-            return torch.stack([self._memory_ts_map[int(key)] for key in keys])
-        elif mode == 'mailbox':
-            return torch.stack([self._mailbox_map[int(key)] for key in keys])
-        elif mode == 'mailbox_ts':
-            return torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -164,7 +158,7 @@ class KVStoreClient:
         # for future in futures:
         #     future.wait()
 
-    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
@@ -226,7 +220,7 @@ class KVStoreClient:
             keys, feats = future.wait()
         return keys, feats
 
-    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
+    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]):
         """
         Merge pull results from different partitions.
 
@@ -244,13 +238,9 @@ class KVStoreClient:
         for pull_result in pull_results:
             all_pull_results += len(pull_result)
 
-        # torch scalar
-        if pull_results[0][0].shape == torch.Size([]):
-            all_pull_results = torch.zeros(
-                (all_pull_results,), dtype=torch.float32)
-        else:
-            all_pull_results = torch.zeros(
-                (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
+        feat_dim = pull_results[0][0].shape[0]
+        all_pull_results = torch.zeros(
+            (all_pull_results, feat_dim), dtype=torch.float32)
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
@@ -258,7 +248,7 @@ class KVStoreClient:
 
         return all_pull_results
 
-    def _merge_pull_results_memory(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
+    def _merge_pull_results_memory(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]):
         """
         Merge pull results from different partitions.
 
@@ -277,28 +267,22 @@ class KVStoreClient:
             all_pull_results += len(pull_result)
 
         # torch scalar
-        all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
-        all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
+        mem_dim = pull_results[0][0][0].shape[0]
+        mail_dim = pull_results[0][2][0].shape[0]
+
         all_mem = torch.zeros(
-            (all_pull_results, 100), dtype=torch.float32)
+            (all_pull_results, mem_dim), dtype=torch.float32)
+        all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
         all_mail = torch.zeros(
-            (all_pull_results, 372), dtype=torch.float32)
-        # all_mem = torch.zeros(
-        #         (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
-        # all_mail = torch.zeros(
-        #         (all_pull_results, pull_results[0][2][0].shape[0]), dtype=torch.float32)
+            (all_pull_results, mail_dim), dtype=torch.float32)
+        all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
-            # TODO: try to concate to tensor and split them
-            all_mem[idx] = pull_result[:, 2:102]
-            all_mem_ts[idx] = pull_result[:, 0]
-            all_mail[idx] = pull_result[:, 102:]
-            all_mail_ts[idx] = pull_result[:, 1]
-            # all_mem[idx] = pull_result[0]
-            # all_mem_ts[idx] = pull_result[1]
-            # all_mail[idx] = pull_result[2]
-            # all_mail_ts[idx] = pull_result[3]
+            all_mem[idx] = pull_result[:, :mem_dim]
+            all_mem_ts[idx] = pull_result[:, mem_dim]
+            all_mail[idx] = pull_result[:, mem_dim + 1:mem_dim + 1 + mail_dim]
+            all_mail_ts[idx] = pull_result[:, -1]
 
         return (all_mem, all_mem_ts, all_mail, all_mail_ts)
 

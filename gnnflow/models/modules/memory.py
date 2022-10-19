@@ -169,27 +169,14 @@ class Memory:
         assert isinstance(all_nodes, torch.Tensor)
 
         if self.partition:
-            # mem, mem_ts, mail_ts, mail = self.kvstore_client.pull(all_nodes.cpu(), mode='memory')
-            # b.srcdata['mem'] = mem.to(device)
-            # b.srcdata['mem_ts'] = mem_ts.to(device)
-            # b.srcdata['mail_ts'] = mail_ts.to(device)
-            # b.srcdata['mem_input'] = mail.to(device)
             # unique all nodes
             all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
-            mem_mail = self.kvstore_client.pull(all_nodes_unique, mode='memory')
-            mem = mem_mail[0][inv].to(device)
-            mem_ts = mem_mail[1][inv].to(device)
-            mail = mem_mail[2][inv].to(device)
-            mail_ts = mem_mail[3][inv].to(device)
+            pulled_memory = self.kvstore_client.pull(all_nodes_unique, mode='memory')
+            mem = pulled_memory[0][inv].to(device)
+            mem_ts = pulled_memory[1][inv].to(device)
+            mail = pulled_memory[2][inv].to(device)
+            mail_ts = pull_memory[3][inv].to(device)
 
-            # mem = self.kvstore_client.pull(
-            #     all_nodes_unique, mode='memory')[inv].to(device)
-            # mem_ts = self.kvstore_client.pull(
-            #     all_nodes_unique, mode='memory_ts')[inv].to(device)
-            # mail = self.kvstore_client.pull(
-            #     all_nodes_unique, mode='mailbox')[inv].to(device)
-            # mail_ts = self.kvstore_client.pull(
-            #     all_nodes_unique, mode='mailbox_ts')[inv].to(device)
             b.srcdata['mem'] = mem
             b.srcdata['mem_ts'] = mem_ts
             b.srcdata['mail_ts'] = mail_ts
