@@ -147,8 +147,8 @@ class KVStoreClient:
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.push_tensors, args=(partition_keys, partition_tensors, mode)))
 
-        for future in futures:
-            future.wait()
+        # for future in futures:
+        #     future.wait()
 
     def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> torch.Tensor:
         """

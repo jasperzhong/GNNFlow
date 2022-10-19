@@ -186,11 +186,6 @@ class Memory:
 
             mem = self.kvstore_client.pull(
                 all_nodes_unique, mode='memory')[inv].to(device)
-            # mem_2 = self.kvstore_client.pull(
-            #     all_nodes.cpu(), mode='memory').to(device)
-            # logging.info("mem: {}".format(mem.shape))
-            # logging.info("mem not unqiue: {}".format(mem_2.shape))
-            # assert torch.allclose(mem, mem_2), "the unique function is error"
             mem_ts = self.kvstore_client.pull(
                 all_nodes_unique, mode='memory_ts')[inv].to(device)
             mail = self.kvstore_client.pull(
@@ -210,13 +205,7 @@ class Memory:
             # b.srcdata['mem_input'] = self.kvstore_client.pull(
             #     all_nodes.cpu(), mode='mailbox').to(device)
         else:
-            all_nodes_unique, inv, counts = torch.unique(all_nodes, return_inverse=True, return_counts=True)
-            mem = self.node_memory[all_nodes].to(device)
-            mem_2 = self.node_memory[all_nodes_unique][inv].to(device)
-            # logging.info("mem: {}".format(mem.shape))
-            # logging.info("mem not unqiue: {}".format(mem_2.shape))
-            assert torch.allclose(mem, mem_2), "the unique function is error"
-            b.srcdata['mem'] = mem
+            b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
             b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
             b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
             b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
