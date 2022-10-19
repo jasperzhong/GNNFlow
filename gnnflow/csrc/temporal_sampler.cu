@@ -56,17 +56,23 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
   device_ = graph_.device();
 }
 
-void TemporalSampler::InitBuffer(std::size_t num_root_nodes,
-                                 std::size_t maximum_sampled_nodes) {
-  cpu_buffer_.reset(
-      new PinMemoryBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
-  gpu_input_buffer_.reset(
-      new GPUBuffer(num_root_nodes * kPerNodeInputBufferSize));
-  gpu_output_buffer_.reset(
-      new GPUBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
+void TemporalSampler::InitBufferIfNeeded(std::size_t num_root_nodes,
+                                         std::size_t maximum_sampled_nodes) {
+  if (maximum_sampled_nodes > maximum_sampled_nodes_) {
+    maximum_sampled_nodes_ = maximum_sampled_nodes;
+    cpu_buffer_.reset(
+        new PinMemoryBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
+    gpu_output_buffer_.reset(
+        new GPUBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
+  }
 
-  if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-    rand_states_.reset(new CuRandStateHolder(num_root_nodes, seed_));
+  if (num_root_nodes > maximum_num_root_nodes_) {
+    maximum_num_root_nodes_ = num_root_nodes;
+    gpu_input_buffer_.reset(
+        new GPUBuffer(num_root_nodes * kPerNodeInputBufferSize));
+    if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+      rand_states_.reset(new CuRandStateHolder(num_root_nodes, seed_));
+    }
   }
 }
 
@@ -110,10 +116,7 @@ SamplingResult TemporalSampler::SampleLayer(
     return result;
   }
 
-  if (maximum_sampled_nodes > maximum_sampled_nodes_) {
-    maximum_sampled_nodes_ = maximum_sampled_nodes;
-    InitBuffer(num_root_nodes, maximum_sampled_nodes_);
-  }
+  InitBufferIfNeeded(num_root_nodes, maximum_sampled_nodes_);
 
   // copy input to pin memory buffer
   auto input_buffer_tuple = GetInputBufferTuple(*cpu_buffer_, num_root_nodes);
@@ -201,7 +204,7 @@ SamplingResult TemporalSampler::SampleLayer(
   std::tie(src_nodes, eids, timestamps, delta_timestamps, num_sampled) =
       GetOutputBufferTuple(*cpu_buffer_, num_root_nodes, num_sampled_nodes);
 
-  // copy output to pin memory buffer 
+  // copy output to pin memory buffer
   CUDA_CALL(cudaMemcpyAsync(src_nodes, d_src_nodes,
                             sizeof(NIDType) * num_sampled_nodes,
                             cudaMemcpyDeviceToHost, stream_holders_[snapshot]));
