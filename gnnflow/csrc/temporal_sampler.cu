@@ -75,6 +75,8 @@ void TemporalSampler::InitBufferIfNeeded(std::size_t num_root_nodes,
       rand_states_.reset(new CuRandStateHolder(num_root_nodes, seed_));
     }
   }
+  LOG(DEBUG) << "Maximum sampled nodes: " << maximum_sampled_nodes_
+             << ", maximum root nodes: " << maximum_num_root_nodes_;
 }
 
 TemporalSampler::InputBufferTuple TemporalSampler::GetInputBufferTuple(
@@ -118,6 +120,9 @@ SamplingResult TemporalSampler::SampleLayer(
   }
 
   InitBufferIfNeeded(num_root_nodes, maximum_sampled_nodes);
+  CHECK_NOTNULL(cpu_buffer_.get());
+  CHECK_NOTNULL(gpu_input_buffer_.get());
+  CHECK_NOTNULL(gpu_output_buffer_.get());
 
   // copy input to pin memory buffer
   auto input_buffer_tuple = GetInputBufferTuple(*cpu_buffer_, num_root_nodes);
