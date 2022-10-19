@@ -1,10 +1,10 @@
-import logging
 from typing import List, Optional
 
 import torch
 import torch.distributed.rpc as rpc
 
 from gnnflow.distributed import graph_services
+from gnnflow.utils import local_world_size, rank
 
 
 class KVStoreServer:
@@ -78,9 +78,11 @@ class KVStoreServer:
         elif mode == 'memory':
             # TODO: try to concat to tensor
             mem = torch.stack([self._memory_map[int(key)] for key in keys])
-            mem_ts = torch.stack([self._memory_ts_map[int(key)] for key in keys])
+            mem_ts = torch.stack([self._memory_ts_map[int(key)]
+                                 for key in keys])
             mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
-            mail_ts = torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
+            mail_ts = torch.stack(
+                [self._mailbox_ts_map[int(key)] for key in keys])
             # cat them to torch.Tensor
             all_mem = torch.cat((mem_ts.unsqueeze(dim=1),
                                  mail_ts.unsqueeze(dim=1),
@@ -212,6 +214,18 @@ class KVStoreClient:
         else:
             return self._merge_pull_results_memory(pull_results, masks)
 
+    def init_cache(self, capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        global_rank = rank()
+        world_size = local_world_size()
+        kvstore_rank = (global_rank // world_size) * world_size
+        if kvstore_rank == global_rank:
+            keys, feats = graph_services.init_cache(capacity)
+        else:
+            future = rpc.rpc_async('worker{}'.format(
+                kvstore_rank), graph_services.init_cache, args=(capacity))
+            keys, feats = future.wait()
+        return keys, feats
+
     def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
         """
         Merge pull results from different partitions.
@@ -266,9 +280,9 @@ class KVStoreClient:
         all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
         all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
         all_mem = torch.zeros(
-                (all_pull_results, 100), dtype=torch.float32)
+            (all_pull_results, 100), dtype=torch.float32)
         all_mail = torch.zeros(
-                (all_pull_results, 372), dtype=torch.float32)
+            (all_pull_results, 372), dtype=torch.float32)
         # all_mem = torch.zeros(
         #         (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
         # all_mail = torch.zeros(

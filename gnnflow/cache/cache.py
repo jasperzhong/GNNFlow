@@ -149,29 +149,40 @@ class Cache:
         Init the cache with features
         """
         if self.distributed:
-            return
+            # the edge map is ordered my insertion order, which is the order of ts
+            if self.dim_edge_feat != 0:
+                keys, feats = self.kvstore_client.init_cache(
+                    self.edge_capacity)
+                cache_edge_id = torch.arange(
+                        len(keys), dtype=torch.int64, device=self.device)
+                self.cache_edge_buffer[cache_edge_id] = feats.to(
+                    self.device)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_index_to_edge_id[cache_edge_id] = keys.to(
+                    self.device)
+                self.cache_edge_map[keys] = cache_edge_id
+        else:
+            if self.dim_node_feat != 0:
+                cache_node_id = torch.arange(
+                    self.node_capacity, dtype=torch.int64, device=self.device)
 
-        if self.dim_node_feat != 0:
-            cache_node_id = torch.arange(
-                self.node_capacity, dtype=torch.int64, device=self.device)
+                # Init parameters related to feature fetching
+                self.cache_node_buffer[cache_node_id] = self.node_feats[:self.node_capacity].to(
+                    self.device, non_blocking=True)
+                self.cache_node_flag[cache_node_id] = True
+                self.cache_index_to_node_id = cache_node_id
+                self.cache_node_map[cache_node_id] = cache_node_id
 
-            # Init parameters related to feature fetching
-            self.cache_node_buffer[cache_node_id] = self.node_feats[:self.node_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_node_flag[cache_node_id] = True
-            self.cache_index_to_node_id = cache_node_id
-            self.cache_node_map[cache_node_id] = cache_node_id
+            if self.dim_edge_feat != 0:
+                cache_edge_id = torch.arange(
+                    self.edge_capacity, dtype=torch.int64, device=self.device)
 
-        if self.dim_edge_feat != 0:
-            cache_edge_id = torch.arange(
-                self.edge_capacity, dtype=torch.int64, device=self.device)
-
-            # Init parameters related to feature fetching
-            self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
-                self.device, non_blocking=True)
-            self.cache_edge_flag[cache_edge_id] = True
-            self.cache_index_to_edge_id = cache_edge_id
-            self.cache_edge_map[cache_edge_id] = cache_edge_id
+                # Init parameters related to feature fetching
+                self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
+                    self.device, non_blocking=True)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_index_to_edge_id = cache_edge_id
+                self.cache_edge_map[cache_edge_id] = cache_edge_id
 
     def resize(self, new_num_nodes: int, new_num_edges: int):
         """

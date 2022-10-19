@@ -6,9 +6,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <tuple>
 
 #include "common.h"
 #include "dynamic_graph.h"
+#include "resource_holder.h"
 
 namespace gnnflow {
 
@@ -19,7 +22,7 @@ class TemporalSampler {
                   SamplingPolicy sample_policy, uint32_t num_snapshots = 1,
                   float snapshot_time_window = 0.0f, bool prop_time = false,
                   uint64_t seed = 1234);
-  ~TemporalSampler();
+  ~TemporalSampler() = default;
 
   std::vector<std::vector<SamplingResult>> Sample(
       const std::vector<NIDType>& dst_nodes,
@@ -34,16 +37,29 @@ class TemporalSampler {
                              uint32_t layer, uint32_t snapshot);
 
  private:
-  void InitBuffer(std::size_t maximum_sampled_nodes);
+  constexpr static std::size_t kPerNodeInputBufferSize =
+      sizeof(NIDType) + sizeof(TimestampType);
 
-  void FreeBuffer();
-
- private:
-  constexpr static std::size_t per_node_size =
+  constexpr static std::size_t kPerNodeOutputBufferSize =
       sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType) +
       sizeof(TimestampType) + sizeof(uint32_t);
 
-  const DynamicGraph& graph_;
+  typedef std::tuple<NIDType*, TimestampType*> InputBufferTuple;
+  InputBufferTuple GetInputBufferTuple(const Buffer& buffer,
+                                       std::size_t num_root_nodes) const;
+
+  typedef std::tuple<NIDType*, EIDType*, TimestampType*, TimestampType*,
+                     uint32_t*>
+      OutputBufferTuple;
+  OutputBufferTuple GetOutputBufferTuple(
+      const Buffer& buffer, std::size_t num_root_nodes,
+      std::size_t maximum_sampled_nodes) const;
+
+  void InitBuffer(std::size_t num_root_nodes,
+                  std::size_t maximum_sampled_nodes);
+
+ private:
+  const DynamicGraph& graph_;  // sampling does not modify the graph
   std::vector<uint32_t> fanouts_;
   SamplingPolicy sampling_policy_;
   uint32_t num_snapshots_;
@@ -52,16 +68,15 @@ class TemporalSampler {
   uint32_t num_layers_;
   uint64_t seed_;
   std::size_t shared_memory_size_;
+  int device_;
 
-  cudaStream_t* streams_;
-  char* cpu_buffer_;
-  char* gpu_input_buffer_;
-  char* gpu_output_buffer_;
-  curandState_t* rand_states_;
+  std::unique_ptr<StreamHolder[]> stream_holders_;
+  std::unique_ptr<PinMemoryBuffer> cpu_buffer_;
+  std::unique_ptr<GPUBuffer> gpu_input_buffer_;
+  std::unique_ptr<GPUBuffer> gpu_output_buffer_;
+  std::unique_ptr<CuRandStateHolder> rand_states_;
 
   std::size_t maximum_sampled_nodes_;
-
-  int device_;
 };
 
 }  // namespace gnnflow

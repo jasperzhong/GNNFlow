@@ -68,7 +68,7 @@ class FIFOCache(Cache):
         """
         Reset the cache
         """
-        if self.edge_feats is not None:
+        if self.dim_edge_feat != 0:
             self.cache_edge_pointer = self.edge_capacity - 1
 
     def update_node_cache(self, cached_node_index: torch.Tensor,

@@ -13,7 +13,7 @@ from dgl.heterograph import DGLBlock
 from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
 from gnnflow.distributed.kvstore import KVStoreClient
-from gnnflow.utils import local_rank, local_world_size
+import gnnflow.utils as utils
 
 
 class Memory:
@@ -51,10 +51,8 @@ class Memory:
         # if not partition, not need to use kvstore_client
         if not self.partition:
             if shared_memory:
-                local_world_size = local_world_size()
-                local_rank = local_rank()
+                local_rank = utils.local_rank()
             else:
-                local_world_size = 1
                 local_rank = 0
 
             if not shared_memory:
