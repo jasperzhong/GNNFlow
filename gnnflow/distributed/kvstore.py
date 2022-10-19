@@ -114,16 +114,16 @@ class KVStoreClient:
                  num_partitions: int,
                  num_workers_per_machine: int,
                  local_rank: int,
-                 dim_edge_feat: int = 0,
                  dim_node_feat: int = 0,
+                 dim_edge_feat: int = 0,
                  dim_memory: int = 0):
         self._partition_table = partition_table
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
         self._local_rank = local_rank
 
-        self._dim_edge_feat = dim_edge_feat
         self._dim_node_feat = dim_node_feat
+        self._dim_edge_feat = dim_edge_feat
         self._dim_memory = dim_memory
         self._dim_mail = dim_memory * 2 + self._dim_edge_feat
 
