@@ -75,7 +75,12 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            return torch.stack([self._memory_map[int(key)] for key in keys])
+            mem = torch.stack([self._memory_map[int(key)] for key in keys])
+            mem_ts = torch.stack([self._memory_ts_map[int(key)] for key in keys])
+            mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
+            mail_ts = torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
+            return (mem, mem_ts, mail, mail_ts)
+            # return torch.stack([self._memory_map[int(key)] for key in keys])
         elif mode == 'memory_ts':
             return torch.stack([self._memory_ts_map[int(key)] for key in keys])
         elif mode == 'mailbox':
@@ -147,6 +152,7 @@ class KVStoreClient:
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.push_tensors, args=(partition_keys, partition_tensors, mode)))
 
+        # TODO: it seems that push doesn't need to sync?
         # for future in futures:
         #     future.wait()
 
@@ -195,7 +201,10 @@ class KVStoreClient:
         for future in futures:
             pull_results.append(future.wait())
 
-        return self._merge_pull_results(pull_results, masks)
+        if isinstance(pull_results[0], torch.Tensor):
+            return self._merge_pull_results(pull_results, masks)
+        else:
+            return self._merge_pull_results_memory(pull_results, masks)
 
     def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -228,6 +237,47 @@ class KVStoreClient:
             all_pull_results[idx] = pull_result
 
         return all_pull_results
+
+    def _merge_pull_results_memory(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Merge pull results from different partitions.
+
+        Args:
+            pull_results: pull results from different partitions.
+            masks: masks for each partition.
+
+        Returns:
+            merged pull result.
+        """
+        assert len(pull_results) > 0
+        assert len(pull_results) == len(masks)
+
+        all_pull_results = 0
+        for pull_result in pull_results:
+            all_pull_results += len(pull_result[0])
+
+        # torch scalar
+        all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
+        all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
+        all_mem = torch.zeros(
+                (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
+        all_mail = torch.zeros(
+                (all_pull_results, pull_results[0][0][2].shape[0]), dtype=torch.float32)
+        # if pull_results[0][0][].shape == torch.Size([]):
+        #     all_pull_results = torch.zeros(
+        #         (all_pull_results,), dtype=torch.float32)
+        # else:
+        #     all_pull_results = torch.zeros(
+        #         (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
+
+        for mask, pull_result in zip(masks, pull_results):
+            idx = mask.nonzero().squeeze()
+            all_mem[idx] = pull_result[0]
+            all_mem_ts[idx] = pull_result[1]
+            all_mail[idx] = pull_result[2]
+            all_mail_ts[idx] = pull_result[3]
+
+        return (all_mem, all_mem_ts, all_mail, all_mail_ts)
 
     # only reset the memory on its machine
     def reset_memory(self):
