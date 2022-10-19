@@ -6,6 +6,7 @@ Implementation at:
 """
 from typing import Dict, Optional, Union
 
+import logging
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
@@ -168,14 +169,18 @@ class Memory:
         assert isinstance(all_nodes, torch.Tensor)
 
         if self.partition:
-            b.srcdata['mem'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='memory').to(device)
-            b.srcdata['mem_ts'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='memory_ts').to(device)
-            b.srcdata['mail_ts'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='mailbox_ts').to(device)
-            b.srcdata['mem_input'] = self.kvstore_client.pull(
-                all_nodes.cpu(), mode='mailbox').to(device)
+            # unique all nodes
+            all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
+            pulled_memory = self.kvstore_client.pull(all_nodes_unique, mode='memory')
+            mem = pulled_memory[0][inv].to(device)
+            mem_ts = pulled_memory[1][inv].to(device)
+            mail = pulled_memory[2][inv].to(device)
+            mail_ts = pulled_memory[3][inv].to(device)
+
+            b.srcdata['mem'] = mem
+            b.srcdata['mem_ts'] = mem_ts
+            b.srcdata['mail_ts'] = mail_ts
+            b.srcdata['mem_input'] = mail
         else:
             b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
             b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)

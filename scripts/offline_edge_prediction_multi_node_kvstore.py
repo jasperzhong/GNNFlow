@@ -198,11 +198,11 @@ def main():
                                        args.num_nodes, data_config["undirected"], args.data,
                                        args.dim_memory)
         # every worker will have a kvstore_client
+        dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(
             dgraph.get_partition_table(),
             dgraph.num_partitions(), args.local_world_size,
-            args.local_rank)
-        dim_node, dim_edge = graph_services.get_dim_node_edge()
+            args.local_rank, dim_node, dim_edge, args.dim_memory)
     else:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)

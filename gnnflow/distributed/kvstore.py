@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.distributed.rpc as rpc
@@ -76,13 +76,19 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            return torch.stack([self._memory_map[int(key)] for key in keys])
-        elif mode == 'memory_ts':
-            return torch.stack([self._memory_ts_map[int(key)] for key in keys])
-        elif mode == 'mailbox':
-            return torch.stack([self._mailbox_map[int(key)] for key in keys])
-        elif mode == 'mailbox_ts':
-            return torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
+            mem = torch.stack([self._memory_map[int(key)] for key in keys])
+            mem_ts = torch.stack([self._memory_ts_map[int(key)]
+                                 for key in keys])
+            mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
+            mail_ts = torch.stack(
+                [self._mailbox_ts_map[int(key)] for key in keys])
+            # cat them to torch.Tensor
+            all_mem = torch.cat((mem,
+                                 mem_ts.unsqueeze(dim=1),
+                                 mail,
+                                 mail_ts.unsqueeze(dim=1),
+                                 ), dim=1)
+            return all_mem
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -107,11 +113,19 @@ class KVStoreClient:
     def __init__(self, partition_table: torch.Tensor,
                  num_partitions: int,
                  num_workers_per_machine: int,
-                 local_rank: int):
+                 local_rank: int,
+                 dim_node_feat: int = 0,
+                 dim_edge_feat: int = 0,
+                 dim_memory: int = 0):
         self._partition_table = partition_table
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
         self._local_rank = local_rank
+
+        self._dim_node_feat = dim_node_feat
+        self._dim_edge_feat = dim_edge_feat
+        self._dim_memory = dim_memory
+        self._dim_mail = dim_memory * 2 + self._dim_edge_feat
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
@@ -148,10 +162,11 @@ class KVStoreClient:
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.push_tensors, args=(partition_keys, partition_tensors, mode)))
 
-        for future in futures:
-            future.wait()
+        # TODO: it seems that push doesn't need to sync?
+        # for future in futures:
+        #     future.wait()
 
-    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.
 
@@ -196,7 +211,7 @@ class KVStoreClient:
         for future in futures:
             pull_results.append(future.wait())
 
-        return self._merge_pull_results(pull_results, masks)
+        return self._merge_pull_results(pull_results, masks, mode)
 
     def init_cache(self, capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
         global_rank = rank()
@@ -210,7 +225,59 @@ class KVStoreClient:
             keys, feats = future.wait()
         return keys, feats
 
-    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]) -> torch.Tensor:
+    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor], mode: str):
+        """
+        Merge pull results from different partitions.
+
+        Args:
+            pull_results: pull results from different partitions.
+            masks: masks for each partition.
+            mode: decide to fetch node/edge features or memory.
+
+        Returns:
+            merged pull result.
+        """
+        assert len(pull_results) > 0
+        assert len(pull_results) == len(masks)
+
+        all_pull_results = 0
+        for pull_result in pull_results:
+            all_pull_results += len(pull_result)
+
+        if mode == "memory":
+
+            all_mem = torch.zeros(
+                (all_pull_results, self._dim_memory), dtype=torch.float32)
+            all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
+            all_mail = torch.zeros(
+                (all_pull_results, self._dim_mail), dtype=torch.float32)
+            all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
+
+            for mask, pull_result in zip(masks, pull_results):
+                idx = mask.nonzero().squeeze()
+                all_mem[idx] = pull_result[:, :self._dim_memory]
+                all_mem_ts[idx] = pull_result[:, self._dim_memory]
+                all_mail[idx] = pull_result[:,
+                                            self._dim_memory + 1:self._dim_memory + 1 + self._dim_mail]
+                all_mail_ts[idx] = pull_result[:, -1]
+
+            return (all_mem, all_mem_ts, all_mail, all_mail_ts)
+        else:
+            if mode == 'edge':
+                dim = self._dim_edge_feat
+            else:
+                dim = self._dim_node_feat
+
+            all_pull_results = torch.zeros(
+                (all_pull_results, dim), dtype=torch.float32)
+
+            for mask, pull_result in zip(masks, pull_results):
+                idx = mask.nonzero().squeeze()
+                all_pull_results[idx] = pull_result
+
+            return all_pull_results
+
+    def _merge_pull_results_memory(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]):
         """
         Merge pull results from different partitions.
 
@@ -227,20 +294,6 @@ class KVStoreClient:
         all_pull_results = 0
         for pull_result in pull_results:
             all_pull_results += len(pull_result)
-
-        # torch scalar
-        if pull_results[0][0].shape == torch.Size([]):
-            all_pull_results = torch.zeros(
-                (all_pull_results,), dtype=torch.float32)
-        else:
-            all_pull_results = torch.zeros(
-                (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
-
-        for mask, pull_result in zip(masks, pull_results):
-            idx = mask.nonzero().squeeze()
-            all_pull_results[idx] = pull_result
-
-        return all_pull_results
 
     # only reset the memory on its machine
     def reset_memory(self):
