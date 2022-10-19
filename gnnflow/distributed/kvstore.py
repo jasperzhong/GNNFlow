@@ -113,11 +113,19 @@ class KVStoreClient:
     def __init__(self, partition_table: torch.Tensor,
                  num_partitions: int,
                  num_workers_per_machine: int,
-                 local_rank: int):
+                 local_rank: int,
+                 dim_edge_feat: int = 0,
+                 dim_node_feat: int = 0,
+                 dim_memory: int = 0):
         self._partition_table = partition_table
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
         self._local_rank = local_rank
+
+        self._dim_edge_feat = dim_edge_feat
+        self._dim_node_feat = dim_node_feat
+        self._dim_memory = dim_memory
+        self._dim_mail = dim_memory * 2 + self._dim_edge_feat
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
@@ -203,10 +211,7 @@ class KVStoreClient:
         for future in futures:
             pull_results.append(future.wait())
 
-        if mode != 'memory':
-            return self._merge_pull_results(pull_results, masks)
-        else:
-            return self._merge_pull_results_memory(pull_results, masks)
+        return self._merge_pull_results(pull_results, masks, mode)
 
     def init_cache(self, capacity: int) -> Tuple[torch.Tensor, torch.Tensor]:
         global_rank = rank()
@@ -220,13 +225,14 @@ class KVStoreClient:
             keys, feats = future.wait()
         return keys, feats
 
-    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]):
+    def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor], mode: str):
         """
         Merge pull results from different partitions.
 
         Args:
             pull_results: pull results from different partitions.
             masks: masks for each partition.
+            mode: decide to fetch node/edge features or memory.
 
         Returns:
             merged pull result.
@@ -238,15 +244,38 @@ class KVStoreClient:
         for pull_result in pull_results:
             all_pull_results += len(pull_result)
 
-        feat_dim = pull_results[0][0].shape[0]
-        all_pull_results = torch.zeros(
-            (all_pull_results, feat_dim), dtype=torch.float32)
+        if mode == "memory":
 
-        for mask, pull_result in zip(masks, pull_results):
-            idx = mask.nonzero().squeeze()
-            all_pull_results[idx] = pull_result
+            all_mem = torch.zeros(
+                (all_pull_results, self._dim_memory), dtype=torch.float32)
+            all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
+            all_mail = torch.zeros(
+                (all_pull_results, self._dim_mail), dtype=torch.float32)
+            all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
 
-        return all_pull_results
+            for mask, pull_result in zip(masks, pull_results):
+                idx = mask.nonzero().squeeze()
+                all_mem[idx] = pull_result[:, :self._dim_memory]
+                all_mem_ts[idx] = pull_result[:, self._dim_memory]
+                all_mail[idx] = pull_result[:,
+                                            self._dim_memory + 1:self._dim_memory + 1 + self._dim_mail]
+                all_mail_ts[idx] = pull_result[:, -1]
+
+            return (all_mem, all_mem_ts, all_mail, all_mail_ts)
+        else:
+            if mode == 'edge':
+                dim = self._dim_edge_feat
+            else:
+                dim = self._dim_node_feat
+
+            all_pull_results = torch.zeros(
+                (all_pull_results, dim), dtype=torch.float32)
+
+            for mask, pull_result in zip(masks, pull_results):
+                idx = mask.nonzero().squeeze()
+                all_pull_results[idx] = pull_result
+
+            return all_pull_results
 
     def _merge_pull_results_memory(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor]):
         """
@@ -265,26 +294,6 @@ class KVStoreClient:
         all_pull_results = 0
         for pull_result in pull_results:
             all_pull_results += len(pull_result)
-
-        # torch scalar
-        mem_dim = pull_results[0][0][0].shape[0]
-        mail_dim = pull_results[0][2][0].shape[0]
-
-        all_mem = torch.zeros(
-            (all_pull_results, mem_dim), dtype=torch.float32)
-        all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
-        all_mail = torch.zeros(
-            (all_pull_results, mail_dim), dtype=torch.float32)
-        all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
-
-        for mask, pull_result in zip(masks, pull_results):
-            idx = mask.nonzero().squeeze()
-            all_mem[idx] = pull_result[:, :mem_dim]
-            all_mem_ts[idx] = pull_result[:, mem_dim]
-            all_mail[idx] = pull_result[:, mem_dim + 1:mem_dim + 1 + mail_dim]
-            all_mail_ts[idx] = pull_result[:, -1]
-
-        return (all_mem, all_mem_ts, all_mail, all_mail_ts)
 
     # only reset the memory on its machine
     def reset_memory(self):
