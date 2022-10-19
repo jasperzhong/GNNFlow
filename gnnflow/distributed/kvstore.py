@@ -81,7 +81,11 @@ class KVStoreServer:
             mem_ts = torch.stack([self._memory_ts_map[int(key)] for key in keys])
             mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
             mail_ts = torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
-            return (mem, mem_ts, mail, mail_ts)
+            # cat them to torch.Tensor
+            all_mem = torch.cat((mem_ts.unsqueeze(dim=1),
+                                 mail_ts.unsqueeze(dim=1),
+                                 mem, mail), dim=1)
+            return all_mem
             # return torch.stack([self._memory_map[int(key)] for key in keys])
         elif mode == 'memory_ts':
             return torch.stack([self._memory_ts_map[int(key)] for key in keys])
@@ -203,7 +207,7 @@ class KVStoreClient:
         for future in futures:
             pull_results.append(future.wait())
 
-        if isinstance(pull_results[0], torch.Tensor):
+        if mode != 'memory':
             return self._merge_pull_results(pull_results, masks)
         else:
             return self._merge_pull_results_memory(pull_results, masks)
@@ -262,17 +266,25 @@ class KVStoreClient:
         all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
         all_mail_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
         all_mem = torch.zeros(
-                (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
+                (all_pull_results, 100), dtype=torch.float32)
         all_mail = torch.zeros(
-                (all_pull_results, pull_results[0][2][0].shape[0]), dtype=torch.float32)
+                (all_pull_results, 372), dtype=torch.float32)
+        # all_mem = torch.zeros(
+        #         (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
+        # all_mail = torch.zeros(
+        #         (all_pull_results, pull_results[0][2][0].shape[0]), dtype=torch.float32)
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
             # TODO: try to concate to tensor and split them
-            all_mem[idx] = pull_result[0]
-            all_mem_ts[idx] = pull_result[1]
+            all_mem[idx] = pull_result[:, 2:102]
+            all_mem_ts[idx] = pull_result[:, 0]
             all_mail[idx] = pull_result[2]
-            all_mail_ts[idx] = pull_result[3]
+            all_mail_ts[idx] = pull_result[:, 102:]
+            # all_mem[idx] = pull_result[0]
+            # all_mem_ts[idx] = pull_result[1]
+            # all_mail[idx] = pull_result[2]
+            # all_mail_ts[idx] = pull_result[3]
 
         return (all_mem, all_mem_ts, all_mail, all_mail_ts)
 
