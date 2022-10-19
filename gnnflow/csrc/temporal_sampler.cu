@@ -59,10 +59,6 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
 
 void TemporalSampler::InitBufferIfNeeded(std::size_t num_root_nodes,
                                          std::size_t maximum_sampled_nodes) {
-    LOG(INFO) << "num_root_nodes: " << num_root_nodes
-                << ", maximum_sampled_nodes: " << maximum_sampled_nodes 
-                << ", maximum_num_root_nodes_: " << maximum_num_root_nodes_
-                << ", maximum_sampled_nodes_: " << maximum_sampled_nodes_;
   if (maximum_sampled_nodes > maximum_sampled_nodes_) {
     maximum_sampled_nodes_ = maximum_sampled_nodes;
     cpu_buffer_.reset(
