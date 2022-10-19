@@ -45,21 +45,24 @@ template <>
 class ResourceHolder<char*> {
  public:
   ResourceHolder() = default;
-  ResourceHolder(std::size_t size) {}
+  ResourceHolder(std::size_t size) : size_(size) {}
   virtual ~ResourceHolder() = default;
 
   operator char*() const& { return resource_; }
   char* operator+(std::size_t offset) const { return resource_ + offset; }
 
+  std::size_t size() const { return size_; }
+
  protected:
   char* resource_;
+  std::size_t size_;
 };
 typedef ResourceHolder<char*> Buffer;
 
 class GPUResourceHolder : public ResourceHolder<char*> {
  public:
   GPUResourceHolder() = default;
-  GPUResourceHolder(std::size_t size) {
+  GPUResourceHolder(std::size_t size) : ResourceHolder<char*>(size) {
     CUDA_CALL(cudaMalloc(&resource_, size));
   }
   ~GPUResourceHolder() { cudaFree(resource_); }
@@ -69,7 +72,7 @@ typedef GPUResourceHolder GPUBuffer;
 class PinMemoryResourceHolder : public ResourceHolder<char*> {
  public:
   PinMemoryResourceHolder() = default;
-  PinMemoryResourceHolder(std::size_t size) {
+  PinMemoryResourceHolder(std::size_t size) : ResourceHolder<char*>(size) {
     CUDA_CALL(cudaMallocHost(&resource_, size));
   }
   ~PinMemoryResourceHolder() { cudaFreeHost(resource_); }
