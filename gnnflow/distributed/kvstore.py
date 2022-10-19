@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 import torch
@@ -78,6 +79,7 @@ class KVStoreServer:
             mem = torch.stack([self._memory_map[int(key)] for key in keys])
             mem_ts = torch.stack([self._memory_ts_map[int(key)] for key in keys])
             mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
+            logging.info('mail shape: {}'.format(mail.shape))
             mail_ts = torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
             return (mem, mem_ts, mail, mail_ts)
             # return torch.stack([self._memory_map[int(key)] for key in keys])
@@ -262,7 +264,7 @@ class KVStoreClient:
         all_mem = torch.zeros(
                 (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
         all_mail = torch.zeros(
-                (all_pull_results, pull_results[0][0][2].shape[0]), dtype=torch.float32)
+                (all_pull_results, pull_results[0][2][0].shape[0]), dtype=torch.float32)
         # if pull_results[0][0][].shape == torch.Size([]):
         #     all_pull_results = torch.zeros(
         #         (all_pull_results,), dtype=torch.float32)
