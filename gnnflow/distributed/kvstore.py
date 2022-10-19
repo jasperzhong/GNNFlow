@@ -76,10 +76,10 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
+            # TODO: try to concat to tensor
             mem = torch.stack([self._memory_map[int(key)] for key in keys])
             mem_ts = torch.stack([self._memory_ts_map[int(key)] for key in keys])
             mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
-            logging.info('mail shape: {}'.format(mail.shape))
             mail_ts = torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
             return (mem, mem_ts, mail, mail_ts)
             # return torch.stack([self._memory_map[int(key)] for key in keys])
@@ -265,15 +265,10 @@ class KVStoreClient:
                 (all_pull_results, pull_results[0][0][0].shape[0]), dtype=torch.float32)
         all_mail = torch.zeros(
                 (all_pull_results, pull_results[0][2][0].shape[0]), dtype=torch.float32)
-        # if pull_results[0][0][].shape == torch.Size([]):
-        #     all_pull_results = torch.zeros(
-        #         (all_pull_results,), dtype=torch.float32)
-        # else:
-        #     all_pull_results = torch.zeros(
-        #         (all_pull_results, pull_results[0][0].shape[0]), dtype=torch.float32)
 
         for mask, pull_result in zip(masks, pull_results):
             idx = mask.nonzero().squeeze()
+            # TODO: try to concate to tensor and split them
             all_mem[idx] = pull_result[0]
             all_mem_ts[idx] = pull_result[1]
             all_mail[idx] = pull_result[2]
