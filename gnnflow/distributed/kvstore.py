@@ -1,5 +1,3 @@
-import logging
-import time
 from typing import List, Optional
 
 import torch
@@ -77,16 +75,7 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            mem = torch.stack([self._memory_map[int(key)] for key in keys])
-            mem_ts = torch.stack([self._memory_ts_map[int(key)] for key in keys])
-            mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
-            mail_ts = torch.stack([self._mailbox_ts_map[int(key)] for key in keys])
-            return (mem, mem_ts, mail, mail_ts)
-            # start = time.time()
-            # temp = torch.stack([self._memory_map[int(key)] for key in keys])
-            # end = time.time()
-            # logging.info("exclude rpc time: {}".format(end - start))
-            # return temp
+            return torch.stack([self._memory_map[int(key)] for key in keys])
         elif mode == 'memory_ts':
             return torch.stack([self._memory_ts_map[int(key)] for key in keys])
         elif mode == 'mailbox':

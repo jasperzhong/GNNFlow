@@ -178,19 +178,19 @@ class Memory:
             # b.srcdata['mem_input'] = mail.to(device)
             # unique all nodes
             all_nodes_unique, counts = torch.unique(all_nodes.cpu(), return_counts=True)
-            mem_mail = self.kvstore_client.pull(all_nodes_unique, mode='memory')
-            mem = torch.repeat_interleave(mem_mail[0], counts, dim=0).to(device)
-            mem_ts = torch.repeat_interleave(mem_mail[1], counts, dim=0).to(device)
-            mail = torch.repeat_interleave(mem_mail[2], counts, dim=0).to(device)
-            mail_ts = torch.repeat_interleave(mem_mail[3], counts, dim=0).to(device)
-            # mem = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='memory'), counts, dim=0).to(device)
-            # mem_ts = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='memory_ts'), counts, dim=0).to(device)
-            # mail = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='mailbox'), counts, dim=0).to(device)
-            # mail_ts = torch.repeat_interleave(self.kvstore_client.pull(
-            #     all_nodes_unique, mode='mailbox_ts'), counts, dim=0).to(device)
+            # mem_mail = self.kvstore_client.pull(all_nodes_unique, mode='memory')
+            # mem = torch.repeat_interleave(mem_mail[0], counts, dim=0).to(device)
+            # mem_ts = torch.repeat_interleave(mem_mail[1], counts, dim=0).to(device)
+            # mail = torch.repeat_interleave(mem_mail[2], counts, dim=0).to(device)
+            # mail_ts = torch.repeat_interleave(mem_mail[3], counts, dim=0).to(device)
+            mem = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='memory'), counts, dim=0).to(device)
+            mem_ts = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='memory_ts'), counts, dim=0).to(device)
+            mail = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox'), counts, dim=0).to(device)
+            mail_ts = torch.repeat_interleave(self.kvstore_client.pull(
+                all_nodes_unique, mode='mailbox_ts'), counts, dim=0).to(device)
             b.srcdata['mem'] = mem
             b.srcdata['mem_ts'] = mem_ts
             b.srcdata['mail_ts'] = mail_ts
