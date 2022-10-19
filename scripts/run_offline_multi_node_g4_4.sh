@@ -9,7 +9,7 @@ PARTITION_STRATEGY="${5:-hash}"
 
 HOST_NODE_ADDR=172.31.33.18
 HOST_NODE_PORT=29400
-NNODES=4
+NNODES=2
 NPROC_PER_NODE=1
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
@@ -28,7 +28,7 @@ cmd="torchrun \
     --rdzv_id=1234 --rdzv_backend=c10d \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
     --rdzv_conf is_host=$IS_HOST \
-    offline_edge_prediction_multi_node.py --model $MODEL --data $DATA \
+    offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \
