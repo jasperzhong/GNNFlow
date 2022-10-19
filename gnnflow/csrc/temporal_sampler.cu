@@ -46,8 +46,8 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       gpu_input_buffer_(nullptr),
       gpu_output_buffer_(nullptr),
       rand_states_(nullptr),
-      maximum_sampled_nodes_(0),
-      maximum_num_root_nodes_(0) {
+      maximum_num_root_nodes_(0),
+      maximum_sampled_nodes_(0) {
   if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
     LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
                     "Ignore the snapshot time window.";
@@ -59,6 +59,10 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
 
 void TemporalSampler::InitBufferIfNeeded(std::size_t num_root_nodes,
                                          std::size_t maximum_sampled_nodes) {
+    LOG(INFO) << "num_root_nodes: " << num_root_nodes
+                << ", maximum_sampled_nodes: " << maximum_sampled_nodes 
+                << ", maximum_num_root_nodes_: " << maximum_num_root_nodes_
+                << ", maximum_sampled_nodes_: " << maximum_sampled_nodes_;
   if (maximum_sampled_nodes > maximum_sampled_nodes_) {
     maximum_sampled_nodes_ = maximum_sampled_nodes;
     cpu_buffer_.reset(
@@ -117,7 +121,7 @@ SamplingResult TemporalSampler::SampleLayer(
     return result;
   }
 
-  InitBufferIfNeeded(num_root_nodes, maximum_sampled_nodes_);
+  InitBufferIfNeeded(num_root_nodes, maximum_sampled_nodes);
 
   // copy input to pin memory buffer
   auto input_buffer_tuple = GetInputBufferTuple(*cpu_buffer_, num_root_nodes);
