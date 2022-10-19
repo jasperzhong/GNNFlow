@@ -260,7 +260,7 @@ class KVStoreClient:
 
         all_pull_results = 0
         for pull_result in pull_results:
-            all_pull_results += len(pull_result[0])
+            all_pull_results += len(pull_result)
 
         # torch scalar
         all_mem_ts = torch.zeros((all_pull_results,), dtype=torch.float32)
@@ -280,6 +280,8 @@ class KVStoreClient:
             all_mem[idx] = pull_result[:, 2:102]
             all_mem_ts[idx] = pull_result[:, 0]
             all_mail[idx] = pull_result[2]
+            logging.info("mail size {}".format(pull_result[:, 102:].shape))
+            logging.info("all shape:{}".format(pull_result.shape))
             all_mail_ts[idx] = pull_result[:, 102:]
             # all_mem[idx] = pull_result[0]
             # all_mem_ts[idx] = pull_result[1]
