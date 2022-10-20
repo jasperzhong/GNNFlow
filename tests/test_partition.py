@@ -58,15 +58,15 @@ class TestPartition(unittest.TestCase):
                 # timestamps = np.concatenate([timestamps, timestamps])
                 # eids = np.concatenate([eids, eids])
 
-                src_nodes_ext = list(itertools.chain.from_iterable(zip(src_nodes, dst_nodes)))
-                dst_nodes_ext = list(itertools.chain.from_iterable(zip(dst_nodes, src_nodes)))
+                src_nodes_ext = np.array(list(itertools.chain.from_iterable(zip(src_nodes, dst_nodes))))
+                dst_nodes_ext = np.array(list(itertools.chain.from_iterable(zip(dst_nodes, src_nodes))))
                 src_nodes = src_nodes_ext
                 dst_nodes = dst_nodes_ext
 
-                timestamps_ext = list(itertools.chain.from_iterable(zip(timestamps, timestamps)))
+                timestamps_ext = np.array(list(itertools.chain.from_iterable(zip(timestamps, timestamps))))
                 timestamps = timestamps_ext
 
-                eids_ext = list(itertools.chain.from_iterable(zip(eids, eids)))
+                eids_ext = np.array(list(itertools.chain.from_iterable(zip(eids, eids))))
                 eids = eids_ext
 
             src_nodes = torch.from_numpy(src_nodes)
