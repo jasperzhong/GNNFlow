@@ -559,7 +559,7 @@ class IncrPartitioner(Partitioner):
             # time factor log(time_avg + 1)
             timefctr = 0.0
             if self._partition_time_map[i][0] != 0:
-                timefctr = -1.0 * math.log(1 + self._partition_time_map[i][1] / self._partition_time_map[i][0])
+                timefctr = 0.04 * -1.0 * math.log(1 + self._partition_time_map[i][1] / self._partition_time_map[i][0])
 
 
             partition_score.append(timefctr + neighbour_in_partition_size
