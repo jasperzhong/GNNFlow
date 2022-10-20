@@ -126,13 +126,6 @@ SamplingResult TemporalSampler::SampleLayer(
   Copy(std::get<1>(input_buffer_tuple), dst_timestamps.data(),
        num_root_nodes * sizeof(TimestampType));
 
-  LOG(DEBUG) << "sample layer " << layer << " snapshot " << snapshot
-             << " num_root_nodes " << num_root_nodes
-             << " maximum_sampled_nodes " << maximum_sampled_nodes
-             << " gpu_input_buffer size: " << gpu_input_buffer_->size()
-             << " cpu_buffer size: " << cpu_buffer_->size() << " ;bytes to copy"
-             << num_root_nodes * kPerNodeInputBufferSize;
-
   // copy input to GPU buffer
   CUDA_CALL(cudaMemcpyAsync(
       *gpu_input_buffer_, *cpu_buffer_,
@@ -170,9 +163,6 @@ SamplingResult TemporalSampler::SampleLayer(
   } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
     int offset_per_thread =
         shared_memory_size_ / sizeof(SamplingRange) / num_threads_per_block;
-
-    LOG(DEBUG) << "Max shared memory size: " << shared_memory_size_ << " bytes"
-               << ", offset per thread: " << offset_per_thread;
 
     SampleLayerUniformKernel<<<num_blocks, num_threads_per_block,
                                offset_per_thread * num_threads_per_block *
