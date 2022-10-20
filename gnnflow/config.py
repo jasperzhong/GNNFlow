@@ -45,7 +45,7 @@ _tgat_default_config = {
     "dropout": 0.1,
     "att_head": 2,
     "att_dropout": 0.1,
-    "num_layers": 1,
+    "num_layers": 2,
     "fanouts": [10, 10],
     "sample_strategy": "recent",
     "num_snapshots": 1,
