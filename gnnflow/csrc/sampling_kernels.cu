@@ -175,7 +175,8 @@ __global__ void SampleLayerUniformKernel(
   uint32_t indices[kMaxFanout];
   uint32_t to_sample = min(fanout, num_candidates);
   for (uint32_t i = 0; i < to_sample; i++) {
-    indices[i] = curand(rand_states + tid) % num_candidates;
+    // indices[i] = curand(rand_states + tid) % num_candidates;
+    indices[i] = i;
   }
   QuickSort(indices, 0, to_sample - 1);
 
