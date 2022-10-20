@@ -23,10 +23,8 @@ class KVStoreServer:
         # keys -> tensors
         self._node_feat_map = {}
         self._edge_feat_map = {}
+        # include mem, mem_ts, mail, mail_ts
         self._memory_map = {}
-        self._memory_ts_map = {}
-        self._mailbox_map = {}
-        self._mailbox_ts_map = {}
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -49,15 +47,6 @@ class KVStoreServer:
         elif mode == 'memory':
             for key, tensor in zip(keys, tensors):
                 self._memory_map[int(key)] = tensor
-        elif mode == 'memory_ts':
-            for key, tensor in zip(keys, tensors):
-                self._memory_ts_map[int(key)] = tensor
-        elif mode == 'mailbox':
-            for key, tensor in zip(keys, tensors):
-                self._mailbox_map[int(key)] = tensor
-        elif mode == 'mailbox_ts':
-            for key, tensor in zip(keys, tensors):
-                self._mailbox_ts_map[int(key)] = tensor
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -76,31 +65,13 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            mem = torch.stack([self._memory_map[int(key)] for key in keys])
-            mem_ts = torch.stack([self._memory_ts_map[int(key)]
-                                 for key in keys])
-            mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
-            mail_ts = torch.stack(
-                [self._mailbox_ts_map[int(key)] for key in keys])
-            # cat them to torch.Tensor
-            all_mem = torch.cat((mem,
-                                 mem_ts.unsqueeze(dim=1),
-                                 mail,
-                                 mail_ts.unsqueeze(dim=1),
-                                 ), dim=1)
-            return all_mem
+            return torch.stack([self._memory_map[int(key)] for key in keys])
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
     def reset_memory(self):
-        for mem, mem_ts, mail, mail_ts in zip(self._memory_map.values(),
-                                              self._memory_ts_map.values(),
-                                              self._mailbox_map.values(),
-                                              self._mailbox_ts_map.values()):
+        for mem in zip(self._memory_map.values()):
             mem.fill_(0)
-            mem_ts.fill_(0)
-            mail.fill_(0)
-            mail_ts.fill_(0)
 
 
 class KVStoreClient:

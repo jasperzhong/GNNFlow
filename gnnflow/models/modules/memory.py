@@ -4,6 +4,7 @@ This code is based on the implementation of TGL's memory module.
 Implementation at:
     https://github.com/amazon-research/tgl/blob/main/memorys.py
 """
+from pydoc import splitdoc
 from typing import Dict, Optional, Union
 
 import logging
@@ -170,8 +171,10 @@ class Memory:
 
         if self.partition:
             # unique all nodes
-            all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
-            pulled_memory = self.kvstore_client.pull(all_nodes_unique, mode='memory')
+            all_nodes_unique, inv = torch.unique(
+                all_nodes.cpu(), return_inverse=True)
+            pulled_memory = self.kvstore_client.pull(
+                all_nodes_unique, mode='memory')
             mem = pulled_memory[0][inv].to(device)
             mem_ts = pulled_memory[1][inv].to(device)
             mail = pulled_memory[2][inv].to(device)
@@ -187,36 +190,13 @@ class Memory:
             b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
             b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
 
-    def update_memory(self, last_updated_nid: torch.Tensor,
-                      last_updated_memory: torch.Tensor,
-                      last_updated_ts: torch.Tensor):
+    def update_mem_mail(self, last_updated_nid: torch.Tensor,
+                        last_updated_memory: torch.Tensor,
+                        last_updated_ts: torch.Tensor,
+                        edge_feats: Optional[torch.Tensor] = None,
+                        neg_sample_ratio: int = 1):
         """
-        Update the memory of last updated nodes.
-
-        Args:
-            last_updated_nid: node IDs of the nodes to update
-            last_updated_memory: new memory of the nodes
-            last_updated_ts: new timestamp of the nodes
-        """
-        if self.partition:
-            self.kvstore_client.push(
-                last_updated_nid.cpu(), last_updated_memory.cpu(), mode='memory')
-            self.kvstore_client.push(
-                last_updated_nid.cpu(), last_updated_ts.cpu(), mode='memory_ts')
-        else:
-            last_updated_nid = last_updated_nid.to(self.device)
-            last_updated_memory = last_updated_memory.to(self.device)
-            last_updated_ts = last_updated_ts.to(self.device)
-            self.node_memory[last_updated_nid] = last_updated_memory
-            self.node_memory_ts[last_updated_nid] = last_updated_ts
-
-    def update_mailbox(self, last_updated_nid: torch.Tensor,
-                       last_updated_memory: torch.Tensor,
-                       last_updated_ts: torch.Tensor,
-                       edge_feats: Optional[torch.Tensor] = None,
-                       neg_sample_ratio: int = 1):
-        """
-        Update the mailbox of last updated nodes.
+        Update the mem and mailbox of last updated nodes.
 
         Args:
             last_updated_nid: node IDs of the nodes to update
@@ -229,6 +209,7 @@ class Memory:
         last_updated_memory = last_updated_memory.to(self.device)
         last_updated_ts = last_updated_ts.to(self.device)
 
+        # genereate mail
         split_chunks = 2 + neg_sample_ratio
         if edge_feats is None:
             # dummy edge features
@@ -257,10 +238,33 @@ class Memory:
         mail = mail[perm]
         mail_ts = mail_ts[perm]
 
-        # update mailbox
+        # prepare mem
+        num_true_src_dst = last_updated_nid.shape[0] // split_chunks * 2
+            
+        nid = last_updated_nid[:num_true_src_dst].to(self.device)
+        memory = last_updated_memory[:num_true_src_dst].to(self.device)
+        ts = last_updated_ts[:num_true_src_dst].to(self.device)
+        # the nid of mem and mail is different
+        # after unique they are the same but perm is still different
+        uni, inv = torch.unique(nid, return_inverse=True)
+        perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
+        perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
+        nid = nid[perm]
+        mem = memory[perm]
+        mem_ts = ts[perm]
+
         if self.partition:
-            self.kvstore_client.push(nid, mail, mode='mailbox')
-            self.kvstore_client.push(nid, mail_ts, mode='mailbox_ts')
+            # cat the memory first
+            all_mem = torch.cat((mem,
+                                 mem_ts.unsqueeze(dim=1),
+                                 mail,
+                                 mail_ts.unsqueeze(dim=1)),
+                                dim=1)
+            self.kvstore_client.push(nid, all_mem, mode='memory')
         else:
+            # update mailbox first
             self.mailbox[nid] = mail
             self.mailbox_ts[nid] = mail_ts
+            # update mem
+            self.node_memory[nid] = mem
+            self.node_memory_ts[nid] = mem_ts
