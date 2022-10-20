@@ -45,7 +45,7 @@ template <>
 class ResourceHolder<char*> {
  public:
   ResourceHolder() = default;
-  ResourceHolder(std::size_t size) : size_(size) {}
+  ResourceHolder(std::size_t size) : resource_(nullptr), size_(size) {}
   virtual ~ResourceHolder() = default;
 
   operator char*() const& { return resource_; }
