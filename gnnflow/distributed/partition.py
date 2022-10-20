@@ -625,6 +625,6 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
     elif partition_strategy == "ldg":
         return LDGPartitioner(num_partitions, assign_with_dst_node)
     elif partition_strategy == "incr":
-
+        return IncrPartitioner(num_partitions, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
