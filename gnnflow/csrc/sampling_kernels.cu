@@ -203,27 +203,31 @@ __global__ void SampleLayerUniformKernel(
       start_idx = ranges[offset_by_thread + curr_idx].start_idx;
       end_idx = ranges[offset_by_thread + curr_idx].end_idx;
     } else {
-      // search in the current block
-      if (start_timestamp >= curr->start_timestamp &&
-          end_timestamp <= curr->end_timestamp) {
-        // all edges in the current block
-        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-      } else if (start_timestamp < curr->start_timestamp &&
-                 end_timestamp <= curr->end_timestamp) {
-        // only the edges before end_timestamp are in the current block
-        start_idx = 0;
-        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-      } else if (start_timestamp > curr->start_timestamp &&
-                 end_timestamp > curr->end_timestamp) {
-        // only the edges after start_timestamp are in the current block
-        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-        end_idx = curr->size;
-      } else {
-        // the whole block is in the range
-        start_idx = 0;
-        end_idx = curr->size;
-      }
+      //      // search in the current block
+      //      if (start_timestamp >= curr->start_timestamp &&
+      //          end_timestamp <= curr->end_timestamp) {
+      //        // all edges in the current block
+      //        LowerBound(curr->timestamps, curr->size, start_timestamp,
+      //        &start_idx); LowerBound(curr->timestamps, curr->size,
+      //        end_timestamp, &end_idx);
+      //      } else if (start_timestamp < curr->start_timestamp &&
+      //                 end_timestamp <= curr->end_timestamp) {
+      //        // only the edges before end_timestamp are in the current block
+      //        start_idx = 0;
+      //        LowerBound(curr->timestamps, curr->size, end_timestamp,
+      //        &end_idx);
+      //      } else if (start_timestamp > curr->start_timestamp &&
+      //                 end_timestamp > curr->end_timestamp) {
+      //        // only the edges after start_timestamp are in the current block
+      //        LowerBound(curr->timestamps, curr->size, start_timestamp,
+      //        &start_idx); end_idx = curr->size;
+      //      } else {
+      //        // the whole block is in the range
+      //        start_idx = 0;
+      //        end_idx = curr->size;
+      //      }
+      start_idx = 0;
+      end_idx = curr->size;
     }
 
     auto idx = indices[sampled] - cumsum;
