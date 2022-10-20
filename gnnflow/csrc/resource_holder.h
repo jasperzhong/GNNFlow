@@ -89,7 +89,8 @@ class CuRandStateResourceHolder : public ResourceHolder<curandState_t*> {
     uint32_t num_blocks =
         (num_elements + num_threads_per_block - 1) / num_threads_per_block;
 
-    InitCuRandStates<<<num_blocks, num_threads_per_block>>>(resource_, seed);
+    InitCuRandStates<<<num_blocks, num_threads_per_block>>>(resource_,
+                                                            num_elements, seed);
   }
 
   ~CuRandStateResourceHolder() { cudaFree(resource_); }
