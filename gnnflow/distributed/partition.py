@@ -570,7 +570,7 @@ class IncrPartitioner(Partitioner):
 
 
             partition_score.append(timefctr + neighbour_in_partition_size
-                                   - 0.06 * alpha * gamma * (partition_size ** (gamma - 1)))
+                                   - 0.2 * alpha * gamma * (partition_size ** (gamma - 1)))
 
         partition_score = np.array(partition_score)
 
