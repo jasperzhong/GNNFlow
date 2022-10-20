@@ -170,8 +170,10 @@ class Memory:
 
         if self.partition:
             # unique all nodes
-            all_nodes_unique, inv = torch.unique(all_nodes.cpu(), return_inverse=True)
-            pulled_memory = self.kvstore_client.pull(all_nodes_unique, mode='memory')
+            all_nodes_unique, inv = torch.unique(
+                all_nodes.cpu(), return_inverse=True)
+            pulled_memory = self.kvstore_client.pull(
+                all_nodes_unique, mode='memory')
             mem = pulled_memory[0][inv].to(device)
             mem_ts = pulled_memory[1][inv].to(device)
             mail = pulled_memory[2][inv].to(device)
@@ -188,10 +190,10 @@ class Memory:
             b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
 
     def update_mem_mail(self, last_updated_nid: torch.Tensor,
-                       last_updated_memory: torch.Tensor,
-                       last_updated_ts: torch.Tensor,
-                       edge_feats: Optional[torch.Tensor] = None,
-                       neg_sample_ratio: int = 1):
+                        last_updated_memory: torch.Tensor,
+                        last_updated_ts: torch.Tensor,
+                        edge_feats: Optional[torch.Tensor] = None,
+                        neg_sample_ratio: int = 1):
         """
         Update the mem and mailbox of last updated nodes.
 
@@ -236,7 +238,8 @@ class Memory:
         mail_ts = mail_ts[perm]
 
         # prepare mem
-        num_true_src_dst = last_updated_nid.shape[0] // (1 + 2) * 2
+        num_true_src_dst = last_updated_nid.shape[0] // (
+            neg_sample_ratio + 2) * 2
         nid = last_updated_nid[:num_true_src_dst].to(self.device)
         memory = last_updated_memory[:num_true_src_dst].to(self.device)
         ts = last_updated_ts[:num_true_src_dst].to(self.device)
@@ -255,7 +258,7 @@ class Memory:
                                  mem_ts.unsqueeze(dim=1),
                                  mail,
                                  mail_ts.unsqueeze(dim=1)),
-                                 dim=1)
+                                dim=1)
             self.kvstore_client.push(nid, all_mem, mode='memory')
         else:
             # update mailbox first
@@ -264,4 +267,3 @@ class Memory:
             # update mem
             self.node_memory[nid] = mem
             self.node_memory_ts[nid] = mem_ts
-
