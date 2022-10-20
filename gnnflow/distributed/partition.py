@@ -2,6 +2,7 @@ from typing import List, NamedTuple
 
 import numpy as np
 import torch
+import math
 
 
 class Partition(NamedTuple):
@@ -425,6 +426,175 @@ class LDGPartitioner(Partitioner):
 
         return partition_table
 
+# Own designed partitioner
+class IncrPartitioner(Partitioner):
+
+    """
+    Partitioner With Incremental Time-Evolving Graph
+    """
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, assign_with_dst_node)
+
+        # key: NID -> value: List[num_partitions]
+        self._neighbor_memory = {}
+        # ideal partition capacity
+        self._partition_capacity = 0
+        # edges partitioned
+        self._edges_partitioned = 0
+
+        # pid -> [num_edges, time_sum]
+        self._partition_time_map = {}
+
+        # init
+        for i in range(num_partitions):
+            self._partition_time_map[i] = [0, 0.0]
+
+    # partition
+    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
+                  timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
+        # resize the partition table if necessary
+        max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
+        if max_node > self._max_node:
+            self._partition_table.resize_(max_node + 1)
+            if self._max_node == 0:
+                self._partition_table[:] = self.UNASSIGNED
+            else:
+                self._partition_table[self._max_node + 1:] = self.UNASSIGNED
+            self._max_node = max_node
+
+        # update edges partitioned
+        self._edges_partitioned = self._edges_partitioned + len(src_nodes)
+        # update the capacity
+        upsilon = 1.1
+        self._partition_capacity = (max_node * upsilon) / self._num_partitions
+
+        # dispatch edges to already assigned source nodes
+        partitions = []
+        for i in range(self._num_partitions):
+            mask = self._partition_table[src_nodes] == i
+
+            # enable memory
+            for src_id, dst_id, tstmp in zip(src_nodes[mask], dst_nodes[mask], timestamps[mask]):
+                if int(dst_id) in self._neighbor_memory.keys():
+                    self._neighbor_memory[int(dst_id)][i].add(int(src_id))
+
+                    # add the timestamp
+                    self._partition_time_map[i][0] += 1
+                    self._partition_time_map[i][1] += tstmp
+
+                else:
+                    self._neighbor_memory[int(dst_id)] = [set() for i in range(self._num_partitions)]
+                    self._neighbor_memory[int(dst_id)][i].add(int(src_id))
+
+                    # add the timestamp
+                    self._partition_time_map[i][0] += 1
+                    self._partition_time_map[i][1] += tstmp
+
+            partitions.append(Partition(
+                src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
+
+        # partition the edges for the unseen source nodes
+        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+
+        if self._assign_with_dst_node:
+            # assign the edges to the partition of the assined destination node
+            for i in range(self._num_partitions):
+                mask = self._partition_table[dst_nodes[unassigned_mask]] == i
+                partitions[i].src_nodes = torch.cat(
+                    [partitions[i].src_nodes, src_nodes[unassigned_mask][mask]])
+                partitions[i].dst_nodes = torch.cat(
+                    [partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]])
+                partitions[i].timestamps = torch.cat(
+                    [partitions[i].timestamps, timestamps[unassigned_mask][mask]])
+                partitions[i].eids = torch.cat(
+                    [partitions[i].eids, eids[unassigned_mask][mask]])
+
+                # update unassigned mask
+                unassigned_mask = unassigned_mask & ~mask
+
+        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+            timestamps[unassigned_mask], eids[unassigned_mask])
+
+        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+        )
+
+        # merge the partitions
+        for i in range(self._num_partitions):
+            mask = partition_table_for_unseen_nodes == i
+
+            # update the partition table
+            self._partition_table[src_nodes[unassigned_mask][mask]] = i
+
+            # no need to sort edges here
+            partitions[i] = Partition(
+                torch.cat([partitions[i].src_nodes,
+                           src_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].dst_nodes,
+                           dst_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].timestamps,
+                           timestamps[unassigned_mask][mask]]),
+                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+
+        return partitions
+
+    def Incr(self, vid: int):
+        partition_score = []
+
+        # hyper parameter
+        alpha = (self._num_partitions ** 0.5) * self._edges_partitioned / (self._max_node ** 1.5)
+        gamma = 1.5
+
+        for i in range(self._num_partitions):
+            partition_size = self._partition_table.tolist().count(i)
+
+            if partition_size >= self._partition_capacity:
+                partition_score.append(-2147483647)
+                continue
+
+            neighbour_in_partition_size = 0
+            if vid in self._neighbor_memory.keys():
+                neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
+
+            # time factor log(time_avg + 1)
+            timefctr = 0.0
+            if self._partition_time_map[i][0] != 0:
+                timefctr = -1.0 * math.log(1 + self._partition_time_map[i][1] / self._partition_time_map[i][0])
+
+
+            partition_score.append(timefctr + neighbour_in_partition_size
+                                   - 0.04 * alpha * gamma * (partition_size ** (gamma - 1)))
+
+        partition_score = np.array(partition_score)
+
+        return np.random.choice(np.where(partition_score == partition_score.max())[0])
+
+
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
+        for i in range(len(unique_src_nodes)):
+            pid = self.Incr(int(unique_src_nodes[i]))
+            partition_table[i] = pid
+            self._partition_table[int(unique_src_nodes[i])] = pid
+
+            # update time factor
+            for timest in timestamps_list[i]:
+                self._partition_time_map[pid][0] += 1
+                self._partition_time_map[pid][1] += timest
+
+            for dst_nid in dst_nodes_list[i]:
+                # update memory table
+                if int(dst_nid) in self._neighbor_memory.keys():
+                    self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
+
+                else:
+                    self._neighbor_memory[int(dst_nid)] = [set() for i in range(self._num_partitions)]
+                    self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
+
+        return partition_table
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
@@ -454,5 +624,7 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
             num_partitions, assign_with_dst_node)
     elif partition_strategy == "ldg":
         return LDGPartitioner(num_partitions, assign_with_dst_node)
+    elif partition_strategy == "incr":
+
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
