@@ -126,7 +126,10 @@ SamplingResult TemporalSampler::SampleLayer(
   Copy(std::get<1>(input_buffer_tuple), dst_timestamps.data(),
        num_root_nodes * sizeof(TimestampType));
 
-  LOG(DEBUG) << "gpu_input_buffer size: " << gpu_input_buffer_->size()
+  LOG(DEBUG) << "sample layer " << layer << " snapshot " << snapshot
+             << " num_root_nodes " << num_root_nodes
+             << " maximum_sampled_nodes " << maximum_sampled_nodes
+             << " gpu_input_buffer size: " << gpu_input_buffer_->size()
              << " cpu_buffer size: " << cpu_buffer_->size() << " ;bytes to copy"
              << num_root_nodes * kPerNodeInputBufferSize;
 
