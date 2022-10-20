@@ -38,8 +38,6 @@ class TestPartition(unittest.TestCase):
         overall_start = time.time()
         for i in range(0, len(dataset), ingestion_batch_size):
 
-            print("****** Dataset Range {} to {} Begin ******".format(i, i + ingestion_batch_size))
-
             batch = dataset[i: i + ingestion_batch_size]
             src_nodes = batch["src"].values.astype(np.int64)
             dst_nodes = batch["dst"].values.astype(np.int64)
@@ -88,10 +86,6 @@ class TestPartition(unittest.TestCase):
                     edge_cut += 1
 
             edge_cut_list.append(float(100.0 * float(edge_cut) / float(len(batch))))
-            print("Test Partition. Time usage: {} seconds; Speed: {} edges per sec\n"
-                  .format(partition_end - partition_start, ingestion_batch_size / (partition_end - partition_start)))
-
-            print("====== Dataset Range {} to {} finished ======\n".format(i, i + ingestion_batch_size))
 
         # load balance
         ptable = test_partitioner.get_partition_table()
