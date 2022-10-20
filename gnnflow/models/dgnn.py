@@ -151,9 +151,9 @@ class DGNN(torch.nn.Module):
                 if 'edge_feats' in kwargs and kwargs['edge_feats'] is not None:
                     edge_feats = kwargs['edge_feats']
 
-                self.memory.update_mailbox(
+                # use one function
+                self.memory.update_mem_mail(
                     **last_updated, edge_feats=edge_feats,
                     neg_sample_ratio=neg_sample_ratio)
-                self.memory.update_memory(**last_updated)
 
         return self.edge_predictor(embed)

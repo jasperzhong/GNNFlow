@@ -101,14 +101,14 @@ class Dispatcher:
                 mailbox = torch.zeros(
                     (len(keys), dim_raw_message), dtype=torch.float32)
                 mailbox_ts = torch.zeros((len(keys), ), dtype=torch.float32)
+                all_mem = torch.cat((memory,
+                                    memory_ts.unsqueeze(dim=1),
+                                    mailbox,
+                                    mailbox_ts.unsqueeze(dim=1),
+                                    ), dim=1)
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, memory, 'memory')))
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, memory_ts, 'memory_ts')))
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, mailbox, 'mailbox')))
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, mailbox_ts, 'mailbox_ts')))
+                                             args=(keys, all_mem, 'memory')))
+
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:
