@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash"], [10000]))
+        itertools.product(["ldg"], [10000]))
     def test_partition_graph(self, partition_strategy, batch_size):
 
         dataset_name = 'WIKI'
@@ -25,7 +25,7 @@ class TestPartition(unittest.TestCase):
         num_p = 4
         ingestion_batch_size = batch_size
         undirected = True
-        dataset = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))  # LINUX
+        dataset = pd.read_csv('/home/ubuntu/data/{}/edges.csv'.format(dataset_name))  # LINUX
         dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
 
         num_nodes = 0
