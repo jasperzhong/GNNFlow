@@ -155,9 +155,5 @@ class DGNN(torch.nn.Module):
                 self.memory.update_mem_mail(
                     **last_updated, edge_feats=edge_feats,
                     neg_sample_ratio=neg_sample_ratio)
-                # self.memory.update_mailbox(
-                #     **last_updated, edge_feats=edge_feats,
-                #     neg_sample_ratio=neg_sample_ratio)
-                # self.memory.update_memory(**last_updated)
 
         return self.edge_predictor(embed)

@@ -108,12 +108,7 @@ class Dispatcher:
                                     ), dim=1)
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, all_mem, 'memory')))
-                # futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                #                              args=(keys, memory_ts, 'memory_ts')))
-                # futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                #                              args=(keys, mailbox, 'mailbox')))
-                # futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                #                              args=(keys, mailbox_ts, 'mailbox_ts')))
+
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:

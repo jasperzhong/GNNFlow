@@ -202,7 +202,6 @@ class Memory:
             edge_feats: edge features of the nodes
             neg_sample_ratio: negative sampling ratio
         """
-        # get mem
         last_updated_nid = last_updated_nid.to(self.device)
         last_updated_memory = last_updated_memory.to(self.device)
         last_updated_ts = last_updated_ts.to(self.device)
@@ -252,7 +251,6 @@ class Memory:
 
         if self.partition:
             # cat the memory first
-            # TODO: it seems that we only need one map
             all_mem = torch.cat((mem,
                                  mem_ts.unsqueeze(dim=1),
                                  mail,
@@ -267,99 +265,3 @@ class Memory:
             self.node_memory[nid] = memory
             self.node_memory_ts[nid] = ts
 
-    def update_memory(self, last_updated_nid: torch.Tensor,
-                      last_updated_memory: torch.Tensor,
-                      last_updated_ts: torch.Tensor):
-        """
-        Update the memory of last updated nodes.
-
-        Args:
-            last_updated_nid: node IDs of the nodes to update
-            last_updated_memory: new memory of the nodes
-            last_updated_ts: new timestamp of the nodes
-        """
-        if self.partition:
-            self.kvstore_client.push(
-                last_updated_nid.cpu(), last_updated_memory.cpu(), mode='memory')
-            self.kvstore_client.push(
-                last_updated_nid.cpu(), last_updated_ts.cpu(), mode='memory_ts')
-        else:
-            num_true_src_dst = last_updated_nid.shape[0] // (1 + 2) * 2
-            with torch.no_grad():
-                nid = last_updated_nid[:num_true_src_dst].to(self.device)
-                memory = last_updated_memory[:num_true_src_dst].to(self.device)
-                ts = last_updated_ts[:num_true_src_dst].to(self.device)
-
-                uni, inv = torch.unique(nid, return_inverse=True)
-                perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
-                perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-                nid = nid[perm]
-                memory = memory[perm]
-                ts = ts[perm]
-                self.node_memory[nid.long()] = memory
-                self.node_memory_ts[nid.long()] = ts
-            # last_updated_nid = last_updated_nid.to(self.device)
-            # last_updated_memory = last_updated_memory.to(self.device)
-            # last_updated_ts = last_updated_ts.to(self.device)
-            # self.node_memory[last_updated_nid] = last_updated_memory
-            # self.node_memory_ts[last_updated_nid] = last_updated_ts
-
-    def update_mailbox(self, last_updated_nid: torch.Tensor,
-                       last_updated_memory: torch.Tensor,
-                       last_updated_ts: torch.Tensor,
-                       edge_feats: Optional[torch.Tensor] = None,
-                       neg_sample_ratio: int = 1):
-        """
-        Update the mailbox of last updated nodes.
-
-        Args:
-            last_updated_nid: node IDs of the nodes to update
-            last_updated_memory: new memory of the nodes
-            last_updated_ts: new timestamp of the nodes
-            edge_feats: edge features of the nodes
-            neg_sample_ratio: negative sampling ratio
-        """
-        last_updated_nid = last_updated_nid.to(self.device)
-        last_updated_memory = last_updated_memory.to(self.device)
-        last_updated_ts = last_updated_ts.to(self.device)
-
-        split_chunks = 2 + neg_sample_ratio
-        if edge_feats is None:
-            # dummy edge features
-            edge_feats = torch.zeros(
-                last_updated_nid.shape[0] // split_chunks, self.dim_edge,
-                device=self.device)
-
-        edge_feats = edge_feats.to(self.device)
-
-        src, dst, *_ = last_updated_nid.tensor_split(split_chunks)
-        mem_src, mem_dst, *_ = last_updated_memory.tensor_split(split_chunks)
-
-        src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
-        dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)
-        mail = torch.cat([src_mail, dst_mail],
-                         dim=1).reshape(-1, src_mail.shape[1])
-        nid = torch.cat(
-            [src.unsqueeze(1), dst.unsqueeze(1)], dim=1).reshape(-1)
-        mail_ts = last_updated_ts[:len(nid)]
-
-        # find unique nid to update mailbox
-        uni, inv = torch.unique(nid, return_inverse=True)
-        perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
-        perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-        nid = nid[perm]
-        mail = mail[perm]
-        mail_ts = mail_ts[perm]
-
-        # logging.info("nid and last_updated_nid {}".format(torch.allclose(nid, last_updated_nid)))
-        # logging.info("uni: {}".format(uni))
-        # logging.info("nid: {}".format(nid))
-        # logging.info("uni: {}".format(uni.shape))
-        # logging.info("nid: {}".format(nid.shape))
-        # update mailbox
-        if self.partition:
-            self.kvstore_client.push(nid, mail, mode='mailbox')
-            self.kvstore_client.push(nid, mail_ts, mode='mailbox_ts')
-        else:
-            self.mailbox[nid] = mail
-            self.mailbox_ts[nid] = mail_ts

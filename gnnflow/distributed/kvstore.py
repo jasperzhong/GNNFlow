@@ -23,10 +23,8 @@ class KVStoreServer:
         # keys -> tensors
         self._node_feat_map = {}
         self._edge_feat_map = {}
+        # include mem, mem_ts, mail, mail_ts
         self._memory_map = {}
-        # self._memory_ts_map = {}
-        # self._mailbox_map = {}
-        # self._mailbox_ts_map = {}
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -49,15 +47,6 @@ class KVStoreServer:
         elif mode == 'memory':
             for key, tensor in zip(keys, tensors):
                 self._memory_map[int(key)] = tensor
-        # elif mode == 'memory_ts':
-        #     for key, tensor in zip(keys, tensors):
-        #         self._memory_ts_map[int(key)] = tensor
-        # elif mode == 'mailbox':
-        #     for key, tensor in zip(keys, tensors):
-        #         self._mailbox_map[int(key)] = tensor
-        # elif mode == 'mailbox_ts':
-        #     for key, tensor in zip(keys, tensors):
-        #         self._mailbox_ts_map[int(key)] = tensor
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -76,19 +65,7 @@ class KVStoreServer:
         elif mode == 'edge':
             return torch.stack([self._edge_feat_map[int(key)] for key in keys])
         elif mode == 'memory':
-            mem = torch.stack([self._memory_map[int(key)] for key in keys])
-            # mem_ts = torch.stack([self._memory_ts_map[int(key)]
-            #                      for key in keys])
-            # mail = torch.stack([self._mailbox_map[int(key)] for key in keys])
-            # mail_ts = torch.stack(
-            #     [self._mailbox_ts_map[int(key)] for key in keys])
-            # # cat them to torch.Tensor
-            # all_mem = torch.cat((mem,
-            #                      mem_ts.unsqueeze(dim=1),
-            #                      mail,
-            #                      mail_ts.unsqueeze(dim=1),
-            #                      ), dim=1)
-            return mem
+            return torch.stack([self._memory_map[int(key)] for key in keys])
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
