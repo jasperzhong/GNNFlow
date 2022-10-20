@@ -262,6 +262,6 @@ class Memory:
             self.mailbox[nid] = mail
             self.mailbox_ts[nid] = mail_ts
             # update mem
-            self.node_memory[nid] = memory
-            self.node_memory_ts[nid] = ts
+            self.node_memory[nid] = mem
+            self.node_memory_ts[nid] = mem_ts
 
