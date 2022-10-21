@@ -26,7 +26,10 @@ class KVStoreServer:
         self._edge_feat_map = {}
         # include mem, mem_ts, mail, mail_ts
         self._memory_map = {}
-        self._lock = threading.Lock()
+
+        self._node_feat_lock = threading.Lock()
+        self._edge_feat_lock = threading.Lock()
+        self._memory_lock = threading.Lock()
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -40,18 +43,20 @@ class KVStoreServer:
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
 
-        with self._lock:
-            if mode == 'node':
+        if mode == 'node':
+            with self._node_feat_lock:
                 for key, tensor in zip(keys, tensors):
                     self._node_feat_map[int(key)] = tensor
-            elif mode == 'edge':
+        elif mode == 'edge':
+            with self._edge_feat_lock:
                 for key, tensor in zip(keys, tensors):
                     self._edge_feat_map[int(key)] = tensor
-            elif mode == 'memory':
+        elif mode == 'memory':
+            with self._memory_lock:
                 for key, tensor in zip(keys, tensors):
                     self._memory_map[int(key)] = tensor
-            else:
-                raise ValueError(f"Unknown mode: {mode}")
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
     def pull(self, keys: torch.Tensor, mode: str) -> torch.Tensor:
         """
@@ -63,15 +68,17 @@ class KVStoreServer:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        with self._lock:
-            if mode == 'node':
+        if mode == 'node':
+            with self._node_feat_lock:
                 return torch.stack([self._node_feat_map[int(key)] for key in keys])
-            elif mode == 'edge':
+        elif mode == 'edge':
+            with self._edge_feat_lock:
                 return torch.stack([self._edge_feat_map[int(key)] for key in keys])
-            elif mode == 'memory':
+        elif mode == 'memory':
+            with self._memory_lock:
                 return torch.stack([self._memory_map[int(key)] for key in keys])
-            else:
-                raise ValueError(f"Unknown mode: {mode}")
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
     def reset_memory(self):
         for mem in zip(self._memory_map.values()):
