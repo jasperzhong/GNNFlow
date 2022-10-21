@@ -98,6 +98,8 @@ class KVStoreClient:
         self._dim_memory = dim_memory
         self._dim_mail = dim_memory * 2 + self._dim_edge_feat
 
+        self._memory_push_reqs = []
+
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Push tensors to the corresponding KVStore servers according to the partition table.
@@ -133,9 +135,8 @@ class KVStoreClient:
             futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
                                          graph_services.push_tensors, args=(partition_keys, partition_tensors, mode)))
 
-        # TODO: it seems that push doesn't need to sync?
-        # for future in futures:
-        #     future.wait()
+        if mode == 'memory':
+            self._memory_push_reqs.extend(futures)
 
     def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
@@ -161,6 +162,11 @@ class KVStoreClient:
             partition_ids = partition_table[nid]
         else:
             partition_ids = partition_table[keys]
+
+        if mode == 'memory':
+            # wait for all memory push requests to finish
+            torch.futures.wait_all(self._memory_push_reqs)
+            self._memory_push_reqs = []
 
         futures = []
         masks = []
