@@ -4,10 +4,8 @@ This code is based on the implementation of TGL's memory module.
 Implementation at:
     https://github.com/amazon-research/tgl/blob/main/memorys.py
 """
-from pydoc import splitdoc
 from typing import Dict, Optional, Union
 
-import logging
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
@@ -240,7 +238,6 @@ class Memory:
 
         # prepare mem
         num_true_src_dst = last_updated_nid.shape[0] // split_chunks * 2
-            
         nid = last_updated_nid[:num_true_src_dst].to(self.device)
         memory = last_updated_memory[:num_true_src_dst].to(self.device)
         ts = last_updated_ts[:num_true_src_dst].to(self.device)
