@@ -1,4 +1,5 @@
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
+import threading
 
 import torch
 import torch.distributed.rpc as rpc
@@ -14,9 +15,9 @@ class KVStoreServer:
     NB: we let local root (i.e., local_rank == 0) to be the server.
 
     The value can be:
-    - node feature (key: "N{node_id}", value: node feature)
-    - edge feature (key: "E{edge_id}", value: edge feature)
-    - memory (key: "M{node_id}", value: memory)
+    - node feature 
+    - edge feature
+    - memory 
     """
 
     def __init__(self):
@@ -25,6 +26,7 @@ class KVStoreServer:
         self._edge_feat_map = {}
         # include mem, mem_ts, mail, mail_ts
         self._memory_map = {}
+        self._lock = threading.Lock()
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -38,17 +40,18 @@ class KVStoreServer:
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
 
-        if mode == 'node':
-            for key, tensor in zip(keys, tensors):
-                self._node_feat_map[int(key)] = tensor
-        elif mode == 'edge':
-            for key, tensor in zip(keys, tensors):
-                self._edge_feat_map[int(key)] = tensor
-        elif mode == 'memory':
-            for key, tensor in zip(keys, tensors):
-                self._memory_map[int(key)] = tensor
-        else:
-            raise ValueError(f"Unknown mode: {mode}")
+        with self._lock:
+            if mode == 'node':
+                for key, tensor in zip(keys, tensors):
+                    self._node_feat_map[int(key)] = tensor
+            elif mode == 'edge':
+                for key, tensor in zip(keys, tensors):
+                    self._edge_feat_map[int(key)] = tensor
+            elif mode == 'memory':
+                for key, tensor in zip(keys, tensors):
+                    self._memory_map[int(key)] = tensor
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
 
     def pull(self, keys: torch.Tensor, mode: str) -> torch.Tensor:
         """
@@ -60,14 +63,15 @@ class KVStoreServer:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        if mode == 'node':
-            return torch.stack([self._node_feat_map[int(key)] for key in keys])
-        elif mode == 'edge':
-            return torch.stack([self._edge_feat_map[int(key)] for key in keys])
-        elif mode == 'memory':
-            return torch.stack([self._memory_map[int(key)] for key in keys])
-        else:
-            raise ValueError(f"Unknown mode: {mode}")
+        with self._lock:
+            if mode == 'node':
+                return torch.stack([self._node_feat_map[int(key)] for key in keys])
+            elif mode == 'edge':
+                return torch.stack([self._edge_feat_map[int(key)] for key in keys])
+            elif mode == 'memory':
+                return torch.stack([self._memory_map[int(key)] for key in keys])
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
 
     def reset_memory(self):
         for mem in zip(self._memory_map.values()):
@@ -98,8 +102,6 @@ class KVStoreClient:
         self._dim_memory = dim_memory
         self._dim_mail = dim_memory * 2 + self._dim_edge_feat
 
-        self._memory_push_reqs = []
-
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Push tensors to the corresponding KVStore servers according to the partition table.
@@ -122,7 +124,6 @@ class KVStoreClient:
         else:
             partition_ids = partition_table[keys]
 
-        futures = []
         for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
@@ -132,11 +133,8 @@ class KVStoreClient:
             # local rank 0 in those partitions
             worker_rank = partition_id * self._num_workers_per_machine
 
-            futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
-                                         graph_services.push_tensors, args=(partition_keys, partition_tensors, mode)))
-
-        if mode == 'memory':
-            self._memory_push_reqs.extend(futures)
+            rpc.rpc_async('worker{}'.format(worker_rank),
+                          graph_services.push_tensors, args=(partition_keys, partition_tensors, mode))
 
     def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
@@ -162,11 +160,6 @@ class KVStoreClient:
             partition_ids = partition_table[nid]
         else:
             partition_ids = partition_table[keys]
-
-        if mode == 'memory':
-            # wait for all memory push requests to finish
-            torch.futures.wait_all(self._memory_push_reqs)
-            self._memory_push_reqs = []
 
         futures = []
         masks = []
