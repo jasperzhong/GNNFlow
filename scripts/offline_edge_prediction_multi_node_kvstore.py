@@ -238,8 +238,10 @@ def main():
         sampler = TemporalSampler(dgraph, **model_config)
 
     if args.distributed:
+        # NB: it seems that DySAT needs this parameter. I don't know why.
+        find_unused_parameters = True if args.model == "DySAT" else False
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank])
+            model, device_ids=[args.local_rank], find_unused_parameters=find_unused_parameters)
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,

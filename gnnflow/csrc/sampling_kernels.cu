@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 
 #include "common.h"
 #include "sampling_kernels.h"
@@ -126,7 +127,7 @@ __global__ void SampleLayerUniformKernel(
   auto curr = list.tail;
   int start_idx, end_idx;
   int curr_idx = 0;
-  int offset_by_thread = offset_per_thread * threadIdx.x;
+  const int offset_by_thread = offset_per_thread * threadIdx.x;
   while (curr != nullptr) {
     if (end_timestamp < curr->start_timestamp) {
       // search in the prev block

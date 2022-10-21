@@ -159,7 +159,10 @@ class DistributedTemporalSampler:
                 sampling_results.append(future.wait())
 
         # merge sampling results
-        return self._merge_sampling_results(sampling_results, masks)
+        mfg = self._merge_sampling_results(sampling_results, masks)
+        assert mfg.num_dst_nodes() == len(
+            target_vertices), 'Layer {}\tError: Number of destination nodes does not match'.format(layer)
+        return mfg
 
     def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch], masks: List[torch.Tensor]) -> DGLBlock:
         """

@@ -85,9 +85,12 @@ void Copy(void* dst, const void* src, std::size_t size) {
   }
 }
 
-__global__ void InitCuRandStates(curandState_t* states, uint64_t seed) {
+__global__ void InitCuRandStates(curandState_t* states,
+                                 std::size_t num_elements, uint64_t seed) {
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
-  curand_init(seed, tid, 0, &states[tid]);
+  if (tid < num_elements) {
+    curand_init(seed, tid, 0, &states[tid]);
+  }
 }
 
 __host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,

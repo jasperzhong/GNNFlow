@@ -6,7 +6,6 @@ Implementation at:
 """
 from typing import Dict, Optional, Union
 
-import logging
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
@@ -238,8 +237,7 @@ class Memory:
         mail_ts = mail_ts[perm]
 
         # prepare mem
-        num_true_src_dst = last_updated_nid.shape[0] // (
-            neg_sample_ratio + 2) * 2
+        num_true_src_dst = last_updated_nid.shape[0] // split_chunks * 2
         nid = last_updated_nid[:num_true_src_dst].to(self.device)
         memory = last_updated_memory[:num_true_src_dst].to(self.device)
         ts = last_updated_ts[:num_true_src_dst].to(self.device)
