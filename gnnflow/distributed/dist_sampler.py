@@ -210,7 +210,12 @@ class DistributedTemporalSampler:
 
             mask = masks[i]
             dst_idx = mask.nonzero().squeeze().numpy()
-            all_row[offset:offset + num_edges] = dst_idx[sampling_result.row]
+            try:
+                all_row[offset:offset + num_edges] = dst_idx[sampling_result.row]
+            except IndexError:
+                print('dst_idx', dst_idx)
+                print('sampling_result.row', sampling_result.row)
+                raise
 
             all_dst_nodes[dst_idx] = dst_nodes
             all_dst_timestamps[dst_idx] = dst_timestamps
