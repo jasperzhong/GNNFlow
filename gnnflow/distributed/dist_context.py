@@ -29,6 +29,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         data_name (str): the dataset name of the dataset for loading features.
         use_memory (bool): if the kvstore need to initialize the memory.
     """
+    # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      _transports=["shm", "uv"],
