@@ -198,7 +198,7 @@ class KVStoreClient:
             keys, feats = graph_services.init_cache(capacity)
         else:
             future = rpc.rpc_async('worker{}'.format(
-                kvstore_rank), graph_services.init_cache, args=(capacity))
+                kvstore_rank), graph_services.init_cache, args=(capacity, ))
             keys, feats = future.wait()
         return keys, feats
 
