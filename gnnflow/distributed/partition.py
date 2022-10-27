@@ -616,7 +616,7 @@ class LDGLightPartitioner(Partitioner):
         super().__init__(num_partitions, assign_with_dst_node)
 
         # key: NID -> value: List[num_partitions]
-        self._neighbor_memory = {}
+        self._neighbor_memory = torch.zeros(num_partitions, 30000)
         # ideal partition capacity
         self._partition_capacity = 0
         # edges partitioned
@@ -647,12 +647,7 @@ class LDGLightPartitioner(Partitioner):
             mask = self._partition_table[src_nodes] == i
 
             # enable memory
-            for src_id, dst_id in zip(src_nodes[mask], dst_nodes[mask]):
-                if int(dst_id) in self._neighbor_memory.keys():
-                    self._neighbor_memory[int(dst_id)][i] = self._neighbor_memory[int(dst_id)][i] + 1
-                else:
-                    self._neighbor_memory[int(dst_id)] = [0 for i in range(self._num_partitions)]
-                    self._neighbor_memory[int(dst_id)][i] = 1
+            self._neighbor_memory[i][dst_nodes[mask]] = self._neighbor_memory[i][dst_nodes[mask]] + 1
 
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
@@ -714,15 +709,13 @@ class LDGLightPartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
 
-            if partition_size >= self._partition_capacity:
-                partition_score.append(-2147483647)
-                continue
+            # if partition_size >= self._partition_capacity:
+            #     partition_score.append(-2147483647)
+            #     continue
 
-            neighbour_in_partition_size = 0
-            if vid in self._neighbor_memory.keys():
-                neighbour_in_partition_size = self._neighbor_memory[vid][i]
+            neighbour_in_partition_size = self._neighbor_memory[i][vid]
 
-            partition_score.append(neighbour_in_partition_size - 0.7 * alpha * gamma * (partition_size ** (gamma - 1)))
+            partition_score.append(neighbour_in_partition_size - 0.8 * alpha * gamma * (partition_size ** (gamma - 1)))
 
         partition_score = np.array(partition_score)
 
@@ -739,13 +732,7 @@ class LDGLightPartitioner(Partitioner):
             partition_table[i] = pid
             self._partition_table[int(unique_src_nodes[i])] = pid
 
-            for dst_nid in dst_nodes_list[i]:
-                # update memory table
-                if int(dst_nid) in self._neighbor_memory.keys():
-                    self._neighbor_memory[int(dst_nid)][pid] = self._neighbor_memory[int(dst_nid)][pid] + 1
-                else:
-                    self._neighbor_memory[int(dst_nid)] = [0 for i in range(self._num_partitions)]
-                    self._neighbor_memory[int(dst_nid)][pid] = 1
+            self._neighbor_memory[pid][dst_nodes_list[i]] = self._neighbor_memory[pid][dst_nodes_list[i]] + 1
 
         return partition_table
 
