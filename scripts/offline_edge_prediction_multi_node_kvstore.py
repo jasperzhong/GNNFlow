@@ -144,16 +144,20 @@ def main():
     full_data = full_data[:full_len // 100]
     full_data['src'] = full_data['src'] + 1
     full_data['dst'] = full_data['dst'] + 1
-    logging.info('full data: {}'.format(full_data['src']))
     train_len = int(0.7 * full_len)
     val_len = int(0.9 * full_len)
-    train_data = full_data[:train_len]
-    val_data = full_data[train_len:val_len]
-    test_data = full_data[val_len:]
-    logging.info("train_data: {}".format(train_data))
-    logging.info("val_data: {}".format(val_data))
-    logging.info("test_data: {}".format(test_data))
-    logging.info("full_data: {}".format(full_data))
+    if args.rank == 0:
+        logging.info('full data: {}'.format(full_data['src']))
+        logging.info('train_len: {}'.format(train_len))
+        logging.info('val_len: {}'.format(val_len))
+    train_data = full_data.iloc[:train_len]
+    val_data = full_data.iloc[train_len:val_len]
+    test_data = full_data.iloc[val_len:]
+    if args.rank == 0:
+        logging.info("train_data: {}".format(train_data))
+        logging.info("val_data: {}".format(val_data))
+        logging.info("test_data: {}".format(test_data))
+        logging.info("full_data: {}".format(full_data))
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
