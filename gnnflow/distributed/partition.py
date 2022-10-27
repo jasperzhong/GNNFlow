@@ -848,9 +848,9 @@ class IncrLightPartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
 
-            # if partition_size >= self._partition_capacity:
-            #     partition_score.append(-2147483647)
-            #     continue
+            if partition_size >= self._partition_capacity:
+                partition_score.append(-2147483647)
+                continue
 
             neighbour_in_partition_size = self._neighbor_memory[i][vid]
 
@@ -861,7 +861,7 @@ class IncrLightPartitioner(Partitioner):
 
 
             partition_score.append(timefctr + neighbour_in_partition_size
-                                   - 0.8 * alpha * gamma * (partition_size ** (gamma - 1)))
+                                   - 0.6 * alpha * gamma * (partition_size ** (gamma - 1)))
 
         partition_score = np.array(partition_score)
 
