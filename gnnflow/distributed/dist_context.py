@@ -62,9 +62,9 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     logging.info("Rank %d: partition table shape: %s",
                  rank, str(graph_services.get_partition_table().shape))
 
-    # save partition table
-    partition_table_numpy = graph_services.get_partition_table().numpy()
-    np.savetxt('partiton_table.txt', partition_table_numpy, delimiter='\n')
+    # # save partition table
+    # partition_table_numpy = graph_services.get_partition_table().numpy()
+    # np.savetxt('partiton_table.txt', partition_table_numpy, delimiter='\n')
     dgraph = graph_services.get_dgraph()
     logging.info("Rank %d: local number of vertices: %d, number of edges: %d",
                  rank, dgraph._dgraph.num_vertices(), dgraph._dgraph.num_edges())
