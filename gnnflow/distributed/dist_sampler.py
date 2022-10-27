@@ -123,7 +123,8 @@ class DistributedTemporalSampler:
         # dispatch target vertices and timestamps to different partitions
         partition_table = self._partition_table
         partition_ids = partition_table[target_vertices]
-
+        logging.info("sample global target vertices: {}".format(
+            len(target_vertices)))
         futures = []
         masks = []
         for partition_id in range(self._num_partitions):
@@ -211,6 +212,9 @@ class DistributedTemporalSampler:
             mask = masks[i]
             dst_idx = mask.nonzero().squeeze(dim=1).numpy()
             all_row[offset:offset + num_edges] = dst_idx[sampling_result.row]
+            logging.info("merge len dst_nodes: {}".format(len(dst_nodes)))
+            logging.info("merge len dst_idx: {}".format(len(dst_idx)))
+            logging.info("merge max dst_idx: {}".format(max(dst_idx)))
             all_dst_nodes[dst_idx] = dst_nodes
             all_dst_timestamps[dst_idx] = dst_timestamps
 
