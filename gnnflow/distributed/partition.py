@@ -555,9 +555,9 @@ class IncrPartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
 
-            if partition_size >= self._partition_capacity:
-                partition_score.append(-2147483647)
-                continue
+            # if partition_size >= self._partition_capacity:
+            #     partition_score.append(-2147483647)
+            #     continue
 
             neighbour_in_partition_size = 0
             if vid in self._neighbor_memory.keys():
