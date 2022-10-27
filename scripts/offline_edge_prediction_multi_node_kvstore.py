@@ -142,8 +142,8 @@ def main():
     # test
     full_len = len(full_data)
     full_data = full_data[:full_len // 100]
-    full_data['src'] = full_data['src'].values() + 1
-    full_data['dst'] = full_data['dst'].values() + 1
+    full_data['src'] = full_data['src'] + 1
+    full_data['dst'] = full_data['dst'] + 1
     logging.info('full data: {}'.format(full_data['src']))
     train_len = int(0.7 * full_len)
     val_len = int(0.9 * full_len)
