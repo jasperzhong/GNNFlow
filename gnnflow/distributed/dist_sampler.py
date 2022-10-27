@@ -159,6 +159,22 @@ class DistributedTemporalSampler:
             else:
                 sampling_results.append(future.wait())
 
+        # deal with non-partitioned nodes
+        non_partition_mask = partition_ids == -1
+        if non_partition_mask.sum() > 0:
+            masks.append(non_partition_mask)
+            result = SamplingResultTorch()
+            result.row = torch.tensor([])
+            result.num_dst_nodes = non_partition_mask.sum()
+            result.num_src_nodes = result.num_dst_nodes
+            result.all_nodes = torch.from_numpy(
+                target_vertices[non_partition_mask]).contiguous()
+            result.all_timestamps = torch.from_numpy(
+                timestamps[non_partition_mask]).contiguous()
+            result.delta_timestamps = torch.tensor([])
+            result.eids = torch.tensor([])
+            sampling_results.append(result)
+
         # merge sampling results
         mfg = self._merge_sampling_results(sampling_results, masks)
         assert mfg.num_dst_nodes() == len(
