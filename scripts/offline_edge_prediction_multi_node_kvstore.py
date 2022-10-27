@@ -93,7 +93,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     with torch.no_grad():
         total_loss = 0
         for target_nodes, ts, eid in dataloader:
-            # target_nodes -= 1
+            target_nodes += 1
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
@@ -310,7 +310,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
-            # target_nodes -= 1
+            target_nodes += 1
             mfgs = sampler.sample(target_nodes, ts)
 
             # Feature
