@@ -46,8 +46,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
-        # node_feats, edge_feats = load_feat(data_name)
-        node_feats, edge_feats = None, None
+        node_feats, edge_feats = load_feat(data_name)
+        if edge_feats != None:
+            edge_len = len(edge_feats)
+            edge_feats = edge_feats[:edge_len // 100]
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected, node_feats, edge_feats,
                                    use_memory)
