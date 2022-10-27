@@ -47,6 +47,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
         node_feats, edge_feats = load_feat(data_name)
+        node_feats = None
         if edge_feats != None:
             edge_len = len(edge_feats)
             edge_feats = edge_feats[:edge_len // 100]
