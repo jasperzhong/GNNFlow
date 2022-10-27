@@ -154,7 +154,7 @@ class Cache:
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
                 cache_edge_id = torch.arange(
-                        len(keys), dtype=torch.int64, device=self.device)
+                    len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
                     self.device)
                 self.cache_edge_flag[cache_edge_id] = True
@@ -284,12 +284,12 @@ class Cache:
                         # TODO: maybe fetch local and remote features separately
                         self.pinned_nfeat_buffs[
                             i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
-                            uncached_node_id_unique, mode='node')
+                            uncached_node_id_unique.cpu(), mode='node')
                         uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
                             self.device, non_blocking=True)
                     else:
                         uncached_node_feature = self.kvstore_client.pull(
-                            uncached_node_id_unique, mode='node')
+                            uncached_node_id_unique.cpu(), mode='node')
                 else:
                     if self.pinned_nfeat_buffs is not None:
                         torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
