@@ -289,7 +289,7 @@ class Cache:
                             self.device, non_blocking=True)
                     else:
                         uncached_node_feature = self.kvstore_client.pull(
-                            uncached_node_id_unique.cpu(), mode='node')
+                            uncached_node_id_unique.cpu(), mode='node').to(self.device)
                 else:
                     if self.pinned_nfeat_buffs is not None:
                         torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
@@ -363,7 +363,7 @@ class Cache:
                                     self.device, non_blocking=True)
                             else:
                                 uncached_edge_feature = self.kvstore_client.pull(
-                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
+                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device)
                         else:
                             uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                                 uncached_edge_id, return_inverse=True)
