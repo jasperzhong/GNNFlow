@@ -140,25 +140,25 @@ def main():
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
     # test
-    full_len = len(full_data)
-    full_len = full_len // 100
-    full_data = full_data[:full_len]
-    full_data['src'] = full_data['src'] + 1
-    full_data['dst'] = full_data['dst'] + 1
-    train_len = int(0.7 * full_len)
-    val_len = int(0.9 * full_len)
-    if args.rank == 0:
-        logging.info('full data: {}'.format(full_data['src']))
-        logging.info('train_len: {}'.format(train_len))
-        logging.info('val_len: {}'.format(val_len))
-    train_data = full_data.iloc[:train_len]
-    val_data = full_data.iloc[train_len:val_len]
-    test_data = full_data.iloc[val_len:]
-    if args.rank == 0:
-        logging.info("train_data: {}".format(train_data))
-        logging.info("val_data: {}".format(val_data))
-        logging.info("test_data: {}".format(test_data))
-        logging.info("full_data: {}".format(full_data))
+    # full_len = len(full_data)
+    # full_len = full_len // 100
+    # full_data = full_data[:full_len]
+    # full_data['src'] = full_data['src'] + 1
+    # full_data['dst'] = full_data['dst'] + 1
+    # train_len = int(0.7 * full_len)
+    # val_len = int(0.9 * full_len)
+    # if args.rank == 0:
+    #     logging.info('full data: {}'.format(full_data['src']))
+    #     logging.info('train_len: {}'.format(train_len))
+    #     logging.info('val_len: {}'.format(val_len))
+    # train_data = full_data.iloc[:train_len]
+    # val_data = full_data.iloc[train_len:val_len]
+    # test_data = full_data.iloc[val_len:]
+    # if args.rank == 0:
+    #     logging.info("train_data: {}".format(train_data))
+    #     logging.info("val_data: {}".format(val_data))
+    #     logging.info("test_data: {}".format(test_data))
+    #     logging.info("full_data: {}".format(full_data))
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
@@ -263,6 +263,7 @@ def main():
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank], find_unused_parameters=True)
 
+    # pinned_nfeat_buffs, pinned_efeat_buffs = None, None
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
         dim_node, dim_edge)
