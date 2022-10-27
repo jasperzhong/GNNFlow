@@ -212,7 +212,7 @@ class DistributedTemporalSampler:
         all_dst_timestamps = np.zeros(all_num_dst_nodes, dtype=np.float32)
         all_delta_timestamps = np.zeros(all_num_src_nodes, dtype=np.float32)
         all_eids = np.zeros(all_num_src_nodes, dtype=np.int64)
-        logging.info("all dst nodes: {}".format(all_dst_nodes))
+        logging.info("all dst nodes: {}".format(len(all_dst_nodes)))
         offset = 0
         # use mask to restore dst node order
         for i, sampling_result in enumerate(sampling_results):
