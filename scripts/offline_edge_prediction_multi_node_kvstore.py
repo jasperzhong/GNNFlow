@@ -93,7 +93,6 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     with torch.no_grad():
         total_loss = 0
         for target_nodes, ts, eid in dataloader:
-            target_nodes += 1
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
@@ -141,10 +140,20 @@ def main():
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
     # test
-    # train_data = train_data[:len(train_data) // 100]
-    # val_data = val_data[:len(val_data) // 100]
-    # test_data = test_data[:len(test_data) // 100]
-    # full_data = full_data[:len(full_data) // 100]
+    full_len = len(full_data)
+    full_data = full_data[:full_len // 100]
+    full_data['src'] = full_data['src'].values() + 1
+    full_data['dst'] = full_data['dst'].values() + 1
+    logging.info('full data: {}'.format(full_data['src']))
+    train_len = int(0.7 * full_len)
+    val_len = int(0.9 * full_len)
+    train_data = full_data[:train_len]
+    val_data = full_data[train_len:val_len]
+    test_data = full_data[val_len:]
+    logging.info("train_data: {}".format(train_data))
+    logging.info("val_data: {}".format(val_data))
+    logging.info("test_data: {}".format(test_data))
+    logging.info("full_data: {}".format(full_data))
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
@@ -310,7 +319,6 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
-            target_nodes += 1
             mfgs = sampler.sample(target_nodes, ts)
 
             # Feature

@@ -159,8 +159,6 @@ class Dispatcher:
             dst_nodes = torch.from_numpy(dst_nodes)
             timestamps = torch.from_numpy(timestamps)
             eids = torch.from_numpy(eids)
-            src_nodes += 1
-            dst_nodes += 1
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
                            timestamps, eids, node_feats, edge_feats,
                            defer_sync=True, dim_memory=dim_memory))
