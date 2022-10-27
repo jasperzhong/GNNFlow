@@ -165,7 +165,7 @@ class DistributedTemporalSampler:
             masks.append(non_partition_mask)
             result = SamplingResultTorch()
             result.row = torch.tensor([])
-            result.num_dst_nodes = non_partition_mask.sum()
+            result.num_dst_nodes = int(non_partition_mask.sum())
             result.num_src_nodes = result.num_dst_nodes
             result.all_nodes = torch.from_numpy(
                 target_vertices[non_partition_mask]).contiguous()
