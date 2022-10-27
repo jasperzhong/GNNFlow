@@ -30,10 +30,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         use_memory (bool): if the kvstore need to initialize the memory.
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
-    rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
-                 rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
-                     _transports=["shm", "uv"],
-                     _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
+    rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size)
+    #  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
+    #      _transports=["shm", "uv"],
+    #      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
 
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -45,7 +45,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
-        node_feats, edge_feats = load_feat(data_name)
+        # node_feats, edge_feats = load_feat(data_name)
+        node_feats, edge_feats = None, None
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected, node_feats, edge_feats,
                                    use_memory)

@@ -93,6 +93,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     with torch.no_grad():
         total_loss = 0
         for target_nodes, ts, eid in dataloader:
+            # target_nodes -= 1
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
@@ -139,6 +140,11 @@ def main():
         data_config["mem_resource_type"] = "shared"
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
+    # test
+    # train_data = train_data[:len(train_data) // 100]
+    # val_data = val_data[:len(val_data) // 100]
+    # test_data = test_data[:len(test_data) // 100]
+    # full_data = full_data[:len(full_data) // 100]
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
@@ -304,6 +310,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
+            # target_nodes -= 1
             mfgs = sampler.sample(target_nodes, ts)
 
             # Feature

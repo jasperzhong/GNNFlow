@@ -1,3 +1,5 @@
+import gc
+import logging
 from typing import Optional
 
 import numpy as np
@@ -105,7 +107,7 @@ class Dispatcher:
                                     memory_ts.unsqueeze(dim=1),
                                     mailbox,
                                     mailbox_ts.unsqueeze(dim=1),
-                                    ), dim=1)
+                                     ), dim=1)
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, all_mem, 'memory')))
 
@@ -137,6 +139,7 @@ class Dispatcher:
         """
         # Partition the dataset.
         futures = []
+        logging.info("len dataset: {}".format(len(dataset)))
         for i in range(0, len(dataset), ingestion_batch_size):
             batch = dataset[i:i + ingestion_batch_size]
             src_nodes = batch["src"].values.astype(np.int64)
@@ -156,7 +159,8 @@ class Dispatcher:
             dst_nodes = torch.from_numpy(dst_nodes)
             timestamps = torch.from_numpy(timestamps)
             eids = torch.from_numpy(eids)
-
+            # src_nodes -= 1
+            # dst_nodes -= 1
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
                            timestamps, eids, node_feats, edge_feats,
                            defer_sync=True, dim_memory=dim_memory))
@@ -164,6 +168,12 @@ class Dispatcher:
             # Wait for the workers to finish.
             for future in futures:
                 future.wait()
+            logging.info("{} wait end".format(i))
+            # del src_nodes
+            # del dst_nodes
+            # del timestamps
+            # del eids
+            # gc.collect()
             futures = []
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
