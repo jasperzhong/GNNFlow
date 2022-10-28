@@ -31,7 +31,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         use_memory (bool): if the kvstore need to initialize the memory.
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
-    rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size)
+    rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
+                 rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
+                     num_worker_threads=2))
+
     #  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
     #      _transports=["shm", "uv"],
     #      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
