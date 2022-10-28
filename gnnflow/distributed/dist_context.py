@@ -57,7 +57,13 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         dispatcher.partition_graph(dataset, ingestion_batch_size,
                                    undirected, node_feats, edge_feats,
                                    use_memory)
-
+    rpc.shutdown()
+    rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
+                 #  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
+                 #      num_worker_threads=2))
+                 rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
+                     _transports=["uv"],
+                     _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     # check
     torch.distributed.barrier()
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
