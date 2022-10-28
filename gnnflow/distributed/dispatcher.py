@@ -1,5 +1,6 @@
 import gc
 import logging
+import tracemalloc
 from typing import Optional
 
 import numpy as np
@@ -138,6 +139,7 @@ class Dispatcher:
             dim_memory (int): Dimension of the memory.
         """
         # Partition the dataset.
+        tracemalloc.start()
         futures = []
         logging.info("len dataset: {}".format(len(dataset)))
         for i in range(0, len(dataset), ingestion_batch_size):
@@ -173,6 +175,12 @@ class Dispatcher:
             # del eids
             # gc.collect()
             futures = []
+            snapshot = tracemalloc.take_snapshot()
+            top_stats = snapshot.statistics('lineno')
+
+            print("[ Top 10 ]")
+            for stat in top_stats[:10]:
+                logging.info(stat)
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
         dim_node = 0 if node_feats is None else node_feats.shape[1]
