@@ -55,8 +55,8 @@ class TemporalSampler {
       const Buffer& buffer, std::size_t num_root_nodes,
       std::size_t maximum_sampled_nodes) const;
 
-  void InitBuffer(std::size_t num_root_nodes,
-                  std::size_t maximum_sampled_nodes);
+  void InitBufferIfNeeded(std::size_t num_root_nodes,
+                          std::size_t maximum_sampled_nodes);
 
  private:
   const DynamicGraph& graph_;  // sampling does not modify the graph
@@ -76,6 +76,7 @@ class TemporalSampler {
   std::unique_ptr<GPUBuffer> gpu_output_buffer_;
   std::unique_ptr<CuRandStateHolder> rand_states_;
 
+  std::size_t maximum_num_root_nodes_;
   std::size_t maximum_sampled_nodes_;
 };
 
