@@ -172,6 +172,7 @@ class Dispatcher:
             # del timestamps
             # del eids
             # gc.collect()
+            del futures
             futures = []
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
