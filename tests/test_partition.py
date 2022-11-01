@@ -33,7 +33,7 @@ class TestPartition(unittest.TestCase):
 
         edge_cut_list = []
 
-        test_partitioner = get_partitioner(p_stgy, num_p)
+        test_partitioner = get_partitioner(p_stgy, num_p, True)
 
         overall_start = time.time()
         for i in range(0, len(dataset), ingestion_batch_size):
