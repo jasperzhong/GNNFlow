@@ -104,6 +104,8 @@ class Partitioner:
                     eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
                 )
 
+                print(unassigned_mask, mask)
+
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask
 
