@@ -104,6 +104,8 @@ class Partitioner:
                     eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
                 )
 
+                # assign to src node partition
+                self._partition_table[src_nodes[unassigned_mask][mask]] = i
                 # mask in global edge set
                 mask_global = self._partition_table[dst_nodes] == i
 
