@@ -436,7 +436,8 @@ class LDGPartitioner(Partitioner):
         return partition_table
 
 
-def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
+# TODO: Parameterized it
+def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = True):
     """
     Get the partitioner.
 
