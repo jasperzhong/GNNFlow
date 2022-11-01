@@ -78,8 +78,6 @@ class Partitioner:
         partitions = []
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
-            print(mask, len(mask))
-            print(src_nodes[mask], len(src_nodes))
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
@@ -106,10 +104,11 @@ class Partitioner:
                     eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
                 )
 
-                print(unassigned_mask, mask)
+                # mask in global edge set
+                mask_global = self._partition_table[dst_nodes] == i
 
                 # update unassigned mask
-                unassigned_mask = unassigned_mask & ~mask
+                unassigned_mask = unassigned_mask & ~mask_global
 
         partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
             src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
