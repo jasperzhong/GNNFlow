@@ -74,9 +74,11 @@ class Dispatcher:
                 if worker_rank == self._rank:
                     graph_services.add_edges(*edges)
                 else:
-                    future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
+                    rpc.remote("worker%d" % worker_rank, graph_services.add_edges,
                                            args=(*edges, ))
-                    futures.append(future)
+                    # future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
+                    #                        args=(*edges, ))
+                    # futures.append(future)
 
         # push features to the KVStore server on the partition.
         for partition_id, edges in enumerate(partitions):
