@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash"], [10000], [True, False]))
+        itertools.product(["hash"], [10000], [False, True]))
     def test_partition_graph(self, partition_strategy, batch_size, assign_with_dst):
 
         dataset_name = 'REDDIT'
@@ -108,5 +108,5 @@ class TestPartition(unittest.TestCase):
         print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
         print("Load factor is:{} \n".format(load_factor))
         print("Edge Cut Percentage is :{}%;".format(np.average(edge_cut_list)))
-        print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}, Assign_With_Dst) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size, assign_with_dst))
+        print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}, Assign_With_Dst:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size, assign_with_dst))
 
