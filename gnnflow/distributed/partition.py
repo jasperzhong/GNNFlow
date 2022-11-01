@@ -78,6 +78,8 @@ class Partitioner:
         partitions = []
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
+            print(mask, len(mask))
+            print(src_nodes[mask], len(src_nodes))
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
