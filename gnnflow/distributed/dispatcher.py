@@ -12,6 +12,7 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.partition import get_partitioner
 from gnnflow.utils import local_world_size
+from torch.profiler import profile, record_function, ProfilerActivity
 
 global dispatcher
 dispatcher = None
@@ -50,15 +51,14 @@ class Dispatcher:
             defer_sync (bool): Whether to defer the synchronization.
             dim_memory (int): Dimension of the memory.
         """
-        self._nodes.update(src_nodes)
-        self._nodes.update(dst_nodes)
+        self._nodes.update(src_nodes.tolist())
+        self._nodes.update(dst_nodes.tolist())
         self._num_edges += torch.unique(eids).size(0)
 
         partitions = self._partitioner.partition(
             src_nodes, dst_nodes, timestamps, eids)
 
         self._max_node = self._partitioner._max_node
-
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
@@ -75,12 +75,11 @@ class Dispatcher:
                     graph_services.add_edges(*edges)
                 else:
                     rpc.remote("worker%d" % worker_rank, graph_services.add_edges,
-                                           args=(*edges, ))
+                               args=(*edges, ))
                     # future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
                     #                        args=(*edges, ))
                     # futures.append(future)
 
-        # push features to the KVStore server on the partition.
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
             # the KVStore server is in local_rank 0
@@ -113,7 +112,7 @@ class Dispatcher:
                                      ), dim=1)
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, all_mem, 'memory')))
-
+        logging.info('do partition done')
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:
@@ -166,15 +165,9 @@ class Dispatcher:
                            timestamps, eids, node_feats, edge_feats,
                            defer_sync=True, dim_memory=dim_memory))
 
-            # Wait for the workers to finish.
-            for future in futures:
-                future.wait()
+            # for future in futures:
+            #     future.wait()
             logging.info("{} wait end".format(i))
-            # del src_nodes
-            # del dst_nodes
-            # del timestamps
-            # del eids
-            # gc.collect()
             futures = []
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
