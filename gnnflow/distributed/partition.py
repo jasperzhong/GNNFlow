@@ -41,7 +41,6 @@ class Partitioner:
         # NID -> partition ID, maximum 128 partitions
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
 
-
     def get_num_partitions(self) -> int:
         """
         Get the number of partitions.
@@ -192,6 +191,7 @@ class HashPartitioner(Partitioner):
         partition_table.apply_(lambda x: hash(str(x)) % self._num_partitions)
         return partition_table.to(torch.int8)
 
+
 class OnePartitioner(Partitioner):
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
@@ -199,6 +199,7 @@ class OnePartitioner(Partitioner):
                                             eids_list: List[torch.Tensor]) -> torch.Tensor:
         partition_table = torch.zeros(len(unique_src_nodes))
         return partition_table.to(torch.int8)
+
 
 class RoundRobinPartitioner(Partitioner):
     """
@@ -388,8 +389,6 @@ class LDGPartitioner(Partitioner):
 
         return partitions
 
-
-
     def LDG(self, vid: int):
         partition_score = []
 
@@ -435,12 +434,13 @@ class LDGPartitioner(Partitioner):
 
         return partition_table
 
+
 # Own designed partitioner
 class IncrPartitioner(Partitioner):
-
     """
     Partitioner With Incremental Time-Evolving Graph
     """
+
     def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
         super().__init__(num_partitions, assign_with_dst_node)
 
@@ -570,14 +570,12 @@ class IncrPartitioner(Partitioner):
             if self._partition_time_map[i][0] != 0:
                 timefctr = 0.04 * -1.0 * math.log(1 + self._partition_time_map[i][1] / self._partition_time_map[i][0])
 
-
             partition_score.append(timefctr + neighbour_in_partition_size
                                    - 0.8 * alpha * gamma * (partition_size ** (gamma - 1)))
 
         partition_score = np.array(partition_score)
 
         return np.random.choice(np.where(partition_score == partition_score.max())[0])
-
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
@@ -604,6 +602,7 @@ class IncrPartitioner(Partitioner):
                     self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
 
         return partition_table
+
 
 # SOTA Partitoner
 class LDGLightPartitioner(Partitioner):
@@ -697,8 +696,6 @@ class LDGLightPartitioner(Partitioner):
 
         return partitions
 
-
-
     def LDGLight(self, vid: int):
         partition_score = []
 
@@ -736,12 +733,13 @@ class LDGLightPartitioner(Partitioner):
 
         return partition_table
 
+
 # Own designed partitioner
 class IncrLightPartitioner(Partitioner):
-
     """
     Partitioner With Incremental Time-Evolving Graph
     """
+
     def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
         super().__init__(num_partitions, assign_with_dst_node)
 
@@ -800,14 +798,21 @@ class IncrLightPartitioner(Partitioner):
             # assign the edges to the partition of the assined destination node
             for i in range(self._num_partitions):
                 mask = self._partition_table[dst_nodes[unassigned_mask]] == i
-                partitions[i].src_nodes = torch.cat(
-                    [partitions[i].src_nodes, src_nodes[unassigned_mask][mask]])
-                partitions[i].dst_nodes = torch.cat(
-                    [partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]])
-                partitions[i].timestamps = torch.cat(
-                    [partitions[i].timestamps, timestamps[unassigned_mask][mask]])
-                partitions[i].eids = torch.cat(
-                    [partitions[i].eids, eids[unassigned_mask][mask]])
+                # partitions[i].src_nodes = torch.cat(
+                #     [partitions[i].src_nodes, src_nodes[unassigned_mask][mask]])
+                # partitions[i].dst_nodes = torch.cat(
+                #     [partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]])
+                # partitions[i].timestamps = torch.cat(
+                #     [partitions[i].timestamps, timestamps[unassigned_mask][mask]])
+                # partitions[i].eids = torch.cat(
+                #     [partitions[i].eids, eids[unassigned_mask][mask]])
+
+                partitions[i] = partitions[i]._replace(
+                    src_nodes=torch.cat([partitions[i].src_nodes, src_nodes[unassigned_mask][mask]]),
+                    dst_nodes=torch.cat([partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]]),
+                    timestamps=torch.cat([partitions[i].timestamps, timestamps[unassigned_mask][mask]]),
+                    eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
+                )
 
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask
@@ -859,14 +864,12 @@ class IncrLightPartitioner(Partitioner):
             if self._partition_time_map[i][0] != 0:
                 timefctr = 0.04 * -1.5 * math.log(1 + self._partition_time_map[i][1] / self._partition_time_map[i][0])
 
-
             partition_score.append(timefctr + neighbour_in_partition_size
                                    - 0.6 * alpha * gamma * (partition_size ** (gamma - 1)))
 
         partition_score = np.array(partition_score)
 
         return np.random.choice(np.where(partition_score == partition_score.max())[0])
-
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
@@ -885,6 +888,7 @@ class IncrLightPartitioner(Partitioner):
             self._neighbor_memory[pid][dst_nodes_list[i]] = self._neighbor_memory[pid][dst_nodes_list[i]] + 1
 
         return partition_table
+
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = True):
     """
