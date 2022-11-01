@@ -88,14 +88,21 @@ class Partitioner:
             # assign the edges to the partition of the assined destination node
             for i in range(self._num_partitions):
                 mask = self._partition_table[dst_nodes[unassigned_mask]] == i
-                partitions[i].src_nodes = torch.cat(
-                    [partitions[i].src_nodes, src_nodes[unassigned_mask][mask]])
-                partitions[i].dst_nodes = torch.cat(
-                    [partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]])
-                partitions[i].timestamps = torch.cat(
-                    [partitions[i].timestamps, timestamps[unassigned_mask][mask]])
-                partitions[i].eids = torch.cat(
-                    [partitions[i].eids, eids[unassigned_mask][mask]])
+                # partitions[i].src_nodes = torch.cat(
+                #     [partitions[i].src_nodes, src_nodes[unassigned_mask][mask]])
+                # partitions[i].dst_nodes = torch.cat(
+                #     [partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]])
+                # partitions[i].timestamps = torch.cat(
+                #     [partitions[i].timestamps, timestamps[unassigned_mask][mask]])
+                # partitions[i].eids = torch.cat(
+                #     [partitions[i].eids, eids[unassigned_mask][mask]])
+
+                partitions[i] = partitions[i]._replace(
+                    src_nodes=torch.cat([partitions[i].src_nodes, src_nodes[unassigned_mask][mask]]),
+                    dst_nodes=torch.cat([partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]]),
+                    timestamps=torch.cat([partitions[i].timestamps, timestamps[unassigned_mask][mask]]),
+                    eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
+                )
 
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask
