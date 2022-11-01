@@ -35,5 +35,5 @@ cmd="torchrun \
     --num-workers 8"
 
 echo $cmd
-NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
+NCCL_DEBUG=INFO LOGLEVEL=INFO MKL_NUM_THREADS=4 OMP_NUM_THREADS=8 exec $cmd
 
