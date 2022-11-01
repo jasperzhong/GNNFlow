@@ -101,7 +101,7 @@ class TestPartition(unittest.TestCase):
 
         # Print Partition Table
         for i in range(len(ptable)):
-            if ptable[i].item() >= num_p:
+            if ptable[i].item() >= num_p or ptable[i].item() == -1:
                 print("Incorrect Partition Table in vid {} is:{}\n".format(i, ptable[i].item()))
 
         print("Ptable is {}".format(ptable))
