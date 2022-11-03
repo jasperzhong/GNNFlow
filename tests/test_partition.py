@@ -36,6 +36,9 @@ class TestPartition(unittest.TestCase):
         test_partitioner = get_partitioner(p_stgy, num_p, assign_with_dst)
 
         overall_start = time.time()
+
+        edge_num_tot = [0 for i in range(num_p)]
+
         for i in range(0, len(dataset), ingestion_batch_size):
 
             batch = dataset[i: i + ingestion_batch_size]
@@ -77,6 +80,9 @@ class TestPartition(unittest.TestCase):
             partitions = test_partitioner.partition(src_nodes, dst_nodes, timestamps, eids)
             partition_end = time.time()
 
+            for pt_idx in range(num_p):
+                edge_num_tot[pt_idx] += len(partitions[pt_idx].eids)
+
             edge_cut = 0
             ptablein = test_partitioner.get_partition_table()
             for idx, row in batch.iterrows():
@@ -96,7 +102,7 @@ class TestPartition(unittest.TestCase):
         load_factor = np.max(psize_list) / (np.min(psize_list) if np.min(psize_list) != 0 else 1)
 
         for i in range(num_p):
-            print("Partition {} has {} edges. \n".format(i, len(partitions[i].src_nodes)))
+            print("Partition {} has {} edges. \n".format(i, edge_num_tot[i]))
 
         overall_end = time.time()
 
