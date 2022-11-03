@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash"], [100000], [False, True]))
+        itertools.product(["hash", "ldg"], [10000], [False, True]))
     def test_partition_graph(self, partition_strategy, batch_size, assign_with_dst):
 
         dataset_name = 'REDDIT'
