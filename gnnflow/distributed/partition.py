@@ -76,6 +76,64 @@ class Partitioner:
             self._max_node = max_node
         # dispatch edges to already assigned source nodes
         partitions = []
+        # for i in range(self._num_partitions):
+        #     mask = self._partition_table[src_nodes] == i
+        #     partitions.append(Partition(
+        #         src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
+        #
+        # # partition the edges for the unseen source nodes
+        # unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+
+        if self._assign_with_dst_node:
+            # assign the edges to the partition of the assined destination node
+
+            # group by src_nodes
+            src_nodes_unassigned = src_nodes[unassigned_mask].clone()
+            dst_nodes_unassigned = dst_nodes[unassigned_mask].clone()
+            timestamps_unassigned = timestamps[unassigned_mask].clone()
+            eids_unassigned = eids[unassigned_mask].clone()
+
+
+            sorted_idx = torch.argsort(src_nodes_unassigned)
+            unique_src_nodes, inverse_idx, counts = torch.unique(
+                src_nodes_unassigned[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
+            split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
+
+            dst_nodes_list = [dst_nodes_unassigned[idx] for idx in split_idx]
+            timestamps_list = [timestamps_unassigned[idx] for idx in split_idx]
+            eids_list = [eids_unassigned[idx] for idx in split_idx]
+
+            for i in range(len(unique_src_nodes)):
+                dst_partition_list = self._partition_table[dst_nodes_list[i]]
+                geq_zero_pt = dst_partition_list >= 0
+                dst_partition_list = dst_partition_list[geq_zero_pt]
+
+                mode_pt = -1
+                if len(dst_partition_list) == 0:
+                    # new edge, use user selected logic to partition
+                    mode_pt = -1
+                else:
+                    mode_pt = torch.mode(dst_partition_list).values.item()
+
+                if mode_pt == -1:
+                    continue
+
+                self._partition_table[unique_src_nodes[i]] = mode_pt
+
+                # Assign the edges
+                # src_extend = unique_src_nodes[i].repeat(len(dst_nodes_list[i]))
+                # partitions[mode_pt] = Partition(
+                #     torch.cat([partitions[mode_pt].src_nodes,
+                #                src_extend]),
+                #     torch.cat([partitions[mode_pt].dst_nodes,
+                #                dst_nodes_list[i]]),
+                #     torch.cat([partitions[mode_pt].timestamps,
+                #                timestamps_list[i]]),
+                #     torch.cat([partitions[mode_pt].eids, eids_list[i]]))
+
+        # # update: partition the edges for the unseen source nodes
+        # unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
             partitions.append(Partition(
@@ -83,58 +141,6 @@ class Partitioner:
 
         # partition the edges for the unseen source nodes
         unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
-
-        if self._assign_with_dst_node:
-            do_nothing = 1
-            # # assign the edges to the partition of the assined destination node
-            #
-            # # group by src_nodes
-            # src_nodes_unassigned = src_nodes[unassigned_mask].clone()
-            # dst_nodes_unassigned = dst_nodes[unassigned_mask].clone()
-            # timestamps_unassigned = timestamps[unassigned_mask].clone()
-            # eids_unassigned = eids[unassigned_mask].clone()
-            #
-            #
-            # sorted_idx = torch.argsort(src_nodes_unassigned)
-            # unique_src_nodes, inverse_idx, counts = torch.unique(
-            #     src_nodes_unassigned[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
-            # split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
-            #
-            # dst_nodes_list = [dst_nodes_unassigned[idx] for idx in split_idx]
-            # timestamps_list = [timestamps_unassigned[idx] for idx in split_idx]
-            # eids_list = [eids_unassigned[idx] for idx in split_idx]
-            #
-            # for i in range(len(unique_src_nodes)):
-            #     dst_partition_list = self._partition_table[dst_nodes_list[i]]
-            #     geq_zero_pt = dst_partition_list >= 0
-            #     dst_partition_list = dst_partition_list[geq_zero_pt]
-            #
-            #     mode_pt = -1
-            #     if len(dst_partition_list) == 0:
-            #         # new edge, use user selected logic to partition
-            #         mode_pt = -1
-            #     else:
-            #         mode_pt = torch.mode(dst_partition_list).values.item()
-            #
-            #     if mode_pt == -1:
-            #         continue
-            #
-            #     self._partition_table[unique_src_nodes[i]] = mode_pt
-            #
-            #     # Assign the edges
-            #     src_extend = unique_src_nodes[i].repeat(len(dst_nodes_list[i]))
-            #     partitions[mode_pt] = Partition(
-            #         torch.cat([partitions[mode_pt].src_nodes,
-            #                    src_extend]),
-            #         torch.cat([partitions[mode_pt].dst_nodes,
-            #                    dst_nodes_list[i]]),
-            #         torch.cat([partitions[mode_pt].timestamps,
-            #                    timestamps_list[i]]),
-            #         torch.cat([partitions[mode_pt].eids, eids_list[i]]))
-
-        # update: partition the edges for the unseen source nodes
-        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
-
 
         # ORIGIN CODE START
             # for i in range(self._num_partitions):
