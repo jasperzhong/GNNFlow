@@ -104,7 +104,7 @@ class Partitioner:
                 mask_global = unassigned_mask & mask_global
 
                 if len((eids[mask_global] == 10588).nonzero()) != 0:
-                    print("MASK GLOBAL WRONGGGGGGGGGGGGGGGGGGGGGG!!!!\n")
+                    print("MASK GLOBAL WRONGGGGGGGGGGGGGGGGGGGGGG!!!!. partition_table:{}\n".format(self._partition_table[10702]))
 
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask_global
