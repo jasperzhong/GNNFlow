@@ -53,7 +53,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
-    full_data = pd.read_csv(path)
+    full_data = pd.read_csv(path, engine="pyarrow")
     assert isinstance(full_data, pd.DataFrame)
 
     full_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
