@@ -100,9 +100,6 @@ class Partitioner:
                 mask_global = self._partition_table[dst_nodes] == i
                 mask_global = unassigned_mask & mask_global
 
-                if len((eids[mask_global] == 10588).nonzero()) != 0:
-                    print("MASK GLOBAL WRONGGGGGGGGGGGGGGGGGGGGGG!!!!. partition_table:{}\n".format(self._partition_table[10702]))
-
                 # assign to src node partition
                 self._partition_table[src_nodes[unassigned_mask][mask]] = i
 
