@@ -83,28 +83,28 @@ class TestPartition(unittest.TestCase):
             for pt_idx in range(num_p):
                 edge_num_tot[pt_idx] += len(partitions[pt_idx].eids)
 
-            # edge_cut = 0
-            # ptablein = test_partitioner.get_partition_table()
-            # for idx, row in batch.iterrows():
-            #     u = int(row['src'])
-            #     v = int(row['dst'])
-            #     if ptablein[u] != -1 and ptablein[v] != -1 and (ptablein[u] != ptablein[v]):
-            #         edge_cut += 1
-            #
-            # edge_cut_list.append(float(100.0 * float(edge_cut) / float(len(batch))))
+            edge_cut = 0
+            ptablein = test_partitioner.get_partition_table()
+            for idx, row in batch.iterrows():
+                u = int(row['src'])
+                v = int(row['dst'])
+                if ptablein[u] != -1 and ptablein[v] != -1 and (ptablein[u] != ptablein[v]):
+                    edge_cut += 1
+
+            edge_cut_list.append(float(100.0 * float(edge_cut) / float(len(batch))))
             eid_list = torch.tensor([])
             for pid in range(num_p):
                 eid_list = torch.cat([eid_list, partitions[pid].eids])
 
-            # check the rows
-            for idx, row in batch.iterrows():
-                u = int(row['src'])
-                v = int(row['dst'])
-                e = int(row['eid'])
-
-                check_tensor = (eid_list == e).nonzero()
-                if len(check_tensor) == 0:
-                    print("Find UNASSIGNED edge. u:{}, v:{}, eid:{}\n".format(u, v, e))
+            # # check the rows
+            # for idx, row in batch.iterrows():
+            #     u = int(row['src'])
+            #     v = int(row['dst'])
+            #     e = int(row['eid'])
+            #
+            #     check_tensor = (eid_list == e).nonzero()
+            #     if len(check_tensor) == 0:
+            #         print("Find UNASSIGNED edge. u:{}, v:{}, eid:{}\n".format(u, v, e))
 
         # load balance
         ptable = test_partitioner.get_partition_table()
@@ -132,6 +132,6 @@ class TestPartition(unittest.TestCase):
         print("Ptable is {}".format(ptable))
         print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
         print("Load factor is:{} \n".format(load_factor))
-        # print("Edge Cut Percentage is :{}%;".format(np.average(edge_cut_list)))
+        print("Edge Cut Percentage is :{}%;".format(np.average(edge_cut_list)))
         print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}, Assign_With_Dst:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size, assign_with_dst))
 
