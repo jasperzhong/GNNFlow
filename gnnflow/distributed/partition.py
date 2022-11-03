@@ -86,25 +86,76 @@ class Partitioner:
 
         if self._assign_with_dst_node:
             # assign the edges to the partition of the assined destination node
-            for i in range(self._num_partitions):
-                mask = self._partition_table[dst_nodes[unassigned_mask]] == i
 
-                partitions[i] = partitions[i]._replace(
-                    src_nodes=torch.cat([partitions[i].src_nodes, src_nodes[unassigned_mask][mask]]),
-                    dst_nodes=torch.cat([partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]]),
-                    timestamps=torch.cat([partitions[i].timestamps, timestamps[unassigned_mask][mask]]),
-                    eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
-                )
+            # group by src_nodes
+            src_nodes_unassigned = src_nodes[unassigned_mask].clone()
+            dst_nodes_unassigned = dst_nodes[unassigned_mask].clone()
+            timestamps_unassigned = timestamps[unassigned_mask].clone()
+            eids_unassigned = eids[unassigned_mask].clone()
 
-                # mask in global edge set
-                mask_global = self._partition_table[dst_nodes] == i
-                mask_global = unassigned_mask & mask_global
 
-                # assign to src node partition
-                self._partition_table[src_nodes[unassigned_mask][mask]] = i
+            sorted_idx = torch.argsort(src_nodes_unassigned)
+            unique_src_nodes, inverse_idx, counts = torch.unique(
+                src_nodes_unassigned[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
+            split_idx = torch.split(sorted_idx, tuple(counts.tolist))
 
-                # update unassigned mask
-                unassigned_mask = unassigned_mask & ~mask_global
+            dst_nodes_list = [dst_nodes_unassigned[idx] for idx in split_idx]
+            timestamps_list = [timestamps_unassigned[idx] for idx in split_idx]
+            eids_list = [eids_unassigned[idx] for idx in split_idx]
+
+            for i in range(len(unique_src_nodes)):
+                dst_partition_list = self._partition_table[dst_nodes_list[i]]
+                geq_zero_pt = dst_partition_list >= 0
+                dst_partition_list = dst_partition_list[geq_zero_pt]
+
+                mode_pt = -1
+                if len(dst_partition_list) == 0:
+                    # new edge, use user selected logic to partition
+                    mode_pt = -1
+                else:
+                    mode_pt = torch.mode(dst_partition_list).values.item()
+
+                if mode_pt == -1:
+                    continue
+
+                self._partition_table[unique_src_nodes[i]] = mode_pt
+
+                # Assign the edges
+                src_extend = unique_src_nodes[i].repeat(len(dst_nodes_list[i]))
+                partitions[mode_pt] = Partition(
+                    torch.cat([partitions[i].src_nodes,
+                               src_extend]),
+                    torch.cat([partitions[i].dst_nodes,
+                               dst_nodes_list[i]]),
+                    torch.cat([partitions[i].timestamps,
+                               timestamps_list[i]]),
+                    torch.cat([partitions[i].eids, eids_list[i]]))
+
+        # update: partition the edges for the unseen source nodes
+        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+
+
+        # ORIGIN CODE START
+            # for i in range(self._num_partitions):
+                # mask = self._partition_table[dst_nodes[unassigned_mask]] == i
+                #
+                # partitions[i] = partitions[i]._replace(
+                #     src_nodes=torch.cat([partitions[i].src_nodes, src_nodes[unassigned_mask][mask]]),
+                #     dst_nodes=torch.cat([partitions[i].dst_nodes, dst_nodes[unassigned_mask][mask]]),
+                #     timestamps=torch.cat([partitions[i].timestamps, timestamps[unassigned_mask][mask]]),
+                #     eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
+                # )
+                #
+                # # mask in global edge set
+                # mask_global = self._partition_table[dst_nodes] == i
+                # mask_global = unassigned_mask & mask_global
+                #
+                # # assign to src node partition
+                # self._partition_table[src_nodes[unassigned_mask][mask]] = i
+                #
+                # # update unassigned mask
+                # unassigned_mask = unassigned_mask & ~mask_global
+        # ORIGIN CODE END
 
         partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
             src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
