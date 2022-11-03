@@ -96,8 +96,7 @@ class Partitioner:
                     eids=torch.cat([partitions[i].eids, eids[unassigned_mask][mask]])
                 )
 
-                # assign to src node partition
-                self._partition_table[src_nodes[unassigned_mask][mask]] = i
+
 
                 # mask in global edge set
                 mask_global = self._partition_table[dst_nodes] == i
@@ -105,6 +104,9 @@ class Partitioner:
 
                 if len((eids[mask_global] == 10588).nonzero()) != 0:
                     print("MASK GLOBAL WRONGGGGGGGGGGGGGGGGGGGGGG!!!!. partition_table:{}\n".format(self._partition_table[10702]))
+
+                # assign to src node partition
+                self._partition_table[src_nodes[unassigned_mask][mask]] = i
 
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask_global
