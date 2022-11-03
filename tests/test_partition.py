@@ -22,7 +22,7 @@ class TestPartition(unittest.TestCase):
 
         dataset_name = 'REDDIT'
         p_stgy = partition_strategy
-        num_p = 2
+        num_p = 4
         ingestion_batch_size = batch_size
         undirected = True
         dataset = pd.read_csv('/home/ubuntu/data/{}/edges.csv'.format(dataset_name))  # LINUX
