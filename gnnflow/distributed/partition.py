@@ -101,6 +101,7 @@ class Partitioner:
 
                 # mask in global edge set
                 mask_global = self._partition_table[dst_nodes] == i
+                mask_global = unassigned_mask & mask_global
 
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask_global
