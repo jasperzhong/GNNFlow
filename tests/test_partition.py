@@ -104,7 +104,7 @@ class TestPartition(unittest.TestCase):
 
                 check_tensor = (eid_list == e).nonzero()
                 if len(check_tensor) == 0:
-                    print("Find UNASSIGNED edge. u:{}, v:{}, eid:{}\n".format(u, v, eid))
+                    print("Find UNASSIGNED edge. u:{}, v:{}, eid:{}\n".format(u, v, e))
 
         # load balance
         ptable = test_partitioner.get_partition_table()
