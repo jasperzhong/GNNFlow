@@ -96,7 +96,7 @@ class TestPartition(unittest.TestCase):
         load_factor = np.max(psize_list) / (np.min(psize_list) if np.min(psize_list) != 0 else 1)
 
         for i in range(num_p):
-            print("Partition {} has {} edges. \n".format(i, len(partitions[i])))
+            print("Partition {} has {} edges. \n".format(i, len(partitions[i].src_nodes)))
 
         overall_end = time.time()
 
