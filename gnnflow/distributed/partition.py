@@ -81,8 +81,8 @@ class Partitioner:
         #     partitions.append(Partition(
         #         src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
         #
-        # # partition the edges for the unseen source nodes
-        # unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+        # partition the edges for the unseen source nodes
+        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
 
         if self._assign_with_dst_node:
             # assign the edges to the partition of the assined destination node
@@ -131,16 +131,15 @@ class Partitioner:
                 #                timestamps_list[i]]),
                 #     torch.cat([partitions[mode_pt].eids, eids_list[i]]))
 
-        # # update: partition the edges for the unseen source nodes
-        # unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+        # update: partition the edges for the unseen source nodes
+        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
 
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-        # partition the edges for the unseen source nodes
-        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+
 
         # ORIGIN CODE START
             # for i in range(self._num_partitions):
