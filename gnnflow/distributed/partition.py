@@ -97,7 +97,7 @@ class Partitioner:
             sorted_idx = torch.argsort(src_nodes_unassigned)
             unique_src_nodes, inverse_idx, counts = torch.unique(
                 src_nodes_unassigned[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
-            split_idx = torch.split(sorted_idx, tuple(counts.tolist))
+            split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
 
             dst_nodes_list = [dst_nodes_unassigned[idx] for idx in split_idx]
             timestamps_list = [timestamps_unassigned[idx] for idx in split_idx]
