@@ -73,6 +73,8 @@ logging.info(args)
 checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
 
+start = time.time()
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -139,6 +141,7 @@ def main():
         data_config["mem_resource_type"] = "shared"
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
+    logging.info("load data done")
     # test
     # full_len = len(full_data)
     # full_len = full_len // 100
@@ -165,11 +168,11 @@ def main():
         full_data['src'].values, full_data['dst'].values)
     test_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
-
+    logging.info("make sampler done")
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
-
+    logging.info("make dataset done")
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
@@ -203,7 +206,8 @@ def main():
     test_loader = torch.utils.data.DataLoader(
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
-
+    logging.info("make dataloader done")
+    dataset_end = time.time()
     node_feats = None
     edge_feats = None
     kvstore_client = None
@@ -256,7 +260,7 @@ def main():
     else:
         assert isinstance(dgraph, DynamicGraph)
         sampler = TemporalSampler(dgraph, **model_config)
-
+    build_graph_end = time.time()
     if args.distributed:
         # NB: it seems that DySAT needs this parameter. I don't know why.
         # find_unused_parameters = True if args.model == "DySAT" else False
@@ -290,7 +294,12 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
-
+    before_train_end = time.time()
+    logging.info("load time: {}".format(dataset_end - start))
+    logging.info("build graph time: {}".format(build_graph_end - dataset_end))
+    logging.info("other time: {}".format(before_train_end - build_graph_end))
+    logging.info("init time: {}".format(build_graph_end - start))
+    logging.info("before train time: {}".format(before_train_end - start))
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device)
 
