@@ -95,6 +95,9 @@ class TestPartition(unittest.TestCase):
             print("Partition {} has {} nodes.\n".format(i, ptable.tolist().count(i)))
         load_factor = np.max(psize_list) / (np.min(psize_list) if np.min(psize_list) != 0 else 1)
 
+        for i in range(num_p):
+            print("Partition {} has {} edges. \n".format(i, len(partitions[i])))
+
         overall_end = time.time()
 
         print("========== All Batch Finished =========\n")
