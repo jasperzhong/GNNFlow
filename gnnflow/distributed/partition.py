@@ -123,13 +123,13 @@ class Partitioner:
                 # Assign the edges
                 src_extend = unique_src_nodes[i].repeat(len(dst_nodes_list[i]))
                 partitions[mode_pt] = Partition(
-                    torch.cat([partitions[i].src_nodes,
+                    torch.cat([partitions[mode_pt].src_nodes,
                                src_extend]),
-                    torch.cat([partitions[i].dst_nodes,
+                    torch.cat([partitions[mode_pt].dst_nodes,
                                dst_nodes_list[i]]),
-                    torch.cat([partitions[i].timestamps,
+                    torch.cat([partitions[mode_pt].timestamps,
                                timestamps_list[i]]),
-                    torch.cat([partitions[i].eids, eids_list[i]]))
+                    torch.cat([partitions[mode_pt].eids, eids_list[i]]))
 
         # update: partition the edges for the unseen source nodes
         unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
