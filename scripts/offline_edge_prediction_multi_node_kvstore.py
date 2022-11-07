@@ -5,6 +5,7 @@ import os
 import random
 import time
 
+import pandas as pd
 import numpy as np
 import torch
 import torch.distributed
@@ -43,7 +44,7 @@ parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.00001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
@@ -140,8 +141,47 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
-    train_data, val_data, test_data, full_data = load_dataset(args.data)
-    logging.info("load data done")
+    for i in range(10):  # 10 chunks of data
+        # train_data, val_data, test_data, full_data = load_dataset(args.data)
+        logging.info("{}th chunk add edges".format(i))
+        data_dir = os.path.join(get_project_root_dir(), "data")
+        path = os.path.join(data_dir, args.data, 'edges_{}.csv'.format(i))
+        full_data = pd.read_csv(path, engine='pyarrow')
+        node_feats = None
+        edge_feats = None
+        kvstore_client = None
+        args.dim_memory = 0 if 'dim_memory' not in model_config else model_config[
+            'dim_memory']
+        if args.partition:
+            dgraph = build_dynamic_graph(
+                **data_config, device=args.local_rank)
+            graph_services.set_dgraph(dgraph)
+            dgraph = graph_services.get_dgraph()
+            gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
+                                           args.ingestion_batch_size, args.partition_strategy,
+                                           args.num_nodes, data_config["undirected"], args.data,
+                                           args.dim_memory)
+            # every worker will have a kvstore_client
+            dim_node, dim_edge = graph_services.get_dim_node_edge()
+            kvstore_client = KVStoreClient(
+                dgraph.get_partition_table(),
+                dgraph.num_partitions(), args.local_world_size,
+                args.local_rank, dim_node, dim_edge, args.dim_memory)
+        else:
+            dgraph = build_dynamic_graph(
+                **data_config, device=args.local_rank, dataset_df=full_data)
+            # put the features in shared memory when using distributed training
+            node_feats, edge_feats = load_feat(
+                args.data, shared_memory=args.distributed,
+                local_rank=args.local_rank, local_world_size=args.local_world_size)
+
+            dim_node = 0 if node_feats is None else node_feats.shape[1]
+            dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+
+        del full_data
+
+    num_nodes = dgraph.num_vertices()
+    num_edges = dgraph.num_edges()
     # test
     # full_len = len(full_data)
     # full_len = full_len // 100
@@ -162,6 +202,8 @@ def main():
     #     logging.info("val_data: {}".format(val_data))
     #     logging.info("test_data: {}".format(test_data))
     #     logging.info("full_data: {}".format(full_data))
+    logging.info("use trunks build graph done")
+    time.sleep(1000)
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
@@ -208,38 +250,6 @@ def main():
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
     logging.info("make dataloader done")
     dataset_end = time.time()
-    node_feats = None
-    edge_feats = None
-    kvstore_client = None
-    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
-    if args.partition:
-        dgraph = build_dynamic_graph(
-            **data_config, device=args.local_rank)
-        graph_services.set_dgraph(dgraph)
-        dgraph = graph_services.get_dgraph()
-        gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
-                                       args.ingestion_batch_size, args.partition_strategy,
-                                       args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory)
-        # every worker will have a kvstore_client
-        dim_node, dim_edge = graph_services.get_dim_node_edge()
-        kvstore_client = KVStoreClient(
-            dgraph.get_partition_table(),
-            dgraph.num_partitions(), args.local_world_size,
-            args.local_rank, dim_node, dim_edge, args.dim_memory)
-    else:
-        dgraph = build_dynamic_graph(
-            **data_config, device=args.local_rank, dataset_df=full_data)
-        # put the features in shared memory when using distributed training
-        node_feats, edge_feats = load_feat(
-            args.data, shared_memory=args.distributed,
-            local_rank=args.local_rank, local_world_size=args.local_world_size)
-
-        dim_node = 0 if node_feats is None else node_feats.shape[1]
-        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
-
-    num_nodes = dgraph.num_vertices()
-    num_edges = dgraph.num_edges()
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))

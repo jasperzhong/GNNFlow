@@ -161,7 +161,7 @@ _gdelt_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 3000
+    "batch_size": 600
 }
 
 _mag_default_config = {

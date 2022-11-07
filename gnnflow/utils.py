@@ -53,10 +53,13 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
-    full_data = pd.read_csv(path, engine="pyarrow")
+    full_data = pd.read_csv(path)
     assert isinstance(full_data, pd.DataFrame)
 
+    # if 'Unnamed: 0' in full_data.columns:
     full_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
+    # else:  # for MAG
+    #     full_data
     train_end = full_data['ext_roll'].values.searchsorted(1)
     val_end = full_data['ext_roll'].values.searchsorted(2)
     train_data = full_data[:train_end]
