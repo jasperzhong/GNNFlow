@@ -10,7 +10,7 @@ import numpy as np
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import load_feat
+from gnnflow.utils import get_project_root_dir, load_feat
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
@@ -55,9 +55,16 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         # if edge_feats != None:
         #     edge_len = len(edge_feats)
         #     edge_feats = edge_feats[:edge_len // 100]
-        dispatcher.partition_graph(dataset, ingestion_batch_size,
-                                   undirected, node_feats, edge_feats,
-                                   use_memory)
+        for i in range(10):  # 10 chunks of data
+            # train_data, val_data, test_data, full_data = load_dataset(args.data)
+            logging.info("{}th chunk add edges".format(i))
+            data_dir = os.path.join(get_project_root_dir(), "data")
+            path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
+            dataset = pd.read_csv(path, engine='pyarrow')
+            dispatcher.partition_graph(dataset, ingestion_batch_size,
+                                       undirected, node_feats, edge_feats,
+                                       use_memory)
+            del dataset
     # check
     torch.distributed.barrier()
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
