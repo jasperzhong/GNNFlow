@@ -74,7 +74,7 @@ class KVStoreServer:
         elif mode == 'edge':
             with self._edge_feat_lock:
                 if len(list(map(self._edge_feat_map.get, keys.tolist()))) == 0:
-                    return torch.tensor([])
+                    print("Check Issue {}, {}", self._edge_feat_map.get, keys.tolist())
                 return torch.stack(list(map(self._edge_feat_map.get, keys.tolist())))
         elif mode == 'memory':
             with self._memory_lock:
