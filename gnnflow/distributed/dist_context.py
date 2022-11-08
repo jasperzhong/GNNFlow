@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 
@@ -36,6 +37,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                  #      num_worker_threads=2))
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      num_worker_threads=2,
+                     rpc_timeout=datetime.timedelta(seconds=1800),
                      _transports=["uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
