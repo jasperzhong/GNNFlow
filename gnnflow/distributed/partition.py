@@ -648,7 +648,7 @@ class IncrLightPartitioner(Partitioner):
 
 
 # TODO: Parameterized it
-def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = True):
+def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
     Get the partitioner.
 
