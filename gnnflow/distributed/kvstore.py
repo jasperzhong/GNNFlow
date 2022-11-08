@@ -70,13 +70,13 @@ class KVStoreServer:
         """
         if mode == 'node':
             with self._node_feat_lock:
-                return torch.stack([self._node_feat_map[int(key)] for key in keys])
+                return torch.stack(list(map(self._node_feat_map.get, keys.tolist())))
         elif mode == 'edge':
             with self._edge_feat_lock:
-                return torch.stack([self._edge_feat_map[int(key)] for key in keys])
+                return torch.stack(list(map(self._edge_feat_map.get, keys.tolist())))
         elif mode == 'memory':
             with self._memory_lock:
-                return torch.stack([self._memory_map[int(key)] for key in keys])
+                return torch.stack(list(map(self._memory_map.get, keys.tolist())))
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
