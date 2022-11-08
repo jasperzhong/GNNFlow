@@ -168,7 +168,7 @@ _mag_default_config = {
     "initial_pool_size": 50*GB,
     "maximum_pool_size": 200*GB,
     "mem_resource_type": "unified",
-    "minimum_block_size": 8196,
+    "minimum_block_size": 8192,
     "blocks_to_preallocate": 65536,
     "insertion_policy": "insert",
     "undirected": False,
