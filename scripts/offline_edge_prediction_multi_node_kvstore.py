@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import logging
 import math
 import os
@@ -124,7 +125,8 @@ def main():
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group('gloo')
+        torch.distributed.init_process_group(
+            'gloo', timeout=datetime.timedelta(seconds=18000))
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
