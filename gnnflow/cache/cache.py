@@ -150,7 +150,7 @@ class Cache:
         """
         if self.distributed:
             # the edge map is ordered my insertion order, which is the order of ts
-            if self.dim_edge_feat != 0:
+            if self.dim_edge_feat != 0 and self.edge_capacity > 0:
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
                 cache_edge_id = torch.arange(
