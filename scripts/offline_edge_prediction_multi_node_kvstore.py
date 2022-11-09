@@ -344,7 +344,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                         total_samples = metrics.tolist()
 
                 logging.info("For 100 epoch, arpc_size = {}, sample_time:{} sec. \n".format(arpc_size,
-                                                                                        time.time() - time_sample_start))
+                                                                                        tot_sample_time))
                 # reset the timer
                 tot_sample_time = 0
                 tot_arpc_size = 0
