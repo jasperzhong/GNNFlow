@@ -986,8 +986,18 @@ class Suc_Partitioner(Partitioner):
             timefctr = 0.0
             tot_time_avg = 0.0
             for j in range(self._num_partitions):
+                if self._partition_time_map[j][1] == 0:
+                    continue
                 tot_time_avg += (self._partition_time_map[j][1] / self._partition_time_map[j][0])
             tot_time_avg /= self._num_partitions
+
+            pt_time_avg = 0.0
+            if self._partition_time_map[i][1] != 0:
+                pt_time_avg = self._partition_time_map[i][1] / self._partition_time_map[i][0]
+
+            if tot_time_avg != 0:
+                timefctr = pt_time_avg / tot_time_avg
+
 
 
             partition_score.append(-1.0 * timefctr + neighbour_in_partition_size
