@@ -25,6 +25,7 @@ class Cache:
                  neg_sample_ratio: Optional[int] = 1):
         """
         Initialize the cache
+
         Args:
             cache_ratio: The ratio of the cache size to the total number of nodes or edges
                     range: [0, 1].
@@ -149,7 +150,7 @@ class Cache:
         """
         if self.distributed:
             # the edge map is ordered my insertion order, which is the order of ts
-            if self.dim_edge_feat != 0:
+            if self.dim_edge_feat != 0 and self.edge_capacity > 0:
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
                 cache_edge_id = torch.arange(
@@ -186,6 +187,7 @@ class Cache:
     def resize(self, new_num_nodes: int, new_num_edges: int):
         """
         Resize the cache
+
         Args:
             new_num_nodes: The new number of nodes
             new_num_edges: The new number of edges
@@ -219,6 +221,7 @@ class Cache:
                           uncached_node_feature: torch.Tensor):
         """
         Update the node cache
+
         Args:
             cached_node_index: The index of the cached nodes
             uncached_node_id: The id of the uncached nodes
@@ -231,6 +234,7 @@ class Cache:
                           uncached_edge_feature: torch.Tensor):
         """
         Update the edge cache
+
         Args:
             cached_edge_index: The index of the cached edges
             uncached_edge_id: The id of the uncached edges
@@ -242,11 +246,13 @@ class Cache:
                       eid: Optional[np.ndarray] = None, update_cache: bool = True,
                       target_edge_features: bool = True):
         """Fetching the node/edge features of input_node_ids
+
         Args:
             mfgs: message-passing flow graphs
             eid: target edge ids
             update_cache: whether to update the cache
             target_edge_features: whether to fetch target edge features for TGN
+
         Returns:
             mfgs: message-passing flow graphs with node/edge features
         """
