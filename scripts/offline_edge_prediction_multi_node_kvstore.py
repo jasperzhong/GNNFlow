@@ -93,7 +93,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     with torch.no_grad():
         total_loss = 0
         for target_nodes, ts, eid in dataloader:
-            mfgs = sampler.sample(target_nodes, ts)
+            mfgs, _ = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
