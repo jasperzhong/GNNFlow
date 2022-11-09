@@ -92,6 +92,29 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
 
     if not os.path.exists(node_feat_path) and \
             not os.path.exists(edge_feat_path):
+        rand_de = 0
+        rand_dn = 0
+
+        node_feats = None
+        edge_feats = None
+
+        if dataset == 'LASTFM':
+            rand_de = 1
+            edge_feats = torch.randn(1293103, rand_de)
+        elif dataset == 'MOOC':
+            rand_de = 1
+            edge_feats = torch.randn(411749, rand_de)
+
+        if dataset == 'LASTFM':
+            rand_dn = 1
+            node_feats = torch.randn(1980, rand_dn)
+        elif dataset == 'MOOC':
+            rand_dn = 1
+            edge_feats = torch.randn(7144, rand_dn)
+
+        if rand_de or rand_dn:
+            return node_feats, edge_feats
+
         raise ValueError("Both {} and {} do not exist".format(
             node_feat_path, edge_feat_path))
 
