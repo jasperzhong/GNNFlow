@@ -304,7 +304,10 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
-            mfgs = sampler.sample(target_nodes, ts)
+            time_sample_start = time.time()
+            mfgs, arpc_size = sampler.sample(target_nodes, ts)
+
+            logging.info("For epoch, arpc_size = {}, sample_time:{} sec. \n".format(arpc_size, time.time() - time_sample_start))
 
             # Feature
             mfgs_to_cuda(mfgs, device)

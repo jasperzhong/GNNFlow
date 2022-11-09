@@ -76,7 +76,7 @@ class DistributedTemporalSampler:
         self._sampling_task_queue.put(
             (target_vertices, timestamps, layer, snapshot, result, callback, handle))
 
-    def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
+    def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) :
         """
         Sample k-hop neighbors of given vertices.
 
@@ -89,25 +89,32 @@ class DistributedTemporalSampler:
             each layer.
         """
         mfgs = []
+        arpc_size = 0
         for layer in range(self._num_layers):
             mfgs.append([])
+
             if layer == 0:
                 for snapshot in range(self._num_snapshots):
-                    mfgs[layer].append(self.sample_layer_global(
-                        target_vertices, timestamps, layer, snapshot))
+                    app, arpc_size_local = self.sample_layer_global(
+                        target_vertices, timestamps, layer, snapshot)
+                    mfgs[layer].append(app)
+                    arpc_size = arpc_size + arpc_size_local
             else:
                 for snapshot in range(self._num_snapshots):
                     prev_mfg = mfgs[layer - 1][snapshot]
                     all_vertices = prev_mfg.srcdata['ID'].numpy()
                     all_timestamps = prev_mfg.srcdata['ts'].numpy()
-                    mfgs[layer].append(self.sample_layer_global(
-                        all_vertices, all_timestamps, layer, snapshot))
+
+                    app, arpc_size_local = self.sample_layer_global(
+                        all_vertices, all_timestamps, layer, snapshot)
+                    arpc_size = arpc_size + arpc_size_local
+                    mfgs[layer].append(app)
 
         mfgs.reverse()
-        return mfgs
+        return mfgs, arpc_size
 
     def sample_layer_global(self, target_vertices: np.ndarray, timestamps: np.ndarray,
-                            layer: int, snapshot: int) -> DGLBlock:
+                            layer: int, snapshot: int):
         """
         Sample neighbors of given vertices in a specific layer and snapshot.
 
@@ -184,7 +191,7 @@ class DistributedTemporalSampler:
 
         logging.info("For Sample Layer Global, calls rpc for {} Times\n".format(arpc_size))
 
-        return mfg
+        return mfg, arpc_size
 
     def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch], masks: List[torch.Tensor]) -> DGLBlock:
         """
