@@ -120,6 +120,8 @@ class DistributedTemporalSampler:
         Returns:
             message flow graph for the specific layer and snapshot.
         """
+        arpc_time = 0
+
         # dispatch target vertices and timestamps to different partitions
         partition_table = self._partition_table
         partition_ids = partition_table[target_vertices]
@@ -137,11 +139,12 @@ class DistributedTemporalSampler:
 
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
-                logging.info(
+                logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
             else:
+                arpc_time = arpc_time + 1
                 logging.info(
                     "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
                 futures.append(rpc.rpc_async(
@@ -178,6 +181,9 @@ class DistributedTemporalSampler:
         mfg = self._merge_sampling_results(sampling_results, masks)
         assert mfg.num_dst_nodes() == len(
             target_vertices), 'Layer {}\tError: Number of destination nodes does not match'.format(layer)
+
+        logging.info("For Sample Layer Global, calls rpc for {} Times\n".format(arpc_time))
+
         return mfg
 
     def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch], masks: List[torch.Tensor]) -> DGLBlock:
