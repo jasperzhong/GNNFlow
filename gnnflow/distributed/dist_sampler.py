@@ -189,7 +189,7 @@ class DistributedTemporalSampler:
         assert mfg.num_dst_nodes() == len(
             target_vertices), 'Layer {}\tError: Number of destination nodes does not match'.format(layer)
 
-        logging.info("For Sample Layer Global, calls rpc for {} Times\n".format(arpc_size))
+        logging.debug("For Sample Layer Global, calls rpc for {} Times\n".format(arpc_size))
 
         return mfg, arpc_size
 
