@@ -1026,7 +1026,7 @@ class Suc_Partitioner(Partitioner):
         return partition_table
 
 
-def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = True):
+def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
     Get the partitioner.
 
