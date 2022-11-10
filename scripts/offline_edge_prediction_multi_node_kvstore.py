@@ -305,6 +305,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         tot_sample_time = 0
         tot_arpc_size = 0
+        tot_ff_time = 0
 
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
@@ -316,8 +317,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
+
+            # fetch feature time
+            fetch_feature = time.time()
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
+            tot_ff_time += time.time() - fetch_feature
+
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
@@ -343,8 +349,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
-                logging.info("For 100 epoch, arpc_size = {}, sample_time:{} sec. \n".format(arpc_size,
-                                                                                        tot_sample_time))
+                logging.info("For 100 epoch, arpc_size = {}, sample_time:{} sec. ff_time:{} \n".format(arpc_size,
+                                                                                        tot_sample_time, tot_ff_time))
                 # reset the timer
                 tot_sample_time = 0
                 tot_arpc_size = 0
