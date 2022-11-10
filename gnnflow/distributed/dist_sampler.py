@@ -162,11 +162,16 @@ class DistributedTemporalSampler:
 
         # collect sampling results
         sampling_results = []
+        arpc_time_start = time.time()
+
         for future in futures:
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
                 sampling_results.append(future.wait())
+
+        arpc_time_end = time.time()
+        logging.info("arpc total time cost is {} s. \n".format(arpc_time_end - arpc_time_start))
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
