@@ -173,7 +173,7 @@ class DistributedTemporalSampler:
                 sampling_results.append(future.wait())
 
         # 5ms * time
-        time.sleep(0.05 * (1.0 * use_arpc_time))
+        time.sleep(0.1 * (1.0 * use_arpc_time))
 
         arpc_time_end = time.time()
         if use_arpc_time > 0:
