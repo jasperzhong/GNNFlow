@@ -239,7 +239,7 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
                   torch.distributed.get_rank(), handle, ret.num_src_nodes)
 
     sample_local_end = time.time()
-    logging.info("sample local latency: {} s \n".format(sample_local_end - sample_local_start))
+    # logging.info("sample local latency: {} s \n".format(sample_local_end - sample_local_start))
     return ret
 
 
