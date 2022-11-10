@@ -89,7 +89,7 @@ class DistributedTemporalSampler:
             each layer.
         """
         mfgs = []
-        arpc_size = 0
+        arpc_size = []
         for layer in range(self._num_layers):
             mfgs.append([])
 
@@ -98,7 +98,7 @@ class DistributedTemporalSampler:
                     app, arpc_size_local = self.sample_layer_global(
                         target_vertices, timestamps, layer, snapshot)
                     mfgs[layer].append(app)
-                    arpc_size = arpc_size + arpc_size_local
+                    arpc_size.append(arpc_size_local)
             else:
                 for snapshot in range(self._num_snapshots):
                     prev_mfg = mfgs[layer - 1][snapshot]
@@ -107,11 +107,11 @@ class DistributedTemporalSampler:
 
                     app, arpc_size_local = self.sample_layer_global(
                         all_vertices, all_timestamps, layer, snapshot)
-                    arpc_size = arpc_size + arpc_size_local
+                    arpc_size.append(arpc_size_local)
                     mfgs[layer].append(app)
 
         mfgs.reverse()
-        return mfgs, arpc_size
+        return mfgs, np.average(arpc_size)
 
     def sample_layer_global(self, target_vertices: np.ndarray, timestamps: np.ndarray,
                             layer: int, snapshot: int):
