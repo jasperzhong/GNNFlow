@@ -217,6 +217,7 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     Returns:
         torch.Tensor: The temporal neighbors of the vertex.
     """
+    sample_local_start = time.time()
     logging.debug("Rank %d: receiving sample_layer_local request. #target_vertices: %d",
                   torch.distributed.get_rank(), target_vertices.size(0))
 
@@ -236,6 +237,9 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
 
     logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
                   torch.distributed.get_rank(), handle, ret.num_src_nodes)
+
+    sample_local_end = time.time()
+    logging.info("sample local latency: {} s \n".format(sample_local_end - sample_local_start))
     return ret
 
 
