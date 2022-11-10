@@ -166,18 +166,24 @@ class DistributedTemporalSampler:
         sampling_results = []
         arpc_time_start = time.time()
 
+        max_single_latency = 0.0
+
         for future in futures:
+            st = time.time()
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
                 sampling_results.append(future.wait())
+
+            ed = time.time()
+            max_single_latency = max(max_single_latency, ed - st)
 
         # 5ms * time
         # time.sleep(0.05 * (1.0 * use_arpc_time))
 
         arpc_time_end = time.time()
         if use_arpc_time > 0:
-            logging.info("arpc total time cost is {} s. \n".format(arpc_time_end - arpc_time_start))
+            logging.info("arpc total time cost is {} s. Max single latency is {} s\n".format(arpc_time_end - arpc_time_start, max_single_latency))
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
