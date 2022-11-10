@@ -349,14 +349,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
-                logging.info("For 100 epoch, arpc_size = {}, sample_time:{} sec. ff_time:{} \n".format(arpc_size,
+                logging.info("For 100 iteration, arpc_size = {}, sample_time:{} sec. ff_time:{} \n".format(arpc_size,
                                                                                         tot_sample_time, tot_ff_time))
                 # reset the timer
                 tot_sample_time = 0
                 tot_arpc_size = 0
+                tot_ff_time = 0
 
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} \n'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
         epoch_time = time.time() - epoch_time_start
