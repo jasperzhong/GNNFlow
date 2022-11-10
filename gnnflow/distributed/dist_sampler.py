@@ -177,7 +177,7 @@ class DistributedTemporalSampler:
 
         arpc_time_end = time.time()
         if use_arpc_time > 0:
-            logging.debug("arpc total time cost is {} s. \n".format(arpc_time_end - arpc_time_start))
+            logging.info("arpc total time cost is {} s. \n".format(arpc_time_end - arpc_time_start))
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
