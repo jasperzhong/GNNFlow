@@ -74,8 +74,6 @@ class Dispatcher:
                 if worker_rank == self._rank:
                     graph_services.add_edges(*edges)
                 else:
-                    # rpc.remote("worker%d" % worker_rank, graph_services.add_edges,
-                    #            args=(*edges, ))
                     future = rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
                                            args=(*edges, ))
                     futures.append(future)
@@ -84,37 +82,13 @@ class Dispatcher:
             edges = list(edges)
             # the KVStore server is in local_rank 0
             # TODO: maybe each worker will have a KVStore server
-            # TODO: node_feats and memory has many duplication, can be done later using partition table.
+            # node_feats and memory dispatch later using partition table.
             kvstore_rank = partition_id * self._local_world_size
-            if node_feats is not None:
-                keys = torch.cat((edges[0], edges[1])).unique()
-                features = node_feats[keys]
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, features, 'node')))
             if edge_feats is not None:
                 keys = edges[3]
                 features = edge_feats[keys]
-                # logging.info("keys: {}".format(keys.shape))
-                # logging.info("features: {}".format(features.shape))
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, features, 'edge')))
-            if dim_memory > 0:
-                keys = torch.cat((edges[0], edges[1])).unique()
-                # use None as value and just init keys here.
-                memory = torch.zeros(
-                    (len(keys), dim_memory), dtype=torch.float32)
-                memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-                dim_raw_message = 2 * dim_memory + dim_edge
-                mailbox = torch.zeros(
-                    (len(keys), dim_raw_message), dtype=torch.float32)
-                mailbox_ts = torch.zeros((len(keys), ), dtype=torch.float32)
-                all_mem = torch.cat((memory,
-                                    memory_ts.unsqueeze(dim=1),
-                                    mailbox,
-                                    mailbox_ts.unsqueeze(dim=1),
-                                     ), dim=1)
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, all_mem, 'memory')))
         if not defer_sync:
             # Wait for the workers to finish.
             for future in futures:
@@ -174,7 +148,6 @@ class Dispatcher:
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
         del edge_feats
-        del node_feats
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
         self.broadcast_node_edge_dim(dim_node, dim_edge)
@@ -212,6 +185,9 @@ class Dispatcher:
                 worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_dim_node_edge,
                              args=(dim_node, dim_edge))
+
+    def get_num_partitions(self):
+        return self._num_partitions
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):

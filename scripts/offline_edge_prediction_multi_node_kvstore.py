@@ -177,38 +177,21 @@ def main():
 
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
-    # test
-    # full_len = len(full_data)
-    # full_len = full_len // 100
-    # full_data = full_data[:full_len]
-    # full_data['src'] = full_data['src'] + 1
-    # full_data['dst'] = full_data['dst'] + 1
-    # train_len = int(0.7 * full_len)
-    # val_len = int(0.9 * full_len)
-    # if args.rank == 0:
-    #     logging.info('full data: {}'.format(full_data['src']))
-    #     logging.info('train_len: {}'.format(train_len))
-    #     logging.info('val_len: {}'.format(val_len))
-    # train_data = full_data.iloc[:train_len]
-    # val_data = full_data.iloc[train_len:val_len]
-    # test_data = full_data.iloc[val_len:]
-    # if args.rank == 0:
-    #     logging.info("train_data: {}".format(train_data))
-    #     logging.info("val_data: {}".format(val_data))
-    #     logging.info("test_data: {}".format(test_data))
-    #     logging.info("full_data: {}".format(full_data))
+
     logging.info("use trunks build graph done")
-    time.sleep(1000)
+    train_end, val_end, full_data = load_dataset(args.data)
     train_rand_sampler = RandEdgeSampler(
-        train_data['src'].values, train_data['dst'].values)
+        full_data['src'][:train_end].values, full_data['dst'][train_end].values)
     val_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
     test_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
     logging.info("make sampler done")
-    train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
-    val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
-    test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
+    train_ds = EdgePredictionDataset(full_data[:train_end], train_rand_sampler)
+    val_ds = EdgePredictionDataset(
+        full_data[train_end:val_end], val_rand_sampler)
+    test_ds = EdgePredictionDataset(
+        full_data[val_end:], test_rand_sampler)
     logging.info("make dataset done")
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
