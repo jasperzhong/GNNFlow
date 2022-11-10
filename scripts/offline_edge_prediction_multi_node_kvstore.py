@@ -306,6 +306,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         tot_sample_time = 0
         tot_arpc_size = 0
         tot_ff_time = 0
+        iter_100_time_start = 0
 
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
@@ -339,6 +340,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
 
+
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
@@ -349,9 +351,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
-                logging.info("For 100 iteration, arpc_size = {}, sample_time:{} sec. ff_time:{} \n".format(arpc_size,
-                                                                                        tot_sample_time, tot_ff_time))
+                logging.info("For 100 iteration, arpc_size = {}, sample_time:{} sec. ff_time:{} . total_100_iter_time :{}\n".format(arpc_size,
+                                                                                        tot_sample_time, tot_ff_time, time.time() - iter_100_time_start))
+
                 # reset the timer
+                iter_100_time_start = time.time()
                 tot_sample_time = 0
                 tot_arpc_size = 0
                 tot_ff_time = 0
