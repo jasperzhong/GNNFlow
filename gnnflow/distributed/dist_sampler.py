@@ -168,7 +168,7 @@ class DistributedTemporalSampler:
         sampling_results = []
         arpc_time_start = time.time()
 
-        max_single_latency = 0.0
+        all_time = []
 
         for future in futures:
             st = time.time()
@@ -178,14 +178,14 @@ class DistributedTemporalSampler:
                 sampling_results.append(future.wait())
 
             ed = time.time()
-            max_single_latency = max(max_single_latency, ed - st)
+            all_time.append(ed - st)
 
         # 5ms * time
         # time.sleep(0.05 * (1.0 * use_arpc_time))
 
         arpc_time_end = time.time()
         if use_arpc_time > 0:
-            logging.debug("arpc time {} total time cost is {} s. Max single latency is {} s\n".format(use_arpc_time, arpc_time_end - arpc_time_start, max_single_latency))
+            logging.debug("arpc time {} total time cost is {} s. All time is {} s\n".format(use_arpc_time, arpc_time_end - arpc_time_start, all_time))
 
         rest_logic_start = time.time()
         # deal with non-partitioned nodes
