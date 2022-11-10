@@ -183,7 +183,7 @@ class DistributedTemporalSampler:
 
         arpc_time_end = time.time()
         if use_arpc_time > 0:
-            logging.debug("arpc total time cost is {} s. Max single latency is {} s\n".format(arpc_time_end - arpc_time_start, max_single_latency))
+            logging.info("arpc time {} total time cost is {} s. Max single latency is {} s\n".format(use_arpc_time, arpc_time_end - arpc_time_start, max_single_latency))
 
         rest_logic_start = time.time()
         # deal with non-partitioned nodes
@@ -210,7 +210,7 @@ class DistributedTemporalSampler:
         logging.debug("For Sample Layer Global, calls rpc for {} Times\n".format(arpc_size))
 
         rest_logic_end = time.time()
-        logging.info("Rest logic cause {} s\n".format(rest_logic_end - rest_logic_start))
+        logging.debug("Rest logic cause {} s\n".format(rest_logic_end - rest_logic_start))
 
         return mfg, arpc_size
 
