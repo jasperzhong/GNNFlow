@@ -137,6 +137,7 @@ class DistributedTemporalSampler:
 
         futures = []
         masks = []
+        para_length = []
         for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
@@ -153,6 +154,7 @@ class DistributedTemporalSampler:
                 local_size = local_size + len(partition_vertices)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
+                para_length.append(len(partition_vertices))
             else:
                 use_arpc_time += 1
                 arpc_size = arpc_size + len(partition_vertices)
@@ -162,6 +164,8 @@ class DistributedTemporalSampler:
                     'worker{}'.format(worker_rank),
                     graph_services.sample_layer_local,
                     args=(partition_vertices, partition_timestamps, layer, snapshot)))
+                para_length.append(len(partition_vertices))
+
             masks.append(partition_mask)
 
         # collect sampling results
@@ -185,7 +189,7 @@ class DistributedTemporalSampler:
 
         arpc_time_end = time.time()
         if use_arpc_time > 0:
-            logging.info("arpc time {} total time cost is {} s. All time is {} s\n".format(use_arpc_time, arpc_time_end - arpc_time_start, all_time))
+            logging.info("arpc time {} total time cost is {} s.\n {}\n {}\n".format(use_arpc_time, arpc_time_end - arpc_time_start, all_time, para_length))
 
         rest_logic_start = time.time()
         # deal with non-partitioned nodes
