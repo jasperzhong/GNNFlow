@@ -307,6 +307,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         tot_arpc_size = 0
         tot_ff_time = 0
         iter_100_time_start = time.time()
+        cnt = 0
 
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
@@ -315,6 +316,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             tot_sample_time += time.time() - time_sample_start
             tot_arpc_size += arpc_size
+            cnt += 1
 
             # Feature
             mfgs_to_cuda(mfgs, device)
@@ -351,7 +353,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
-                logging.info("For 100 iteration, arpc_size = {}, sample_time:{} sec. ff_time:{} . total_100_iter_time :{}\n".format(arpc_size,
+                logging.info("For 100 iteration, arpc_size = {}, sample_time:{} sec. ff_time:{} . total_100_iter_time :{}\n".format(tot_arpc_size / cnt,
                                                                                         tot_sample_time, tot_ff_time, time.time() - iter_100_time_start))
 
                 # reset the timer
@@ -359,6 +361,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 tot_sample_time = 0
                 tot_arpc_size = 0
                 tot_ff_time = 0
+                cnt = 0
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} \n'.format(e + 1, args.epoch, i + 1, int(len(

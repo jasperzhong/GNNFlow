@@ -129,6 +129,7 @@ class DistributedTemporalSampler:
         """
         arpc_size = 0
         use_arpc_time = 0
+        local_size = 0
 
         # dispatch target vertices and timestamps to different partitions
         partition_table = self._partition_table
@@ -149,6 +150,7 @@ class DistributedTemporalSampler:
             if worker_rank == self._rank:
                 logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
+                local_size = local_size + len(partition_vertices)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
             else:
@@ -212,7 +214,7 @@ class DistributedTemporalSampler:
         rest_logic_end = time.time()
         logging.debug("Rest logic cause {} s\n".format(rest_logic_end - rest_logic_start))
 
-        return mfg, arpc_size
+        return mfg, arpc_size / (arpc_size + local_size)
 
     def _merge_sampling_results(self, sampling_results: List[SamplingResultTorch], masks: List[torch.Tensor]) -> DGLBlock:
         """
