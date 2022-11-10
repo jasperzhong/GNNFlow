@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+from threading import Thread
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -58,14 +59,14 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
 
     # if 'Unnamed: 0' in full_data.columns:
     full_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
-    # else:  # for MAG
-    #     full_data
+
     train_end = full_data['ext_roll'].values.searchsorted(1)
     val_end = full_data['ext_roll'].values.searchsorted(2)
-    train_data = full_data[:train_end]
-    val_data = full_data[train_end:val_end]
-    test_data = full_data[val_end:]
-    return train_data, val_data, test_data, full_data
+    # train_data = full_data[:train_end]
+    # val_data = full_data[train_end:val_end]
+    # test_data = full_data[val_end:]
+    # return train_data, val_data, test_data, full_data
+    return train_end, val_end, full_data
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
@@ -91,7 +92,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
 
     dataset_path = os.path.join(data_dir, dataset)
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
-    edge_feat_path = os.path.join(dataset_path, 'edge_features.npy')
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
 
     if not os.path.exists(node_feat_path) and \
             not os.path.exists(edge_feat_path):
