@@ -128,7 +128,7 @@ class DistributedTemporalSampler:
             message flow graph for the specific layer and snapshot.
         """
         arpc_size = 0
-        use_arpc = False
+        use_arpc_time = 0
 
         # dispatch target vertices and timestamps to different partitions
         partition_table = self._partition_table
@@ -152,7 +152,7 @@ class DistributedTemporalSampler:
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
             else:
-                use_arpc = True
+                use_arpc_time += 1
                 arpc_size = arpc_size + len(partition_vertices)
                 logging.debug(
                     "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
@@ -172,8 +172,11 @@ class DistributedTemporalSampler:
             else:
                 sampling_results.append(future.wait())
 
+        # 5ms * time
+        time.sleep(0.005 * (1.0 * use_arpc_time))
+
         arpc_time_end = time.time()
-        if use_arpc:
+        if use_arpc_time > 0:
             logging.info("arpc total time cost is {} s. \n".format(arpc_time_end - arpc_time_start))
 
         # deal with non-partitioned nodes
