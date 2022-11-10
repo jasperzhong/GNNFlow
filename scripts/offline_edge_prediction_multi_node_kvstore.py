@@ -306,7 +306,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         tot_sample_time = 0
         tot_arpc_size = 0
         tot_ff_time = 0
-        iter_100_time_start = 0
+        iter_100_time_start = time.time()
 
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
