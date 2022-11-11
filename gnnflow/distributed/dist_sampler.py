@@ -59,7 +59,6 @@ class DistributedTemporalSampler:
                 self._transform_output(ret, result)
 
                 callback(handle)
-            time.sleep(0.01)
 
     def _transform_output(self, input: SamplingResult, output: SamplingResultTorch):
         output.row = torch.from_numpy(input.row())
