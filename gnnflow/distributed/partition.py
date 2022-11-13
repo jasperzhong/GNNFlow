@@ -312,21 +312,19 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
 # SOTA Partitoner
 class FennelPartitioner(Partitioner):
     """
-    Linear Deterministic Greedy (LDG) Partiton Algorithm
+    Fennel - A revised version of Linear Deterministic Greedy (LDG) Partiton Algorithm
     paper: http://www.vldb.org/pvldb/vol11/p1590-abbas.pdf
     """
 
     def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
         super().__init__(num_partitions, assign_with_dst_node)
 
-        # key: NID -> value: List[num_partitions]
-        self._neighbor_memory = {}
         # ideal partition capacity
         self._partition_capacity = 0
         # edges partitioned
         self._edges_partitioned = 0
 
-    # LDG Partition
+    # Fennel Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
         # resize the partition table if necessary
@@ -350,6 +348,7 @@ class FennelPartitioner(Partitioner):
         # partition the edges for the unseen source nodes
         unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
 
+        # TODO: It is hard to use Fennel in assing_with_dst_node mode. Because the input N(v) is empty.
         if self._assign_with_dst_node:
             # assign the edges to the partition of the assined destination node
 
@@ -391,15 +390,6 @@ class FennelPartitioner(Partitioner):
         # dispatch edges to already assigned source nodes
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
-
-            # enable memory
-            for src_id, dst_id in zip(src_nodes[mask], dst_nodes[mask]):
-                if int(dst_id) in self._neighbor_memory.keys():
-                    self._neighbor_memory[int(dst_id)][i].add(int(src_id))
-                else:
-                    self._neighbor_memory[int(dst_id)] = [set() for i in range(self._num_partitions)]
-                    self._neighbor_memory[int(dst_id)][i].add(int(src_id))
-
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
@@ -429,12 +419,14 @@ class FennelPartitioner(Partitioner):
 
         return partitions
 
-    def Fennel(self, vid: int):
+    def Fennel(self, vid: int, dst_nodes: torch.Tensor):
         partition_score = []
 
         # hyper parameter
         alpha = (self._num_partitions ** 0.5) * self._edges_partitioned / (self._max_node ** 1.5)
         gamma = 1.5
+
+        local_partition_table = self._partition_table[dst_nodes]
 
         for i in range(self._num_partitions):
             partition_size = self._partition_table.tolist().count(i)
@@ -443,11 +435,10 @@ class FennelPartitioner(Partitioner):
                 partition_score.append(-2147483647)
                 continue
 
-            neighbour_in_partition_size = 0
-            if vid in self._neighbor_memory.keys():
-                neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
+            # calculate the neighbor in partition i
+            neighbour_in_partition_size = (local_partition_table == i).sum()
 
-            partition_score.append(neighbour_in_partition_size - 0.04 * alpha * gamma * (partition_size ** (gamma - 1)))
+            partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
 
         partition_score = np.array(partition_score)
 
@@ -460,17 +451,9 @@ class FennelPartitioner(Partitioner):
                                             eids_list: List[torch.Tensor]) -> torch.Tensor:
         partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
         for i in range(len(unique_src_nodes)):
-            pid = self.Fennel(int(unique_src_nodes[i]))
+            pid = self.Fennel(int(unique_src_nodes[i]), dst_nodes_list[i])
             partition_table[i] = pid
             self._partition_table[int(unique_src_nodes[i])] = pid
-
-            for dst_nid in dst_nodes_list[i]:
-                # update memory table
-                if int(dst_nid) in self._neighbor_memory.keys():
-                    self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
-                else:
-                    self._neighbor_memory[int(dst_nid)] = [set() for i in range(self._num_partitions)]
-                    self._neighbor_memory[int(dst_nid)][pid].add(int(unique_src_nodes[i]))
 
         return partition_table
 
