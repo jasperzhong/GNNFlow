@@ -150,11 +150,11 @@ class Cache:
         """
         if self.distributed:
             # the edge map is ordered my insertion order, which is the order of ts
-            if self.dim_edge_feat != 0:
+            if self.dim_edge_feat != 0 and self.edge_capacity > 0:
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
                 cache_edge_id = torch.arange(
-                        len(keys), dtype=torch.int64, device=self.device)
+                    len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
                     self.device)
                 self.cache_edge_flag[cache_edge_id] = True
@@ -284,12 +284,12 @@ class Cache:
                         # TODO: maybe fetch local and remote features separately
                         self.pinned_nfeat_buffs[
                             i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
-                            uncached_node_id_unique, mode='node')
+                            uncached_node_id_unique.cpu(), mode='node')
                         uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
                             self.device, non_blocking=True)
                     else:
                         uncached_node_feature = self.kvstore_client.pull(
-                            uncached_node_id_unique, mode='node')
+                            uncached_node_id_unique.cpu(), mode='node').to(self.device)
                 else:
                     if self.pinned_nfeat_buffs is not None:
                         torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
@@ -363,7 +363,7 @@ class Cache:
                                     self.device, non_blocking=True)
                             else:
                                 uncached_edge_feature = self.kvstore_client.pull(
-                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
+                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device)
                         else:
                             uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                                 uncached_edge_id, return_inverse=True)
