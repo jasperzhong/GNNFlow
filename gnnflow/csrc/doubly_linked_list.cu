@@ -33,6 +33,7 @@ void InsertBlockToDoublyLinkedList(HostDoublyLinkedList* node_table,
     block->next = nullptr;
     list.tail = block;
   }
+  list.size++;
 }
 
 __global__ void InsertBlockToDoublyLinkedListKernel(

@@ -98,6 +98,13 @@ class DynamicGraph {
 
   int device() const { return device_; }
 
+  float avg_linked_list_length() const;
+
+  // NB: does not include metadata. only the edge data.
+  float graph_mem_usage() const;
+
+  float graph_metadata_mem_usage();
+
  private:
   void AddEdgesForOneNode(NIDType src_node,
                           const std::vector<NIDType>& dst_nodes,

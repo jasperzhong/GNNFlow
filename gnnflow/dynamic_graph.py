@@ -27,7 +27,7 @@ class DynamicGraph:
             eids: Optional[np.ndarray] = None,
             add_reverse: bool = False,
             device: int = 0,
-            adaptive_block_size: bool = False):
+            adaptive_block_size: bool = True):
         """
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
@@ -171,3 +171,21 @@ class DynamicGraph:
         Returns: A tuple of (target_vertices, timestamps, edge_ids)
         """
         return self._dgraph.get_temporal_neighbors(vertex)
+
+    def avg_linked_list_length(self) -> float:
+        """
+        Return the average linked list length.
+        """
+        return self._dgraph.avg_linked_list_length()
+
+    def get_graph_memory_usage(self) -> int:
+        """
+        Return the graph memory usage of the graph in bytes.
+        """
+        return self._dgraph.get_graph_memory_usage()
+
+    def get_metadata_memory_usage(self) -> int:
+        """
+        Return the metadata memory usage of the graph in bytes.
+        """
+        return self._dgraph.get_metadata_memory_usage()

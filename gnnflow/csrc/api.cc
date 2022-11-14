@@ -69,7 +69,16 @@ PYBIND11_MODULE(libgnnflow, m) {
              return py::make_tuple(vec2npy(std::get<0>(neighbors)),
                                    vec2npy(std::get<1>(neighbors)),
                                    vec2npy(std::get<2>(neighbors)));
-           });
+           })
+      .def("avg_linked_list_length", [](const DynamicGraph &dgraph) {
+        return dgraph.avg_linked_list_length();
+      })
+      .def("get_graph_memory_usage", [](const DynamicGraph &dgraph) {
+        return dgraph.graph_mem_usage();
+      })
+      .def("get_metadata_memory_usage", [](DynamicGraph &dgraph) {
+        return dgraph.graph_metadata_mem_usage();
+      });
 
   py::class_<SamplingResult>(m, "SamplingResult")
       .def("row",

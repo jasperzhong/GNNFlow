@@ -176,6 +176,10 @@ void DynamicGraph::SyncBlock(TemporalBlock* block, cudaStream_t stream) {
                             cudaMemcpyHostToDevice, stream));
 }
 
+inline std::size_t get_next_power_of_two(std::size_t n) {
+  return 1 << (64 - __builtin_clzl(n - 1));
+}
+
 void DynamicGraph::AddEdgesForOneNode(
     NIDType src_node, const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& timestamps,
@@ -223,8 +227,8 @@ void DynamicGraph::AddEdgesForOneNode(
       std::size_t new_block_size;
       if (adaptive_block_size_) {
         new_block_size = std::max(num_edges, avg_edges_per_insertion);
-        LOG(INFO) << "average edges per insertion: " << avg_edges_per_insertion
-                  << ", new block size: " << new_block_size;
+        // round up to the nearest power of 2
+        new_block_size = get_next_power_of_two(new_block_size);
       } else {
         new_block_size = num_edges;
       }
@@ -256,7 +260,7 @@ void DynamicGraph::AddEdgesForOneNode(
   }
 
   // update the number of edges
-  h_list.num_edges += num_edges;
+  h_list.num_edges += dst_nodes.size();
   h_list.num_insertions++;
 }
 
@@ -333,4 +337,27 @@ std::vector<EIDType> DynamicGraph::edges() const {
 }
 
 NIDType DynamicGraph::max_node_id() const { return max_node_id_; }
+
+float DynamicGraph::avg_linked_list_length() const {
+  float sum = 0;
+  for (auto& node : nodes_) {
+    auto& list = h_copy_of_d_node_table_[node];
+    sum += list.size;
+  }
+  return sum / nodes_.size();
+}
+
+float DynamicGraph::graph_mem_usage() const {
+  return allocator_.get_total_memory_usage();
+}
+
+float DynamicGraph::graph_metadata_mem_usage() {
+  float sum = 0;
+  // num blocks
+  sum += sizeof(TemporalBlock) * h2d_mapping_.size();
+  // node table
+  d_node_table_.shrink_to_fit();
+  sum += sizeof(DoublyLinkedList) * d_node_table_.capacity();
+  return sum;
+}
 }  // namespace gnnflow

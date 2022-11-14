@@ -22,8 +22,10 @@ struct HostDoublyLinkedList {
   TemporalBlock* tail;
   std::size_t num_edges;
   std::size_t num_insertions;
+  std::size_t size;
 
-  HostDoublyLinkedList() : tail(nullptr), num_edges(0), num_insertions(0) {}
+  HostDoublyLinkedList()
+      : tail(nullptr), num_edges(0), num_insertions(0), size(0) {}
 };
 
 __device__ void InsertBlockToDoublyLinkedList(DoublyLinkedList* node_table,
