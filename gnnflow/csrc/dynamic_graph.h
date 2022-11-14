@@ -41,12 +41,14 @@ class DynamicGraph {
    * @param blocks_to_preallocate The number of blocks to preallocate.
    * @param insertion_policy The insertion policy for the linked list.
    * @param device The device id.
+   * @param adaptive_block_size Whether to use adaptive block size.
    */
 
   DynamicGraph(std::size_t initial_pool_size, std::size_t maximum_pool_size,
                MemoryResourceType mem_resource_type,
                std::size_t minium_block_size, std::size_t blocks_to_preallocate,
-               InsertionPolicy insertion_policy, int device);
+               InsertionPolicy insertion_policy, int device,
+               bool adaptive_block_size);
   ~DynamicGraph();
 
   /**
@@ -133,6 +135,7 @@ class DynamicGraph {
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 
   const int device_;
+  bool adaptive_block_size_;
 };
 
 }  // namespace gnnflow

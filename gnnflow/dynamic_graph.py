@@ -26,7 +26,8 @@ class DynamicGraph:
             timestamps: Optional[np.ndarray] = None,
             eids: Optional[np.ndarray] = None,
             add_reverse: bool = False,
-            device: int = 0):
+            device: int = 0,
+            adaptive_block_size: bool = False):
         """
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
@@ -46,6 +47,7 @@ class DynamicGraph:
             eids: optional, 1D tensor, the edge ids of the edges.
             add_reverse: optional, bool, whether to add reverse edges.
             device: optional, int, the device to use.
+            adaptive_block_size: optional, bool, whether to use adaptive block size.
         """
         mem_resource_type = mem_resource_type.lower()
         if mem_resource_type == "cuda":
@@ -72,7 +74,7 @@ class DynamicGraph:
         self._dgraph = _DynamicGraph(
             initial_pool_size, maximum_pool_size, mem_resource_type,
             minimum_block_size, blocks_to_preallocate, insertion_policy,
-            device)
+            device, adaptive_block_size)
 
         # initialize the graph with edges
         if source_vertices is not None and target_vertices is not None \

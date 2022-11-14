@@ -26,12 +26,14 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
                            MemoryResourceType mem_resource_type,
                            std::size_t minium_block_size,
                            std::size_t blocks_to_preallocate,
-                           InsertionPolicy insertion_policy, int device)
+                           InsertionPolicy insertion_policy, int device,
+                           bool adaptive_block_size)
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
                  mem_resource_type, device),
       insertion_policy_(insertion_policy),
       max_node_id_(0),
-      device_(device) {
+      device_(device),
+      adaptive_block_size_(adaptive_block_size) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
     cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -217,7 +219,15 @@ void DynamicGraph::AddEdgesForOneNode(
       } else {
         avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
       }
-      std::size_t new_block_size = std::max(num_edges, avg_edges_per_insertion);
+
+      std::size_t new_block_size;
+      if (adaptive_block_size_) {
+        new_block_size = std::max(num_edges, avg_edges_per_insertion);
+        LOG(INFO) << "average edges per insertion: " << avg_edges_per_insertion
+                  << ", new block size: " << new_block_size;
+      } else {
+        new_block_size = num_edges;
+      }
 
       h_block = allocator_.Allocate(new_block_size);
       is_new_block = true;

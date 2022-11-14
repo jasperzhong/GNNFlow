@@ -39,11 +39,11 @@ PYBIND11_MODULE(libgnnflow, m) {
 
   py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
-                    std::size_t, InsertionPolicy, int>(),
+                    std::size_t, InsertionPolicy, int, bool>(),
            py::arg("initial_pool_size"), py::arg("maximum_pool_size"),
            py::arg("mem_resource_type"), py::arg("minium_block_size"),
            py::arg("blocks_to_preallocate"), py::arg("insertion_policy"),
-           py::arg("device"))
+           py::arg("device"), py::arg("adaptive_block_size"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"))
       .def("num_vertices", &DynamicGraph::num_nodes)
