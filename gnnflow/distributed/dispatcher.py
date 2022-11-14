@@ -105,7 +105,7 @@ class Dispatcher:
                                     memory_ts.unsqueeze(dim=1),
                                     mailbox,
                                     mailbox_ts.unsqueeze(dim=1),
-                                    ), dim=1)
+                                     ), dim=1)
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, all_mem, 'memory')))
 
@@ -120,8 +120,9 @@ class Dispatcher:
 
         return futures
 
-    def partition_graph(self, dataset: pd.DataFrame, ingestion_batch_size: int,
-                        undirected: bool, node_feats: Optional[torch.Tensor] = None,
+    def partition_graph(self, dataset: pd.DataFrame, initial_ingestion_batch_size: int,
+                        ingestion_batch_size: int, undirected: bool,
+                        node_feats: Optional[torch.Tensor] = None,
                         edge_feats: Optional[torch.Tensor] = None,
                         dim_memory: Optional[int] = 0):
         """
@@ -129,15 +130,44 @@ class Dispatcher:
 
         Args:
             dataset (df.DataFrame): The dataset to ingest.
+            initial_ingestion_batch_size (int): The initial ingestion batch size.
             ingestion_batch_size (int): The number of samples to ingest in each iteration.
             undirected (bool): Whether the graph is undirected.
             node_feats (torch.Tensor): The node features of the dataset.
             edge_feats (torch.Tensor): The edge features of the dataset.
             dim_memory (int): Dimension of the memory.
         """
+        futures = []
+        batch = dataset[:initial_ingestion_batch_size]
+        src_nodes = batch["src"].values.astype(np.int64)
+        dst_nodes = batch["dst"].values.astype(np.int64)
+        timestamps = batch["time"].values.astype(np.float32)
+        eids = batch["eid"].values.astype(np.int64)
+
+        if undirected:
+            src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
+            dst_nodes_ext = np.concatenate([dst_nodes, src_nodes])
+            src_nodes = src_nodes_ext
+            dst_nodes = dst_nodes_ext
+            timestamps = np.concatenate([timestamps, timestamps])
+            eids = np.concatenate([eids, eids])
+
+        src_nodes = torch.from_numpy(src_nodes)
+        dst_nodes = torch.from_numpy(dst_nodes)
+        timestamps = torch.from_numpy(timestamps)
+        eids = torch.from_numpy(eids)
+
+        futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
+                       timestamps, eids, node_feats, edge_feats,
+                       defer_sync=True, dim_memory=dim_memory))
+
+        # Wait for the workers to finish.
+        for future in futures:
+            future.wait()
+
         # Partition the dataset.
         futures = []
-        for i in range(0, len(dataset), ingestion_batch_size):
+        for i in range(initial_ingestion_batch_size, len(dataset), ingestion_batch_size):
             batch = dataset[i:i + ingestion_batch_size]
             src_nodes = batch["src"].values.astype(np.int64)
             dst_nodes = batch["dst"].values.astype(np.int64)

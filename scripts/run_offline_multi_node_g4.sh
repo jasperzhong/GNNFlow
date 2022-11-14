@@ -31,6 +31,7 @@ cmd="torchrun \
     offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 10000 \
+    --initial-ingestion-batch-size 500000 \
     --partition-strategy $PARTITION_STRATEGY \
     --num-workers 4"
 
