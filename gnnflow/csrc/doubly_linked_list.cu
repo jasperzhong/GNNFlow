@@ -2,11 +2,11 @@
 
 namespace gnnflow {
 
-__host__ __device__ void InsertBlockToDoublyLinkedList(
-    DoublyLinkedList* node_table, NIDType node_id, TemporalBlock* block) {
+__device__ void InsertBlockToDoublyLinkedList(DoublyLinkedList* node_table,
+                                              NIDType node_id,
+                                              TemporalBlock* block) {
   auto& list = node_table[node_id];
-  if (list.head == nullptr) {
-    list.head = block;
+  if (list.tail == nullptr) {
     list.tail = block;
     block->prev = nullptr;
     block->next = nullptr;
@@ -17,7 +17,22 @@ __host__ __device__ void InsertBlockToDoublyLinkedList(
     block->next = nullptr;
     list.tail = block;
   }
-  list.size++;
+}
+
+void InsertBlockToDoublyLinkedList(HostDoublyLinkedList* node_table,
+                                   NIDType node_id, TemporalBlock* block) {
+  auto& list = node_table[node_id];
+  if (list.tail == nullptr) {
+    list.tail = block;
+    block->prev = nullptr;
+    block->next = nullptr;
+  } else {
+    // append to the tail
+    list.tail->next = block;
+    block->prev = list.tail;
+    block->next = nullptr;
+    list.tail = block;
+  }
 }
 
 __global__ void InsertBlockToDoublyLinkedListKernel(

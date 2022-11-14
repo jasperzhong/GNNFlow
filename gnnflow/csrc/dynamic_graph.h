@@ -17,7 +17,7 @@
 
 namespace gnnflow {
 typedef thrust::device_vector<DoublyLinkedList> DeviceNodeTable;
-typedef std::vector<DoublyLinkedList> HostNodeTable;
+typedef std::vector<HostDoublyLinkedList> HostNodeTable;
 /**
  * @brief A dynamic graph is a graph that can be modified at runtime.
  *

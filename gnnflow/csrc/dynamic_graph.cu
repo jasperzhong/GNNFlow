@@ -182,7 +182,8 @@ void DynamicGraph::AddEdgesForOneNode(
 
   // NB: reference is necessary here since the value is updated in
   // `InsertBlock`
-  auto& h_tail_block = h_copy_of_d_node_table_[src_node].tail;
+  auto& h_list = h_copy_of_d_node_table_[src_node];
+  auto& h_tail_block = h_list.tail;
 
   std::size_t start_idx = 0;
   if (h_tail_block == nullptr) {
@@ -207,7 +208,15 @@ void DynamicGraph::AddEdgesForOneNode(
       }
 
       // allocate and insert a new block
-      auto new_block = allocator_.Allocate(num_edges);
+      // calculate avg edge per insertion
+      std::size_t avg_edges_per_insertion;
+      if (h_list.num_insertions == 0) {
+        avg_edges_per_insertion = num_edges;
+      } else {
+        avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
+      }
+
+      auto new_block = allocator_.Allocate(avg_edges_per_insertion);
       InsertBlock(src_node, new_block, stream);
     } else {
       // reallocate the block
@@ -222,6 +231,10 @@ void DynamicGraph::AddEdgesForOneNode(
   CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, start_idx,
                    num_edges, device_, stream);
   SyncBlock(h_tail_block, stream);
+
+  // update the number of edges
+  h_list.num_edges += num_edges;
+  h_list.num_insertions++;
 }
 
 std::vector<std::size_t> DynamicGraph::out_degree(
@@ -231,10 +244,10 @@ std::vector<std::size_t> DynamicGraph::out_degree(
     size_t out_degree = 0;
     {
       auto& list = h_copy_of_d_node_table_[node];
-      auto block = list.head;
+      auto block = list.tail;
       while (block != nullptr) {
         out_degree += block->size;
-        block = block->next;
+        block = block->prev;
       }
     }
     out_degrees.push_back(out_degree);
@@ -248,7 +261,7 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
   {
     // NB: reference is necessary
     auto& list = h_copy_of_d_node_table_[node];
-    auto block = list.head;
+    auto block = list.tail;
     while (block != nullptr) {
       std::vector<NIDType> dst_nodes(block->size);
       std::vector<TimestampType> timestamps(block->size);
@@ -268,19 +281,16 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
                    eids.begin());
 
       std::get<0>(result).insert(std::end(std::get<0>(result)),
-                                 std::begin(dst_nodes), std::end(dst_nodes));
+                                 std::rbegin(dst_nodes), std::rend(dst_nodes));
       std::get<1>(result).insert(std::end(std::get<1>(result)),
-                                 std::begin(timestamps), std::end(timestamps));
+                                 std::rbegin(timestamps),
+                                 std::rend(timestamps));
       std::get<2>(result).insert(std::end(std::get<2>(result)),
-                                 std::begin(eids), std::end(eids));
+                                 std::rbegin(eids), std::rend(eids));
 
-      block = block->next;
+      block = block->prev;
     }
   }
-  // reverse the order of the result
-  std::reverse(std::get<0>(result).begin(), std::get<0>(result).end());
-  std::reverse(std::get<1>(result).begin(), std::get<1>(result).end());
-  std::reverse(std::get<2>(result).begin(), std::get<2>(result).end());
 
   return result;
 }
