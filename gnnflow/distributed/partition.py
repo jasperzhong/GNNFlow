@@ -392,11 +392,12 @@ class FennelPartitioner(Partitioner):
             partition_size = (self._partition_table == i).sum().item()
 
             if partition_size >= self._partition_capacity:
-                partition_score.append(torch.tensor(-1))
+                partition_score.append(-1)
                 continue
 
             # calculate the neighbor in partition i
-            neighbour_in_partition_size = (local_partition_table == i).sum()
+            neighbour_in_partition_size = (
+                local_partition_table == i).sum().item()
 
             partition_score.append(
                 neighbour_in_partition_size - alpha * self._gamma * (partition_size ** (self._gamma - 1)))
