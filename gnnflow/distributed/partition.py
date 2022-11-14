@@ -505,7 +505,7 @@ class FennelEdgePartitioner(Partitioner):
 
         return partitions
 
-    def FennelEdge(self, vid: int, dst_nodes: torch.Tensor):
+    def fennelEdge(self, vid: int, dst_nodes: torch.Tensor):
         partition_score = []
 
         # hyper parameter
@@ -517,8 +517,8 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
 
-            if partition_size >= self._partition_capacity:
-                partition_score.append(-1)
+            if partition_size >= self._partition_capacity or self._edges_partitioned_num_list[i] > (self._edges_partitioned / self._num_partitions):
+                partition_score.append(-1000)
                 continue
 
             # calculate the neighbor in partition i
@@ -560,7 +560,7 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(len(unique_src_nodes)):
             sorted_idx = argsort_list[i]
 
-            pid = self.FennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
+            pid = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
             partition_table[sorted_idx] = pid
             self._partition_table[int(unique_src_nodes[sorted_idx])] = pid
             self._out_degree[unique_src_nodes[sorted_idx]] += len(dst_nodes_list[sorted_idx])
