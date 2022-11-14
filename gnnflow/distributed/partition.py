@@ -584,7 +584,7 @@ def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_ds
             num_partitions, assign_with_dst_node)
     elif partition_strategy == "fennel":
         return FennelPartitioner(num_partitions, assign_with_dst_node)
-    elif partition_strategy == "fenneledge":
+    elif partition_strategy == "fennel_edge":
         return FennelEdgePartitioner(num_partitions, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
