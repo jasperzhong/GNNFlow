@@ -538,11 +538,9 @@ class FennelEdgePartitioner(Partitioner):
             partition_score.append(
                 locality_score - alpha * self._gamma * (self._edges_partitioned_num_list[i] ** (self._gamma - 1)))
 
-        partition_score = np.array(partition_score)
-
         print("Partition Score is {} \n.".format(partition_score))
 
-        return int(np.argmax(partition_score))
+        return int(np.random.choice(np.where(partition_score == partition_score.max())[0]))
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
