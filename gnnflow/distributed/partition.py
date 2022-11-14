@@ -2,7 +2,6 @@ from typing import List, NamedTuple
 
 import numpy as np
 import torch
-import math
 
 
 class Partition(NamedTuple):
@@ -40,7 +39,6 @@ class Partitioner:
         self._max_node = 0
         # NID -> partition ID, maximum 128 partitions
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
-
 
     def get_num_partitions(self) -> int:
         """
@@ -89,7 +87,6 @@ class Partitioner:
             timestamps_unassigned = timestamps[unassigned_mask].clone()
             eids_unassigned = eids[unassigned_mask].clone()
 
-
             sorted_idx = torch.argsort(src_nodes_unassigned)
             unique_src_nodes, inverse_idx, counts = torch.unique(
                 src_nodes_unassigned[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
@@ -124,7 +121,6 @@ class Partitioner:
             mask = self._partition_table[src_nodes] == i
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
-
 
         partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
             src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
@@ -316,13 +312,16 @@ class FennelPartitioner(Partitioner):
     paper: http://www.vldb.org/pvldb/vol11/p1590-abbas.pdf
     """
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
         super().__init__(num_partitions, assign_with_dst_node)
 
         # ideal partition capacity
         self._partition_capacity = 0
         # edges partitioned
         self._edges_partitioned = 0
+
+        self._upsilon = upsilon
+        self._gamma = gamma
 
     # Fennel Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
@@ -340,52 +339,13 @@ class FennelPartitioner(Partitioner):
         # update edges partitioned
         self._edges_partitioned = self._edges_partitioned + len(src_nodes)
         # update the capacity
-        upsilon = 1.1
-        self._partition_capacity = (max_node * upsilon) / self._num_partitions
+        self._partition_capacity = (
+            max_node * self._upsilon) / self._num_partitions
 
         partitions = []
 
         # partition the edges for the unseen source nodes
         unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
-
-        # TODO: It is hard to use Fennel in assing_with_dst_node mode. Because the input N(v) is empty.
-        if self._assign_with_dst_node:
-            # assign the edges to the partition of the assined destination node
-
-            # group by src_nodes
-            src_nodes_unassigned = src_nodes[unassigned_mask].clone()
-            dst_nodes_unassigned = dst_nodes[unassigned_mask].clone()
-            timestamps_unassigned = timestamps[unassigned_mask].clone()
-            eids_unassigned = eids[unassigned_mask].clone()
-
-            sorted_idx = torch.argsort(src_nodes_unassigned)
-            unique_src_nodes, inverse_idx, counts = torch.unique(
-                src_nodes_unassigned[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
-            split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
-
-            dst_nodes_list = [dst_nodes_unassigned[idx] for idx in split_idx]
-            timestamps_list = [timestamps_unassigned[idx] for idx in split_idx]
-            eids_list = [eids_unassigned[idx] for idx in split_idx]
-
-            for i in range(len(unique_src_nodes)):
-                dst_partition_list = self._partition_table[dst_nodes_list[i]]
-                geq_zero_pt = dst_partition_list >= 0
-                dst_partition_list = dst_partition_list[geq_zero_pt]
-
-                mode_pt = -1
-                if len(dst_partition_list) == 0:
-                    # new edge, use user selected logic to partition
-                    mode_pt = -1
-                else:
-                    mode_pt = torch.mode(dst_partition_list).values.item()
-
-                if mode_pt == -1:
-                    continue
-
-                self._partition_table[unique_src_nodes[i]] = mode_pt
-
-            # update: partition the edges for the unseen source nodes after assign_with_dst
-            unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
 
         # dispatch edges to already assigned source nodes
         for i in range(self._num_partitions):
@@ -423,27 +383,27 @@ class FennelPartitioner(Partitioner):
         partition_score = []
 
         # hyper parameter
-        alpha = (self._num_partitions ** 0.5) * self._edges_partitioned / (self._max_node ** 1.5)
-        gamma = 1.5
+        alpha = (self._num_partitions ** 0.5) * \
+            self._edges_partitioned / (self._max_node ** 1.5)
 
         local_partition_table = self._partition_table[dst_nodes]
 
         for i in range(self._num_partitions):
-            partition_size = self._partition_table.tolist().count(i)
+            partition_size = (self._partition_table == i).sum().item()
 
             if partition_size >= self._partition_capacity:
-                partition_score.append(-2147483647)
+                partition_score.append(torch.tensor(-1))
                 continue
 
             # calculate the neighbor in partition i
             neighbour_in_partition_size = (local_partition_table == i).sum()
 
-            partition_score.append(neighbour_in_partition_size - alpha * gamma * (partition_size ** (gamma - 1)))
+            partition_score.append(
+                neighbour_in_partition_size - alpha * self._gamma * (partition_size ** (self._gamma - 1)))
 
         partition_score = np.array(partition_score)
 
-        return np.random.choice(np.where(partition_score == partition_score.max())[0])
-        # return np.argmax(partition_score)
+        return int(np.argmax(partition_score))
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
@@ -456,6 +416,7 @@ class FennelPartitioner(Partitioner):
             self._partition_table[int(unique_src_nodes[i])] = pid
 
         return partition_table
+
 
 def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
     """
