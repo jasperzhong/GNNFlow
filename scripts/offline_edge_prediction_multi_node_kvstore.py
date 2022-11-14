@@ -61,6 +61,8 @@ parser.add_argument("--cache-ratio", type=float, default=0,
 # distributed
 parser.add_argument("--partition", action="store_true",
                     help="whether to partition the graph")
+parser.add_argument("--initial-ingestion-batch-size", type=int, default=100000,
+                    help="ingestion batch size")
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
@@ -194,6 +196,7 @@ def main():
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
         gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
+                                       args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
                                        args.dim_memory)
