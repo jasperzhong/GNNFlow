@@ -217,8 +217,9 @@ void DynamicGraph::AddEdgesForOneNode(
       } else {
         avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
       }
+      std::size_t new_block_size = std::max(num_edges, avg_edges_per_insertion);
 
-      h_block = allocator_.Allocate(avg_edges_per_insertion);
+      h_block = allocator_.Allocate(new_block_size);
       is_new_block = true;
     } else {
       // reallocate the block
@@ -235,8 +236,8 @@ void DynamicGraph::AddEdgesForOneNode(
   }
 
   // copy data to block
-  CopyEdgesToBlock(h_block, dst_nodes, timestamps, eids, start_idx,
-                   num_edges, device_, stream);
+  CopyEdgesToBlock(h_block, dst_nodes, timestamps, eids, start_idx, num_edges,
+                   device_, stream);
 
   if (is_new_block) {
     InsertBlock(src_node, h_block, stream);
