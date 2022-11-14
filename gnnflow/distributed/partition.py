@@ -540,6 +540,8 @@ class FennelEdgePartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
+        print("Partition Score is {} \n.".format(partition_score))
+
         return int(np.argmax(partition_score))
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
