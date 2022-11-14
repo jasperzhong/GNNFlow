@@ -184,12 +184,14 @@ void DynamicGraph::AddEdgesForOneNode(
   // `InsertBlock`
   auto& h_list = h_copy_of_d_node_table_[src_node];
   auto& h_tail_block = h_list.tail;
+  TemporalBlock* h_block = nullptr;
+  bool is_new_block = false;
 
   std::size_t start_idx = 0;
   if (h_tail_block == nullptr) {
     // case 1: empty list
-    auto block = allocator_.Allocate(num_edges);
-    InsertBlock(src_node, block, stream);
+    h_block = allocator_.Allocate(num_edges);
+    is_new_block = true;
   } else if (h_tail_block->size + num_edges > h_tail_block->capacity) {
     // case 2: not enough space in the current block
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
@@ -216,8 +218,8 @@ void DynamicGraph::AddEdgesForOneNode(
         avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
       }
 
-      auto new_block = allocator_.Allocate(avg_edges_per_insertion);
-      InsertBlock(src_node, new_block, stream);
+      h_block = allocator_.Allocate(avg_edges_per_insertion);
+      is_new_block = true;
     } else {
       // reallocate the block
       // NB: the pointer to the block is not changed, only the content of
@@ -227,10 +229,20 @@ void DynamicGraph::AddEdgesForOneNode(
     }
   }
 
+  if (!is_new_block) {
+    // case 3: there is enough space in the current block
+    h_block = h_tail_block;
+  }
+
   // copy data to block
-  CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, start_idx,
+  CopyEdgesToBlock(h_block, dst_nodes, timestamps, eids, start_idx,
                    num_edges, device_, stream);
-  SyncBlock(h_tail_block, stream);
+
+  if (is_new_block) {
+    InsertBlock(src_node, h_block, stream);
+  } else {
+    SyncBlock(h_block, stream);
+  }
 
   // update the number of edges
   h_list.num_edges += num_edges;
