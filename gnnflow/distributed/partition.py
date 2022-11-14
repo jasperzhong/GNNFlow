@@ -538,7 +538,7 @@ class FennelEdgePartitioner(Partitioner):
             partition_score.append(
                 locality_score - alpha * self._gamma * (self._edges_partitioned_num_list[i] ** (self._gamma - 1)))
 
-        print("Partition Score is {} \n.".format(partition_score))
+        partition_score = np.array(partition_score)
 
         return int(np.random.choice(np.where(partition_score == partition_score.max())[0]))
 
