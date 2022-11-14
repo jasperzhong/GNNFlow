@@ -554,7 +554,7 @@ class FennelEdgePartitioner(Partitioner):
             neighbour_size_list.append(len(dst_nodes_list[i]))
 
         argsort_list = np.argsort(neighbour_size_list)
-        argsort_list = argsort_list[::-1]
+        # argsort_list = argsort_list[::-1]
 
         for i in range(len(unique_src_nodes)):
             sorted_idx = argsort_list[i]
