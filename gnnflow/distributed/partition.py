@@ -547,11 +547,22 @@ class FennelEdgePartitioner(Partitioner):
                                             timestamps_list: List[torch.Tensor],
                                             eids_list: List[torch.Tensor]) -> torch.Tensor:
         partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
+
+        # sort reversely by N(v)
+        neighbour_size_list = []
+        for i in range(len(dst_nodes_list)):
+            neighbour_size_list.append(len(dst_nodes_list[i]))
+
+        argsort_list = np.argsort(neighbour_size_list)
+        argsort_list = argsort_list[::-1]
+
         for i in range(len(unique_src_nodes)):
-            pid = self.FennelEdge(int(unique_src_nodes[i]), dst_nodes_list[i])
-            partition_table[i] = pid
-            self._partition_table[int(unique_src_nodes[i])] = pid
-            self._out_degree[unique_src_nodes[i]] += len(dst_nodes_list[i])
+            sorted_idx = argsort_list[i]
+
+            pid = self.FennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
+            partition_table[sorted_idx] = pid
+            self._partition_table[int(unique_src_nodes[sorted_idx])] = pid
+            self._out_degree[unique_src_nodes[sorted_idx]] += len(dst_nodes_list[sorted_idx])
 
         return partition_table
 
