@@ -536,7 +536,7 @@ class FennelEdgePartitioner(Partitioner):
             locality_score = neighbour_in_partition_size + out_degree_sum
 
             partition_score.append(
-                locality_score - alpha * self._gamma * (self._edges_partitioned_num_list[i] ** (self._gamma - 1)))
+                locality_score - 0.01 * alpha * self._gamma * (self._edges_partitioned_num_list[i] ** (self._gamma - 1)))
 
         partition_score = np.array(partition_score)
 
