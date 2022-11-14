@@ -446,7 +446,7 @@ class FennelEdgePartitioner(Partitioner):
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
             self._partition_table.resize_(max_node + 1)
-            self._out_degree.resize(max_node + 1)
+            self._out_degree.resize_(max_node + 1)
             if self._max_node == 0:
                 self._partition_table[:] = self.UNASSIGNED
                 self._out_degree[:] = 0
