@@ -17,13 +17,12 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel"], [100000], [False]))
-    def test_partition_graph(self, partition_strategy, batch_size, assign_with_dst):
+        itertools.product(["hash", "fennel"], [500000], [100000], [False]))
+    def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
         dataset_name = 'REDDIT'
         p_stgy = partition_strategy
         num_p = 4
-        ingestion_batch_size = batch_size
         undirected = True
         _, _, _, dataset = load_dataset(dataset_name)
         dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
@@ -39,9 +38,11 @@ class TestPartition(unittest.TestCase):
 
         edge_num_tot = [0 for i in range(num_p)]
 
-        for i in range(0, len(dataset), ingestion_batch_size):
-
-            batch = dataset[i: i + ingestion_batch_size]
+        range_list = [0] + \
+            list(range(initial_ingestion_batch_size,
+                 len(dataset), ingestion_batch_size)) + [len(dataset)]
+        for i in range(len(range_list)-1):
+            batch = dataset[range_list[i]:range_list[i+1]]
             src_nodes = batch["src"].values.astype(np.int64)
             dst_nodes = batch["dst"].values.astype(np.int64)
             timestamps = batch["time"].values.astype(np.float32)
