@@ -392,7 +392,7 @@ class FennelPartitioner(Partitioner):
             partition_size = (self._partition_table == i).sum().item()
 
             if partition_size >= self._partition_capacity:
-                partition_score.append(-1)
+                partition_score.append(-10000000)
                 continue
 
             # calculate the neighbor in partition i
