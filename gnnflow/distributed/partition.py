@@ -433,7 +433,7 @@ class FennelEdgePartitioner(Partitioner):
         # edges partitioned
         self._edges_partitioned = 0
         # edges partitioned w.r.t. partitions
-        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.int8)
+        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.int32)
 
         self._upsilon = upsilon
         self._gamma = gamma
