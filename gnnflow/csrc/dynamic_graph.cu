@@ -255,9 +255,8 @@ void DynamicGraph::AddEdgesForOneNode(
 
   if (is_new_block) {
     InsertBlock(src_node, h_block, stream);
-  } else {
-    SyncBlock(h_block, stream);
   }
+  SyncBlock(h_block, stream);
 
   // update the number of edges
   h_list.num_edges += dst_nodes.size();
