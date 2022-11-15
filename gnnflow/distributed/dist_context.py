@@ -58,22 +58,23 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         # edge_feats = None
         # node_feats = torch.randn(100000000, 10)
         # logging.info("load feats done")
-        # chunk = 10
-        # for i in range(chunk):  # 10 chunks of data
-        #     # train_data, val_data, test_data, full_data = load_dataset(args.data)
-        #     logging.info("{}th chunk add edges".format(i))
-        #     data_dir = os.path.join(get_project_root_dir(), "data")
-        #     path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
-        #     dataset = pd.read_csv(path, engine='pyarrow')
-        #     dispatcher.partition_graph(dataset, ingestion_batch_size,
-        #                                undirected, node_feats, edge_feats,
-        #                                use_memory)
-        #     del dataset
+        chunk = 10
+        for i in range(chunk):  # 10 chunks of data
+            # train_data, val_data, test_data, full_data = load_dataset(args.data)
+            logging.info("{}th chunk add edges".format(i))
+            data_dir = os.path.join(get_project_root_dir(), "data")
+            path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
+            dataset = pd.read_csv(path, engine='pyarrow')
+            dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
+                                       ingestion_batch_size,
+                                       undirected, node_feats, edge_feats,
+                                       use_memory)
+            del dataset
         # dispatch node feature and node memory here
-        dispatcher.partition_graph(dataset,  initial_ingestion_batch_size,
-                                   ingestion_batch_size,
-                                   undirected, node_feats, edge_feats,
-                                   use_memory)
+        # dispatcher.partition_graph(dataset,  initial_ingestion_batch_size,
+        #                            ingestion_batch_size,
+        #                            undirected, node_feats, edge_feats,
+        #                            use_memory)
         futures = []
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
         partition_table = graph_services.get_partition_table()

@@ -145,8 +145,8 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
-    # full_data = None
-    train_end, val_end, full_data = load_dataset(args.data)
+    full_data = None
+    # train_end, val_end, full_data = load_dataset(args.data)
     node_feats = None
     edge_feats = None
     kvstore_client = None
