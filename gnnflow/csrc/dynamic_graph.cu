@@ -26,12 +26,14 @@ DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
                            MemoryResourceType mem_resource_type,
                            std::size_t minium_block_size,
                            std::size_t blocks_to_preallocate,
-                           InsertionPolicy insertion_policy, int device)
+                           InsertionPolicy insertion_policy, int device,
+                           bool adaptive_block_size)
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
                  mem_resource_type, device),
       insertion_policy_(insertion_policy),
       max_node_id_(0),
-      device_(device) {
+      device_(device),
+      adaptive_block_size_(adaptive_block_size) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
     cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -174,6 +176,10 @@ void DynamicGraph::SyncBlock(TemporalBlock* block, cudaStream_t stream) {
                             cudaMemcpyHostToDevice, stream));
 }
 
+inline std::size_t get_next_power_of_two(std::size_t n) {
+  return 1 << (64 - __builtin_clzl(n - 1));
+}
+
 void DynamicGraph::AddEdgesForOneNode(
     NIDType src_node, const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& timestamps,
@@ -182,13 +188,16 @@ void DynamicGraph::AddEdgesForOneNode(
 
   // NB: reference is necessary here since the value is updated in
   // `InsertBlock`
-  auto& h_tail_block = h_copy_of_d_node_table_[src_node].tail;
+  auto& h_list = h_copy_of_d_node_table_[src_node];
+  auto& h_tail_block = h_list.tail;
+  TemporalBlock* h_block = nullptr;
+  bool is_new_block = false;
 
   std::size_t start_idx = 0;
   if (h_tail_block == nullptr) {
     // case 1: empty list
-    auto block = allocator_.Allocate(num_edges);
-    InsertBlock(src_node, block, stream);
+    h_block = allocator_.Allocate(num_edges);
+    is_new_block = true;
   } else if (h_tail_block->size + num_edges > h_tail_block->capacity) {
     // case 2: not enough space in the current block
     if (insertion_policy_ == InsertionPolicy::kInsertionPolicyInsert) {
@@ -207,8 +216,25 @@ void DynamicGraph::AddEdgesForOneNode(
       }
 
       // allocate and insert a new block
-      auto new_block = allocator_.Allocate(num_edges);
-      InsertBlock(src_node, new_block, stream);
+      // calculate avg edge per insertion
+      std::size_t avg_edges_per_insertion;
+      if (h_list.num_insertions == 0) {
+        avg_edges_per_insertion = num_edges;
+      } else {
+        avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
+      }
+
+      std::size_t new_block_size;
+      if (adaptive_block_size_) {
+        new_block_size = std::max(num_edges, avg_edges_per_insertion);
+        // round up to the nearest power of 2
+        new_block_size = get_next_power_of_two(new_block_size);
+      } else {
+        new_block_size = num_edges;
+      }
+
+      h_block = allocator_.Allocate(new_block_size);
+      is_new_block = true;
     } else {
       // reallocate the block
       // NB: the pointer to the block is not changed, only the content of
@@ -218,10 +244,24 @@ void DynamicGraph::AddEdgesForOneNode(
     }
   }
 
+  if (!is_new_block) {
+    // case 3: there is enough space in the current block
+    h_block = h_tail_block;
+  }
+
   // copy data to block
-  CopyEdgesToBlock(h_tail_block, dst_nodes, timestamps, eids, start_idx,
-                   num_edges, device_, stream);
-  SyncBlock(h_tail_block, stream);
+  CopyEdgesToBlock(h_block, dst_nodes, timestamps, eids, start_idx, num_edges,
+                   device_, stream);
+
+  if (is_new_block) {
+    InsertBlock(src_node, h_block, stream);
+  } else {
+    SyncBlock(h_block, stream);
+  }
+
+  // update the number of edges
+  h_list.num_edges += dst_nodes.size();
+  h_list.num_insertions++;
 }
 
 std::vector<std::size_t> DynamicGraph::out_degree(
@@ -231,10 +271,10 @@ std::vector<std::size_t> DynamicGraph::out_degree(
     size_t out_degree = 0;
     {
       auto& list = h_copy_of_d_node_table_[node];
-      auto block = list.head;
+      auto block = list.tail;
       while (block != nullptr) {
         out_degree += block->size;
-        block = block->next;
+        block = block->prev;
       }
     }
     out_degrees.push_back(out_degree);
@@ -248,7 +288,7 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
   {
     // NB: reference is necessary
     auto& list = h_copy_of_d_node_table_[node];
-    auto block = list.head;
+    auto block = list.tail;
     while (block != nullptr) {
       std::vector<NIDType> dst_nodes(block->size);
       std::vector<TimestampType> timestamps(block->size);
@@ -268,19 +308,16 @@ DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
                    eids.begin());
 
       std::get<0>(result).insert(std::end(std::get<0>(result)),
-                                 std::begin(dst_nodes), std::end(dst_nodes));
+                                 std::rbegin(dst_nodes), std::rend(dst_nodes));
       std::get<1>(result).insert(std::end(std::get<1>(result)),
-                                 std::begin(timestamps), std::end(timestamps));
+                                 std::rbegin(timestamps),
+                                 std::rend(timestamps));
       std::get<2>(result).insert(std::end(std::get<2>(result)),
-                                 std::begin(eids), std::end(eids));
+                                 std::rbegin(eids), std::rend(eids));
 
-      block = block->next;
+      block = block->prev;
     }
   }
-  // reverse the order of the result
-  std::reverse(std::get<0>(result).begin(), std::get<0>(result).end());
-  std::reverse(std::get<1>(result).begin(), std::get<1>(result).end());
-  std::reverse(std::get<2>(result).begin(), std::get<2>(result).end());
 
   return result;
 }
@@ -300,4 +337,27 @@ std::vector<EIDType> DynamicGraph::edges() const {
 }
 
 NIDType DynamicGraph::max_node_id() const { return max_node_id_; }
+
+float DynamicGraph::avg_linked_list_length() const {
+  float sum = 0;
+  for (auto& node : nodes_) {
+    auto& list = h_copy_of_d_node_table_[node];
+    sum += list.size;
+  }
+  return sum / nodes_.size();
+}
+
+float DynamicGraph::graph_mem_usage() const {
+  return allocator_.get_total_memory_usage();
+}
+
+float DynamicGraph::graph_metadata_mem_usage() {
+  float sum = 0;
+  // num blocks
+  sum += sizeof(TemporalBlock) * h2d_mapping_.size();
+  // node table
+  d_node_table_.shrink_to_fit();
+  sum += sizeof(DoublyLinkedList) * d_node_table_.capacity();
+  return sum;
+}
 }  // namespace gnnflow
