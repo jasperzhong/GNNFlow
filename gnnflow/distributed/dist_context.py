@@ -78,9 +78,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         # get the index of the unsigned nodes
         unassigned_nodes_index = (partition_table == -1).nonzero().squeeze()
         partition_id = torch.arange(
-            len(unassigned_nodes_index)) % dispatcher.get_num_partitions()
+            len(unassigned_nodes_index), dtype=torch.int8) % dispatcher.get_num_partitions()
         partition_table[unassigned_nodes_index] = partition_id
         graph_services.set_partition_table(partition_table)
+        dispatcher._partitioner._partition_table = partition_table
         dispatcher.broadcast_partition_table()
         for partition_id in range(dispatcher.get_num_partitions()):
             partition_mask = partition_table == partition_id
