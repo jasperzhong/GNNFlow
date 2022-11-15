@@ -55,25 +55,33 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         node_feats, edge_feats = load_feat(data_name)
         # edge_feats = None
         # node_feats = torch.randn(100000000, 10)
-        logging.info("load feats done")
-        chunk = 10
-        for i in range(chunk):  # 10 chunks of data
-            # train_data, val_data, test_data, full_data = load_dataset(args.data)
-            logging.info("{}th chunk add edges".format(i))
-            data_dir = os.path.join(get_project_root_dir(), "data")
-            path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
-            dataset = pd.read_csv(path, engine='pyarrow')
-            dispatcher.partition_graph(dataset, ingestion_batch_size,
-                                       undirected, node_feats, edge_feats,
-                                       use_memory)
-            del dataset
+        # logging.info("load feats done")
+        # chunk = 10
+        # for i in range(chunk):  # 10 chunks of data
+        #     # train_data, val_data, test_data, full_data = load_dataset(args.data)
+        #     logging.info("{}th chunk add edges".format(i))
+        #     data_dir = os.path.join(get_project_root_dir(), "data")
+        #     path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
+        #     dataset = pd.read_csv(path, engine='pyarrow')
+        #     dispatcher.partition_graph(dataset, ingestion_batch_size,
+        #                                undirected, node_feats, edge_feats,
+        #                                use_memory)
+        #     del dataset
         # dispatch node feature and node memory here
-        # dispatcher.partition_graph(dataset, ingestion_batch_size,
-        #                            undirected, node_feats, edge_feats,
-        #                            use_memory)
+        dispatcher.partition_graph(dataset, ingestion_batch_size,
+                                   undirected, node_feats, edge_feats,
+                                   use_memory)
         futures = []
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
         partition_table = graph_services.get_partition_table()
+        # TODO: partition unassigned node
+        # get the index of the unsigned nodes
+        unassigned_nodes_index = (partition_table == -1).nonzero().squeeze()
+        partition_id = torch.arange(
+            len(unassigned_nodes_index)) % dispatcher.get_num_partitions()
+        partition_table[unassigned_nodes_index] = partition_id
+        graph_services.set_partition_table(partition_table)
+        dispatcher.broadcast_partition_table()
         for partition_id in range(dispatcher.get_num_partitions()):
             partition_mask = partition_table == partition_id
             assert partition_mask.sum() > 0  # should not be 0
@@ -119,9 +127,9 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     logging.info("Rank %d: partition table shape: %s",
                  rank, str(graph_services.get_partition_table().shape))
 
-    # # save partition table
-    # partition_table_numpy = graph_services.get_partition_table().numpy()
-    # np.savetxt('partiton_table.txt', partition_table_numpy, delimiter='\n')
+    # save partition table
+    partition_table_numpy = graph_services.get_partition_table().numpy()
+    np.savetxt('partiton_table.txt', partition_table_numpy, delimiter='\n')
     dgraph = graph_services.get_dgraph()
     logging.info("Rank %d: local number of vertices: %d, number of edges: %d",
                  rank, dgraph._dgraph.num_vertices(), dgraph._dgraph.num_edges())

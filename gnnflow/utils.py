@@ -92,7 +92,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
 
     dataset_path = os.path.join(data_dir, dataset)
     node_feat_path = os.path.join(dataset_path, 'node_features.pt')
-    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.npy')
 
     if not os.path.exists(node_feat_path) and \
             not os.path.exists(edge_feat_path):

@@ -143,7 +143,8 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
-    full_data = None
+    # full_data = None
+    train_end, val_end, full_data = load_dataset(args.data)
     node_feats = None
     edge_feats = None
     kvstore_client = None
@@ -181,7 +182,7 @@ def main():
     logging.info("use trunks build graph done")
     train_end, val_end, full_data = load_dataset(args.data)
     train_rand_sampler = RandEdgeSampler(
-        full_data['src'][:train_end].values, full_data['dst'][train_end].values)
+        full_data['src'][:train_end].values, full_data['dst'][:train_end].values)
     val_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
     test_rand_sampler = RandEdgeSampler(
