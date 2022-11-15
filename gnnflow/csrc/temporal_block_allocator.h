@@ -75,6 +75,8 @@ class TemporalBlockAllocator {
   void Reallocate(TemporalBlock* block, std::size_t size,
                   cudaStream_t stream = nullptr);
 
+  std::size_t get_total_memory_usage() const { return allocated_; }
+
  private:
   std::size_t AlignUp(std::size_t size);
 
@@ -90,6 +92,8 @@ class TemporalBlockAllocator {
   std::mutex mutex_;
 
   const int device_;
+
+  std::size_t allocated_;
 };
 
 }  // namespace gnnflow

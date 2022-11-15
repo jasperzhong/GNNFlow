@@ -63,6 +63,8 @@ parser.add_argument("--cache-ratio", type=float, default=0,
 # distributed
 parser.add_argument("--partition", action="store_true",
                     help="whether to partition the graph")
+parser.add_argument("--initial-ingestion-batch-size", type=int, default=100000,
+                    help="ingestion batch size")
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
@@ -148,14 +150,14 @@ def main():
     node_feats = None
     edge_feats = None
     kvstore_client = None
-    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config[
-        'dim_memory']
+    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
     if args.partition:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank)
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
         gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
+                                       args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
                                        args.dim_memory)

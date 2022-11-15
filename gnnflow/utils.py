@@ -185,6 +185,7 @@ def build_dynamic_graph(
         insertion_policy: str,
         undirected: bool,
         device: int = 0,
+        adaptive_block_size: bool = False,
         dataset_df: Optional[pd.DataFrame] = None,
         *args, **kwargs) -> DynamicGraph:
     """
@@ -202,6 +203,7 @@ def build_dynamic_graph(
             valid options: ("insert" or "replace") (case insensitive).
         undirected: whether the graph is undirected.
         device: the device to use.
+        adaptive_block_size: whether to use adaptive block size.
     """
     if dataset_df is None:
         src = dst = ts = eids = None
@@ -220,7 +222,8 @@ def build_dynamic_graph(
         insertion_policy,
         src, dst, ts, eids,
         undirected,
-        device)
+        device,
+        adaptive_block_size)
 
     return dgraph
 

@@ -39,11 +39,11 @@ PYBIND11_MODULE(libgnnflow, m) {
 
   py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
-                    std::size_t, InsertionPolicy, int>(),
+                    std::size_t, InsertionPolicy, int, bool>(),
            py::arg("initial_pool_size"), py::arg("maximum_pool_size"),
            py::arg("mem_resource_type"), py::arg("minium_block_size"),
            py::arg("blocks_to_preallocate"), py::arg("insertion_policy"),
-           py::arg("device"))
+           py::arg("device"), py::arg("adaptive_block_size"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"))
       .def("num_vertices", &DynamicGraph::num_nodes)
@@ -69,7 +69,16 @@ PYBIND11_MODULE(libgnnflow, m) {
              return py::make_tuple(vec2npy(std::get<0>(neighbors)),
                                    vec2npy(std::get<1>(neighbors)),
                                    vec2npy(std::get<2>(neighbors)));
-           });
+           })
+      .def("avg_linked_list_length", [](const DynamicGraph &dgraph) {
+        return dgraph.avg_linked_list_length();
+      })
+      .def("get_graph_memory_usage", [](const DynamicGraph &dgraph) {
+        return dgraph.graph_mem_usage();
+      })
+      .def("get_metadata_memory_usage", [](DynamicGraph &dgraph) {
+        return dgraph.graph_metadata_mem_usage();
+      });
 
   py::class_<SamplingResult>(m, "SamplingResult")
       .def("row",

@@ -16,6 +16,7 @@ from gnnflow.utils import get_project_root_dir, load_feat, local_world_size
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
+               initial_ingestion_batch_size: int,
                ingestion_batch_size: int, partition_strategy: str,
                num_partitions: int, undirected: bool, data_name: str,
                use_memory: int):
@@ -26,6 +27,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         rank (int): The rank of the current process.
         world_size (int): The number of processes participating in the job.
         dataset (df.DataFrame): The dataset to ingest.
+        initial_ingestion_batch_size (int): The number of edges to ingest in
         ingestion_batch_size (int): The number of samples to ingest in each iteration.
         num_partitions (int): The number of partitions to split the dataset into.
         undirected (bool): Whether the graph is undirected.
@@ -68,7 +70,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         #                                use_memory)
         #     del dataset
         # dispatch node feature and node memory here
-        dispatcher.partition_graph(dataset, ingestion_batch_size,
+        dispatcher.partition_graph(dataset,  initial_ingestion_batch_size,
+                                   ingestion_batch_size,
                                    undirected, node_feats, edge_feats,
                                    use_memory)
         futures = []

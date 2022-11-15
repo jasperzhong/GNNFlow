@@ -74,7 +74,7 @@ class LRUCache(Cache):
         """
         # NB: only edge cache is reset
         if self.distributed:
-            if self.dim_edge_feat != 0:
+            if self.dim_edge_feat != 0 and self.edge_capacity > 0:
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
                 cache_edge_id = torch.arange(

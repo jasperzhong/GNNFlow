@@ -80,8 +80,7 @@ std::size_t TemporalBlockAllocator::AlignUp(std::size_t size) {
   if (size < minium_block_size_) {
     return minium_block_size_;
   }
-  // round up to the next power of two
-  return 1 << (64 - __builtin_clzl(size - 1));
+  return size;
 }
 
 TemporalBlock *TemporalBlockAllocator::Allocate(std::size_t size) {
@@ -147,6 +146,9 @@ void TemporalBlockAllocator::AllocateInternal(
       mr->allocate(capacity * sizeof(TimestampType)));
   block->eids =
       static_cast<EIDType *>(mr->allocate(capacity * sizeof(EIDType)));
+
+  allocated_ +=
+      capacity * (sizeof(NIDType) + sizeof(TimestampType) + sizeof(EIDType));
 }
 
 void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block) {
@@ -154,14 +156,17 @@ void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block) {
   if (block->dst_nodes != nullptr) {
     mr->deallocate(block->dst_nodes, block->capacity * sizeof(NIDType));
     block->dst_nodes = nullptr;
+    allocated_ -= block->capacity * sizeof(NIDType);
   }
   if (block->timestamps != nullptr) {
     mr->deallocate(block->timestamps, block->capacity * sizeof(TimestampType));
     block->timestamps = nullptr;
+    allocated_ -= block->capacity * sizeof(TimestampType);
   }
   if (block->eids != nullptr) {
     mr->deallocate(block->eids, block->capacity * sizeof(EIDType));
     block->eids = nullptr;
+    allocated_ -= block->capacity * sizeof(EIDType);
   }
 }
 }  // namespace gnnflow
