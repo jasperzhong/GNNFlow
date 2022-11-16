@@ -6,6 +6,7 @@ DATA=$2
 CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${5:-hash}"
+CHUNKS="${6:-1}"
 
 HOST_NODE_ADDR=172.31.47.50
 HOST_NODE_PORT=29400
@@ -31,8 +32,9 @@ cmd="torchrun \
     offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
     --partition --ingestion-batch-size 1000000 \
+    --initial-ingestion-batch-size 1000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 8"
+    --num-workers 8, --chunks $CHUNKS"
 
 echo $cmd
 NCCL_DEBUG=INFO LOGLEVEL=INFO MKL_NUM_THREADS=4 OMP_NUM_THREADS=8 exec $cmd

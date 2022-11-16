@@ -19,7 +19,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                initial_ingestion_batch_size: int,
                ingestion_batch_size: int, partition_strategy: str,
                num_partitions: int, undirected: bool, data_name: str,
-               use_memory: int):
+               use_memory: int, chunk: int):
     """
     Initialize the distributed environment.
 
@@ -33,6 +33,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         undirected (bool): Whether the graph is undirected.
         data_name (str): the dataset name of the dataset for loading features.
         use_memory (bool): if the kvstore need to initialize the memory.
+        chunk (int): the number of chunks of the dataset
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
@@ -58,7 +59,6 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         # edge_feats = None
         # node_feats = torch.randn(100000000, 10)
         # logging.info("load feats done")
-        chunk = 10
         if chunk > 1:
             for i in range(chunk):  # 10 chunks of data
                 # train_data, val_data, test_data, full_data = load_dataset(args.data)
