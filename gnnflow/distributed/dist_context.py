@@ -12,7 +12,7 @@ import numpy as np
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import get_project_root_dir, load_feat, local_world_size
+from gnnflow.utils import get_project_root_dir, load_dataset, load_feat, local_world_size
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
@@ -59,26 +59,31 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         # node_feats = torch.randn(100000000, 10)
         # logging.info("load feats done")
         chunk = 10
-        for i in range(chunk):  # 10 chunks of data
-            # train_data, val_data, test_data, full_data = load_dataset(args.data)
-            logging.info("{}th chunk add edges".format(i))
-            data_dir = os.path.join(get_project_root_dir(), "data")
-            path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
-            dataset = pd.read_csv(path, engine='pyarrow')
+        if chunk > 1:
+            for i in range(chunk):  # 10 chunks of data
+                # train_data, val_data, test_data, full_data = load_dataset(args.data)
+                logging.info("{}th chunk add edges".format(i))
+                data_dir = os.path.join(get_project_root_dir(), "data")
+                path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
+                dataset = pd.read_csv(path, engine='pyarrow')
+                dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
+                                           ingestion_batch_size,
+                                           undirected, node_feats, edge_feats,
+                                           use_memory)
+                del dataset
+        else:
+            # for those datasets that don't need chunks
+            _, _, dataset = load_dataset(data_name)
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
                                        use_memory)
             del dataset
+        logging.info("add edges done")
         # dispatch node feature and node memory here
-        # dispatcher.partition_graph(dataset,  initial_ingestion_batch_size,
-        #                            ingestion_batch_size,
-        #                            undirected, node_feats, edge_feats,
-        #                            use_memory)
         futures = []
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
         partition_table = graph_services.get_partition_table()
-        # TODO: partition unassigned node
         # get the index of the unsigned nodes
         unassigned_nodes_index = (partition_table == -1).nonzero().squeeze()
         partition_id = torch.arange(
