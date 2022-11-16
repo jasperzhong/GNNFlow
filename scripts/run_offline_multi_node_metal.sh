@@ -34,7 +34,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 1000000 \
     --initial-ingestion-batch-size 1000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 8, --chunks $CHUNKS"
+    --num-workers 8 --chunks $CHUNKS"
 
 echo $cmd
 NCCL_DEBUG=INFO LOGLEVEL=INFO MKL_NUM_THREADS=4 OMP_NUM_THREADS=8 exec $cmd
