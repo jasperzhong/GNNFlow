@@ -6,6 +6,7 @@ import os
 import random
 import time
 
+import psutil
 import pandas as pd
 import numpy as np
 import torch
@@ -138,6 +139,8 @@ def main():
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
         args.partition &= args.num_nodes > 1
+        mem = psutil.virtual_memory().percent
+        logging.info("memory usage after init process group: {}".format(mem))
     else:
         args.local_rank = args.rank = 0
         args.local_world_size = args.world_size = 1
@@ -150,6 +153,8 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     full_data = None
     # train_end, val_end, full_data = load_dataset(args.data)
     node_feats = None
@@ -161,6 +166,8 @@ def main():
             **data_config, device=args.local_rank)
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
+        mem = psutil.virtual_memory().percent
+        logging.info("memory usage: {}".format(mem))
         gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,

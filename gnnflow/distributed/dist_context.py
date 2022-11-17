@@ -42,7 +42,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      num_worker_threads=2,
                      rpc_timeout=1800,
-                     _transports=["uv"],
+                     _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
 
@@ -86,12 +86,15 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         partition_table = graph_services.get_partition_table()
         # get the index of the unsigned nodes
         unassigned_nodes_index = (partition_table == -1).nonzero().squeeze()
+        logging.info("len of unassigned nodes: {}".format(
+            len(unassigned_nodes_index)))
         partition_id = torch.arange(
             len(unassigned_nodes_index), dtype=torch.int8) % dispatcher.get_num_partitions()
         partition_table[unassigned_nodes_index] = partition_id
         graph_services.set_partition_table(partition_table)
         dispatcher._partitioner._partition_table = partition_table
         dispatcher.broadcast_partition_table()
+        logging.info("partition unassigned nodes done")
         for partition_id in range(dispatcher.get_num_partitions()):
             partition_mask = partition_table == partition_id
             assert partition_mask.sum() > 0  # should not be 0
@@ -103,6 +106,8 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 features = node_feats[keys]
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, features, 'node')))
+            logging.info(
+                "parition {} node feature dispathc done".format(partition_id))
         mem = psutil.virtual_memory().percent
         logging.info("peak memory usage: {}".format(mem))
         del node_feats
