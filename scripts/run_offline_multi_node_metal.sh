@@ -36,6 +36,8 @@ cmd="torchrun \
     --partition-strategy $PARTITION_STRATEGY \
     --num-workers 8 --chunks $CHUNKS"
 
+rm -rf /dev/shm/rmm_pool_*
+
 echo $cmd
 NCCL_DEBUG=INFO LOGLEVEL=INFO MKL_NUM_THREADS=4 OMP_NUM_THREADS=8 exec $cmd
 
