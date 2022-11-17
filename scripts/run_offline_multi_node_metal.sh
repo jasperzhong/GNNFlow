@@ -31,13 +31,13 @@ cmd="torchrun \
     --rdzv_conf is_host=$IS_HOST \
     offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
-    --partition --ingestion-batch-size 1000000 \
-    --initial-ingestion-batch-size 1000000 \
+    --partition --ingestion-batch-size 100000 \
+    --initial-ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \
     --num-workers 8 --chunks $CHUNKS"
 
 rm -rf /dev/shm/rmm_pool_*
 
 echo $cmd
-NCCL_DEBUG=INFO LOGLEVEL=INFO MKL_NUM_THREADS=4 OMP_NUM_THREADS=8 exec $cmd
+LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
 

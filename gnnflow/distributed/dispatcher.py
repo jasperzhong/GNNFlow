@@ -108,7 +108,6 @@ class Dispatcher:
             list(range(initial_ingestion_batch_size,
                        len(dataset), ingestion_batch_size)) + [len(dataset)]
         t = tqdm(total=len(dataset))
-        logging.info("len dataset: {}".format(len(dataset)))
         for i in range(len(range_list)-1):
             batch = dataset[range_list[i]:range_list[i+1]]
             src_nodes = batch["src"].values.astype(np.int64)
@@ -140,12 +139,14 @@ class Dispatcher:
 
         # deal with unpartitioned nodes
         partition_table = self._partitioner._partition_table
-        unassigned_nodes_index = (partition_table == -1).nonzero().squeeze()
+        unassigned_nodes_index = (partition_table == -1).nonzero().squeeze(dim=1)
         logging.info("len of unassigned nodes: {}".format(
             len(unassigned_nodes_index)))
-        partition_id = torch.arange(
-            len(unassigned_nodes_index), dtype=torch.int8) % self._num_partitions
-        partition_table[unassigned_nodes_index] = partition_id
+
+        if len(unassigned_nodes_index) > 0:
+            partition_id = torch.arange(
+                len(unassigned_nodes_index), dtype=torch.int8) % self._num_partitions
+            partition_table[unassigned_nodes_index] = partition_id
 
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]

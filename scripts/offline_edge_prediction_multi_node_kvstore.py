@@ -188,6 +188,7 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
+
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
 
@@ -244,7 +245,7 @@ def main():
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
-    logging.debug("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
+    logging.info("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed,
