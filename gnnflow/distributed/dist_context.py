@@ -68,7 +68,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 del dataset
         else:
             # for those datasets that don't need chunks
-            _, _, dataset = load_dataset(data_name)
+            _, _, _, dataset = load_dataset(data_name)
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,

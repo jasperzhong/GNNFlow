@@ -158,7 +158,7 @@ class Dispatcher:
         # node feature/memory
         if node_feats is not None:
             futures = []
-            for partition_id in range(self._num_partitions):
+            for partition_id in reversed(range(self._num_partitions)):
                 # the KVStore server is in local_rank 0
                 partition_mask = partition_table == partition_id
                 assert partition_mask.sum() > 0  # should not be 0
@@ -170,7 +170,8 @@ class Dispatcher:
                     features = node_feats[keys]
                     futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                                  args=(keys, features, 'node')))
-
+                logging.info(
+                    "partition: {} dispatch done".format(partition_id))
             mem = psutil.virtual_memory().percent
             logging.info("peak memory usage: {}".format(mem))
             del node_feats
@@ -194,7 +195,8 @@ class Dispatcher:
                     dim_raw_message = 2 * dim_memory + dim_edge
                     mailbox = torch.zeros(
                         (len(keys), dim_raw_message), dtype=torch.float32)
-                    mailbox_ts = torch.zeros((len(keys), ), dtype=torch.float32)
+                    mailbox_ts = torch.zeros(
+                        (len(keys), ), dtype=torch.float32)
                     all_mem = torch.cat((memory,
                                         memory_ts.unsqueeze(dim=1),
                                         mailbox,

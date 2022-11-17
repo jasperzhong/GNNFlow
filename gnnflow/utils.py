@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-from threading import Thread
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -62,11 +61,10 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
 
     train_end = full_data['ext_roll'].values.searchsorted(1)
     val_end = full_data['ext_roll'].values.searchsorted(2)
-    # train_data = full_data[:train_end]
-    # val_data = full_data[train_end:val_end]
-    # test_data = full_data[val_end:]
-    # return train_data, val_data, test_data, full_data
-    return train_end, val_end, full_data
+    train_data = full_data[:train_end]
+    val_data = full_data[train_end:val_end]
+    test_data = full_data[val_end:]
+    return train_data, val_data, test_data, full_data
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,

@@ -7,7 +7,6 @@ import random
 import time
 
 import psutil
-import pandas as pd
 import numpy as np
 import torch
 import torch.distributed
@@ -156,7 +155,6 @@ def main():
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
     full_data = None
-    # train_end, val_end, full_data = load_dataset(args.data)
     node_feats = None
     edge_feats = None
     kvstore_client = None
@@ -193,20 +191,20 @@ def main():
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
 
-    logging.info("use trunks build graph done")
-    train_end, val_end, full_data = load_dataset(args.data)
+    logging.info("use chunks build graph done")
+    train_data, val_data, test_data, full_data = load_dataset(args.data)
     train_rand_sampler = RandEdgeSampler(
-        full_data['src'][:train_end].values, full_data['dst'][:train_end].values)
+        train_data['src'].values, train_data['dst'].values)
     val_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
     test_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
     logging.info("make sampler done")
-    train_ds = EdgePredictionDataset(full_data[:train_end], train_rand_sampler)
+    train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
-        full_data[train_end:val_end], val_rand_sampler)
+        val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(
-        full_data[val_end:], test_rand_sampler)
+        test_data, test_rand_sampler)
     logging.info("make dataset done")
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
@@ -265,8 +263,6 @@ def main():
         sampler = TemporalSampler(dgraph, **model_config)
     build_graph_end = time.time()
     if args.distributed:
-        # NB: it seems that DySAT needs this parameter. I don't know why.
-        # find_unused_parameters = True if args.model == "DySAT" else False
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank], find_unused_parameters=True)
 
