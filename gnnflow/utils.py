@@ -101,7 +101,8 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     edge_feats = None
     if not shared_memory or (shared_memory and local_rank == 0):
         if os.path.exists(node_feat_path):
-            node_feats = torch.load(node_feat_path)
+            node_feats = np.load(node_feat_path, allow_pickle=False)
+            node_feats = torch.from_numpy(node_feats)
             if node_feats.dtype == torch.bool:
                 node_feats = node_feats.type(torch.float32)
 
