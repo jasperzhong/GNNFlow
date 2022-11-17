@@ -107,8 +107,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
 
         if os.path.exists(edge_feat_path):
             edge_feats = np.load(edge_feat_path, allow_pickle=False)
-            edge_feats = torch.tensor(edge_feats)
-            # edge_feats = torch.load(edge_feat_path)
+            edge_feats = torch.from_numpy(edge_feats)
             if edge_feats.dtype == torch.bool:
                 edge_feats = edge_feats.type(torch.float32)
 

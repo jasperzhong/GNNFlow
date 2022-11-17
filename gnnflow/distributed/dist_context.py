@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 import numpy as np
 import pandas as pd
@@ -36,8 +37,6 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
-                 #  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
-                 #      num_worker_threads=2))
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      rpc_timeout=1800,
                      _transports=["shm", "uv"],
@@ -50,10 +49,13 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     if local_rank == 0:
         graph_services.set_kvstore_server(KVStoreServer())
 
+    start = time.time()
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
         node_feats, edge_feats = load_feat(data_name)
+        logging.info("Rank %d: Loaded features in %f seconds.", rank,
+                     time.time() - start)
         if chunk > 1:
             for i in range(chunk):  # 10 chunks of data
                 # train_data, val_data, test_data, full_data = load_dataset(args.data)
@@ -77,6 +79,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     # check
     torch.distributed.barrier()
+    if rank == 0:
+        logging.info("Rank %d: Ingested data in %f seconds.", rank,
+                     time.time() - start)
+
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
                  rank, graph_services.num_vertices(), graph_services.num_edges())
     logging.info("Rank %d: partition table shape: %s",
