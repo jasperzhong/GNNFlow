@@ -179,34 +179,34 @@ class Dispatcher:
             for future in futures:
                 future.wait()
 
-            if dim_memory > 0:
-                for partition_id in range(self._num_partitions):
-                    partition_mask = partition_table == partition_id
-                    assert partition_mask.sum() > 0  # should not be 0
-                    vertices = torch.arange(
-                        len(partition_table), dtype=torch.long)
-                    partition_vertices = vertices[partition_mask]
-                    keys = partition_vertices.contiguous()
-                    kvstore_rank = partition_id * local_world_size()
-                    # use None as value and just init keys here.
-                    memory = torch.zeros(
-                        (len(keys), dim_memory), dtype=torch.float32)
-                    memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-                    dim_raw_message = 2 * dim_memory + dim_edge
-                    mailbox = torch.zeros(
-                        (len(keys), dim_raw_message), dtype=torch.float32)
-                    mailbox_ts = torch.zeros(
-                        (len(keys), ), dtype=torch.float32)
-                    all_mem = torch.cat((memory,
-                                        memory_ts.unsqueeze(dim=1),
-                                        mailbox,
-                                        mailbox_ts.unsqueeze(dim=1),
-                                         ), dim=1)
-                    futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                                 args=(keys, all_mem, 'memory')))
+        if dim_memory > 0:
+            for partition_id in range(self._num_partitions):
+                partition_mask = partition_table == partition_id
+                assert partition_mask.sum() > 0  # should not be 0
+                vertices = torch.arange(
+                    len(partition_table), dtype=torch.long)
+                partition_vertices = vertices[partition_mask]
+                keys = partition_vertices.contiguous()
+                kvstore_rank = partition_id * local_world_size()
+                # use None as value and just init keys here.
+                memory = torch.zeros(
+                    (len(keys), dim_memory), dtype=torch.float32)
+                memory_ts = torch.zeros(len(keys), dtype=torch.float32)
+                dim_raw_message = 2 * dim_memory + dim_edge
+                mailbox = torch.zeros(
+                    (len(keys), dim_raw_message), dtype=torch.float32)
+                mailbox_ts = torch.zeros(
+                    (len(keys), ), dtype=torch.float32)
+                all_mem = torch.cat((memory,
+                                    memory_ts.unsqueeze(dim=1),
+                                    mailbox,
+                                    mailbox_ts.unsqueeze(dim=1),
+                                     ), dim=1)
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                             args=(keys, all_mem, 'memory')))
 
-                for future in futures:
-                    future.wait()
+            for future in futures:
+                future.wait()
 
     def broadcast_graph_metadata(self):
         """
