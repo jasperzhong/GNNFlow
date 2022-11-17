@@ -90,7 +90,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     # save partition table
     partition_table_numpy = graph_services.get_partition_table().numpy()
-    np.savetxt('partiton_table.txt', partition_table_numpy, delimiter='\n')
+    np.savetxt('partition_table.txt', partition_table_numpy, delimiter='\n')
     dgraph = graph_services.get_dgraph()
     logging.info("Rank %d: local number of vertices: %d, number of edges: %d",
                  rank, dgraph._dgraph.num_vertices(), dgraph._dgraph.num_edges())
