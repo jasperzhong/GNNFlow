@@ -69,20 +69,18 @@ class KVStoreServer:
             List[torch.Tensor]: The tensors.
         """
         if mode == 'node':
-            with self._node_feat_lock:
-                return torch.stack(list(map(self._node_feat_map.get, keys.tolist())))
+            return torch.stack(list(map(self._node_feat_map.get, keys.tolist())))
         elif mode == 'edge':
-            with self._edge_feat_lock:
-                return torch.stack(list(map(self._edge_feat_map.get, keys.tolist())))
+            return torch.stack(list(map(self._edge_feat_map.get, keys.tolist())))
         elif mode == 'memory':
-            with self._memory_lock:
-                return torch.stack(list(map(self._memory_map.get, keys.tolist())))
+            return torch.stack(list(map(self._memory_map.get, keys.tolist())))
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
     def reset_memory(self):
-        for mem in zip(self._memory_map.values()):
-            mem.fill_(0)
+        with self._memory_lock:
+            for mem in zip(self._memory_map.values()):
+                mem.fill_(0)
 
 
 class KVStoreClient:

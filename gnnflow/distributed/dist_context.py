@@ -1,18 +1,17 @@
-import datetime
 import logging
 import os
 
-import psutil
+import numpy as np
 import pandas as pd
+import psutil
 import torch
 import torch.distributed
 import torch.distributed.rpc as rpc
-import numpy as np
 
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import get_project_root_dir, load_dataset, load_feat, local_world_size
+from gnnflow.utils import get_project_root_dir, load_dataset, load_feat
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
@@ -40,7 +39,6 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                  #  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                  #      num_worker_threads=2))
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
-                     num_worker_threads=2,
                      rpc_timeout=1800,
                      _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
@@ -56,9 +54,6 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
         node_feats, edge_feats = load_feat(data_name)
-        # edge_feats = None
-        # node_feats = torch.randn(100000000, 10)
-        # logging.info("load feats done")
         if chunk > 1:
             for i in range(chunk):  # 10 chunks of data
                 # train_data, val_data, test_data, full_data = load_dataset(args.data)
@@ -79,62 +74,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                                        undirected, node_feats, edge_feats,
                                        use_memory)
             del dataset
-        logging.info("add edges done")
-        # dispatch node feature and node memory here
-        futures = []
-        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
-        partition_table = graph_services.get_partition_table()
-        # get the index of the unsigned nodes
-        unassigned_nodes_index = (partition_table == -1).nonzero().squeeze()
-        logging.info("len of unassigned nodes: {}".format(
-            len(unassigned_nodes_index)))
-        partition_id = torch.arange(
-            len(unassigned_nodes_index), dtype=torch.int8) % dispatcher.get_num_partitions()
-        partition_table[unassigned_nodes_index] = partition_id
-        graph_services.set_partition_table(partition_table)
-        dispatcher._partitioner._partition_table = partition_table
-        dispatcher.broadcast_partition_table()
-        logging.info("partition unassigned nodes done")
-        for partition_id in range(dispatcher.get_num_partitions()):
-            partition_mask = partition_table == partition_id
-            assert partition_mask.sum() > 0  # should not be 0
-            vertices = torch.arange(len(partition_table), dtype=torch.long)
-            partition_vertices = vertices[partition_mask]
-            keys = partition_vertices.contiguous()
-            kvstore_rank = partition_id * local_world_size()
-            if node_feats is not None:
-                features = node_feats[keys]
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, features, 'node')))
-            logging.info(
-                "parition {} node feature dispathc done".format(partition_id))
-        mem = psutil.virtual_memory().percent
-        logging.info("peak memory usage: {}".format(mem))
-        del node_feats
-        # do this separately to decrease peak memory usage
-        for partition_id in range(dispatcher.get_num_partitions()):
-            partition_mask = partition_table == partition_id
-            assert partition_mask.sum() > 0  # should not be 0
-            vertices = torch.arange(len(partition_table), dtype=torch.long)
-            partition_vertices = vertices[partition_mask]
-            keys = partition_vertices.contiguous()
-            kvstore_rank = partition_id * local_world_size()
-            if use_memory > 0:
-                # use None as value and just init keys here.
-                memory = torch.zeros(
-                    (len(keys), use_memory), dtype=torch.float32)
-                memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-                dim_raw_message = 2 * use_memory + dim_edge
-                mailbox = torch.zeros(
-                    (len(keys), dim_raw_message), dtype=torch.float32)
-                mailbox_ts = torch.zeros((len(keys), ), dtype=torch.float32)
-                all_mem = torch.cat((memory,
-                                    memory_ts.unsqueeze(dim=1),
-                                    mailbox,
-                                    mailbox_ts.unsqueeze(dim=1),
-                                     ), dim=1)
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, all_mem, 'memory')))
+
     # check
     torch.distributed.barrier()
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
