@@ -64,6 +64,11 @@ class Cache:
             assert kvstore_client is not None, 'kvstore_client must be provided when using ' \
                 'distributed training'
             assert neg_sample_ratio > 0, 'neg_sample_ratio must be positive'
+        else:
+            if node_feats is not None and node_feats.dtype == torch.bool:
+                node_feats = node_feats.to(torch.float32)
+            if edge_feats is not None and edge_feats.dtype == torch.bool:
+                edge_feats = edge_feats.to(torch.float32)
 
         # NB: cache_ratio == 0 means no cache
         assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
@@ -156,7 +161,7 @@ class Cache:
                 cache_edge_id = torch.arange(
                     len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
-                    self.device)
+                    self.device).float()
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id[cache_edge_id] = keys.to(
                     self.device)
@@ -286,10 +291,10 @@ class Cache:
                             i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
                             uncached_node_id_unique.cpu(), mode='node')
                         uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                            self.device, non_blocking=True)
+                            self.device, non_blocking=True).float()
                     else:
                         uncached_node_feature = self.kvstore_client.pull(
-                            uncached_node_id_unique.cpu(), mode='node').to(self.device)
+                            uncached_node_id_unique.cpu(), mode='node').to(self.device).float()
                 else:
                     if self.pinned_nfeat_buffs is not None:
                         torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
@@ -360,10 +365,10 @@ class Cache:
                                     i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
                                         uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
                                 uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
-                                    self.device, non_blocking=True)
+                                    self.device, non_blocking=True).float()
                             else:
                                 uncached_edge_feature = self.kvstore_client.pull(
-                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device)
+                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device).float()
                         else:
                             uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                                 uncached_edge_id, return_inverse=True)
@@ -395,7 +400,7 @@ class Cache:
                         self.neg_sample_ratio + 2)
                     nid = mfgs[-1][0].srcdata['ID'][:num_edges]
                     self.target_edge_features = self.kvstore_client.pull(
-                        torch.from_numpy(eid), mode='edge', nid=nid)
+                        torch.from_numpy(eid), mode='edge', nid=nid).float()
                 else:
                     self.target_edge_features = self.edge_feats[eid]
 

@@ -103,14 +103,10 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         if os.path.exists(node_feat_path):
             node_feats = np.load(node_feat_path, allow_pickle=False)
             node_feats = torch.from_numpy(node_feats)
-            if node_feats.dtype == torch.bool:
-                node_feats = node_feats.type(torch.float32)
 
         if os.path.exists(edge_feat_path):
             edge_feats = np.load(edge_feat_path, allow_pickle=False)
             edge_feats = torch.from_numpy(edge_feats)
-            if edge_feats.dtype == torch.bool:
-                edge_feats = edge_feats.type(torch.float32)
 
     if shared_memory:
         node_feats_shm, edge_feats_shm = None, None
