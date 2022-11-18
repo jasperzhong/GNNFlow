@@ -248,7 +248,7 @@ class KVStoreClient:
 
             for mask, pull_result in zip(masks, pull_results):
                 idx = mask.nonzero().squeeze()
-                all_pull_results[idx] = pull_result
+                all_pull_results[idx] = pull_result.float()
 
             return all_pull_results
 
