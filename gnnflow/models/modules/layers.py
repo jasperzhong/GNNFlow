@@ -53,8 +53,8 @@ class TransfomerAttentionLayer(torch.nn.Module):
             att_dropout: dropout rate for attention
         """
         super(TransfomerAttentionLayer, self).__init__()
-        # assert dim_node > 0 or dim_edge > 0, \
-        #     "either dim_node or dim_edge should be positive"
+        assert dim_node > 0 or dim_edge > 0, \
+            "either dim_node or dim_edge should be positive"
 
         self.use_node_feat = dim_node > 0
         self.use_edge_feat = dim_edge > 0
