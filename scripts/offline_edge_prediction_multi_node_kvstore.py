@@ -202,7 +202,7 @@ def main():
     train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
     train_data, val_data, test_data = load_partitioned_dataset(
-        args.data, args.rank, args.world_size)
+        args.data, rank=args.rank, world_size=args.world_size)
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
         val_data, val_rand_sampler)
