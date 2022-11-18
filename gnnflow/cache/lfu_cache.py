@@ -90,7 +90,7 @@ class LFUCache(Cache):
                 cache_edge_id = torch.arange(
                     len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
-                    self.device)
+                    self.device).float()
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id[cache_edge_id] = keys.to(
                     self.device)
