@@ -373,7 +373,7 @@ def set_rand_sampler(train_rand_sampler, val_rand_sampler, test_rand_sampler):
     VAL_RAND_SAMPLER = val_rand_sampler
 
 
-def get_rand_sampler(train_rand_sampler, val_rand_sampler, test_rand_sampler):
+def get_rand_sampler():
     """
     Get rand edge sampler
 
@@ -381,9 +381,15 @@ def get_rand_sampler(train_rand_sampler, val_rand_sampler, test_rand_sampler):
         train, val, test rand sampler
     """
     global TRAIN_RAND_SAMPLER
+    if TRAIN_RAND_SAMPLER is None:
+        raise RuntimeError(
+            "The TRAIN_RAND_SAMPLER has not been initialized.")
     global TEST_RAND_SAMPLER
+    if TEST_RAND_SAMPLER is None:
+        raise RuntimeError(
+            "The TEST_RAND_SAMPLER has not been initialized.")
     global VAL_RAND_SAMPLER
-    TRAIN_RAND_SAMPLER = train_rand_sampler
-    TEST_RAND_SAMPLER = test_rand_sampler
-    VAL_RAND_SAMPLER = val_rand_sampler
-    return train_rand_sampler, val_rand_sampler, test_rand_sampler
+    if VAL_RAND_SAMPLER is None:
+        raise RuntimeError(
+            "The VAL_RAND_SAMPLER has not been initialized.")
+    return TRAIN_RAND_SAMPLER, VAL_RAND_SAMPLER, TEST_RAND_SAMPLER
