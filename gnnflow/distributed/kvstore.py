@@ -198,7 +198,7 @@ class KVStoreClient:
             future = rpc.rpc_async('worker{}'.format(
                 kvstore_rank), graph_services.init_cache, args=(capacity, ))
             keys, feats = future.wait()
-        return keys, feats
+        return keys, feats.float()
 
     def _merge_pull_results(self, pull_results: List[torch.Tensor], masks: List[torch.Tensor], mode: str):
         """
