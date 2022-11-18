@@ -67,6 +67,43 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     return train_data, val_data, test_data, full_data
 
 
+def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank: int = 0, world_size: int = 1) -> \
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Loads the partitioned dataset and returns the dataframes for the train, validation, test.
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+
+    Returns:
+        train_data: the dataframe for the train dataset.
+        val_data: the dataframe for the validation dataset.
+        test_data: the dataframe for the test dataset.
+        full_data: the dataframe for the whole dataset.
+    """
+    if data_dir is None:
+        data_dir = os.path.join(get_project_root_dir(), "data")
+
+    train_path = os.path.join(
+        data_dir, dataset, 'edges_train_{}_{}.csv'.format(world_size, rank))
+    val_path = os.path.join(
+        data_dir, dataset, 'edges_train_{}_{}.csv'.format(world_size, rank))
+    test_path = os.path.join(
+        data_dir, dataset, 'edges_train_{}_{}.csv'.format(world_size, rank))
+    if not os.path.exists(train_path):
+        raise ValueError('{} does not exist'.format(train_path))
+
+    train_data = pd.read_csv(train_path)
+    assert isinstance(train_data, pd.DataFrame)
+    val_data = pd.read_csv(val_path)
+    assert isinstance(val_data, pd.DataFrame)
+    test_data = pd.read_csv(test_path)
+    assert isinstance(test_data, pd.DataFrame)
+
+    return train_data, val_data, test_data
+
+
 def load_feat(dataset: str, data_dir: Optional[str] = None,
               shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1):
     """

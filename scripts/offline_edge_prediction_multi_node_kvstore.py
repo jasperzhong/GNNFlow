@@ -29,7 +29,7 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
                            build_dynamic_graph, get_pinned_buffers,
-                           get_project_root_dir, load_dataset, load_feat,
+                           get_project_root_dir, load_dataset, load_feat, load_partitioned_dataset,
                            mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
@@ -188,19 +188,21 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-
     num_nodes = dgraph.num_vertices()
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    train_data, val_data, test_data, full_data = load_dataset(args.data)
-    train_rand_sampler = RandEdgeSampler(
-        train_data['src'].values, train_data['dst'].values)
-    val_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
-    test_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
+    # train_data, val_data, test_data, full_data = load_dataset(args.data)
+    # train_rand_sampler = RandEdgeSampler(
+    #     train_data['src'].values, train_data['dst'].values)
+    # val_rand_sampler = RandEdgeSampler(
+    #     full_data['src'].values, full_data['dst'].values)
+    # test_rand_sampler = RandEdgeSampler(
+    #     full_data['src'].values, full_data['dst'].values)
+    train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
+    train_data, val_data, test_data = load_partitioned_dataset(
+        args.data, args.rank, args.world_size)
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
         val_data, val_rand_sampler)
@@ -212,7 +214,7 @@ def main():
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed:
+    if args.distributed and args.data not in ['GDELT', 'MAG']:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -223,7 +225,7 @@ def main():
             world_size=args.world_size)
     else:
         train_sampler = RandomStartBatchSampler(
-            SequentialSampler(train_ds), batch_size=batch_size, drop_last=False)
+            SequentialSampler(train_ds), batch_size=batch_size, drop_last=False, world_size=args.world_size)
         val_sampler = BatchSampler(
             SequentialSampler(val_ds), batch_size=batch_size, drop_last=False)
 
