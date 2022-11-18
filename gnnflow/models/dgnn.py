@@ -70,8 +70,7 @@ class DGNN(torch.nn.Module):
 
             self.memory_updater = GRUMemeoryUpdater(
                 dim_node, dim_edge, dim_time, dim_embed, dim_memory)
-            if dim_node == 0:
-                dim_node = dim_memory
+            dim_node = dim_memory
 
         self.layers = torch.nn.ModuleDict()
         for l in range(num_layers):
