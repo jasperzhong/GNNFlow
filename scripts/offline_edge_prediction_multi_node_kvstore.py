@@ -189,7 +189,7 @@ def main():
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
 
-    num_nodes = dgraph.num_vertices()
+    num_nodes = dgraph.num_vertices() + 1
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
