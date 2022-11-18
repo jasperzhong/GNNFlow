@@ -86,11 +86,11 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     train_path = os.path.join(
-        data_dir, dataset, 'edges_train_{}_{}.csv'.format(world_size, rank))
+        data_dir, dataset, 'edges_train_{}_{}.csv'.format(str(world_size), str(rank)))
     val_path = os.path.join(
-        data_dir, dataset, 'edges_train_{}_{}.csv'.format(world_size, rank))
+        data_dir, dataset, 'edges_val_{}_{}.csv'.format(str(world_size), str(rank)))
     test_path = os.path.join(
-        data_dir, dataset, 'edges_train_{}_{}.csv'.format(world_size, rank))
+        data_dir, dataset, 'edges_tests_{}_{}.csv'.format(str(world_size), str(rank)))
     if not os.path.exists(train_path):
         raise ValueError('{} does not exist'.format(train_path))
 
