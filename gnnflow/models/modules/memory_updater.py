@@ -16,7 +16,7 @@ class GRUMemeoryUpdater(torch.nn.Module):
     """
 
     def __init__(self, dim_node: int, dim_edge: int, dim_time: int,
-                 dim_memory: int):
+                 dim_embed: int, dim_memory: int):
         """
         Args:
             dim_node: dimension of node features/embeddings
@@ -29,6 +29,7 @@ class GRUMemeoryUpdater(torch.nn.Module):
         self.dim_message = 2 * dim_memory + dim_edge
         self.dim_node = dim_node
         self.dim_time = dim_time
+        self.dim_embed = dim_embed
         self.updater = torch.nn.GRUCell(
             self.dim_message + self.dim_time, dim_memory)
 

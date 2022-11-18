@@ -120,7 +120,7 @@ _reddit_default_config = {
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
     "undirected": True,
-    "node_feature": False,
+    "node_feature": True,
     "edge_feature": True,
     "batch_size": 600
 }
@@ -152,8 +152,8 @@ _lastfm_default_config = {
 }
 
 _gdelt_default_config = {
-    "initial_pool_size": 5*GB,
-    "maximum_pool_size": 10*GB,
+    "initial_pool_size": 10*GB,
+    "maximum_pool_size": 20*GB,
     "mem_resource_type": "unified",
     "minimum_block_size": 123,
     "blocks_to_preallocate": 8196,
@@ -161,12 +161,12 @@ _gdelt_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 4000
+    "batch_size": 600
 }
 
 _mag_default_config = {
     "initial_pool_size": 50*GB,
-    "maximum_pool_size": 100*GB,
+    "maximum_pool_size": 300*GB,
     "mem_resource_type": "unified",
     "minimum_block_size": 11,
     "blocks_to_preallocate": 65536,

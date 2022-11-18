@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 from queue import Queue
-from typing import Callable, List
+from typing import List
 
 import dgl
 import numpy as np
@@ -14,6 +14,7 @@ from dgl.heterograph import DGLBlock
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow import TemporalSampler
 from gnnflow.distributed.common import SamplingResultTorch
+from gnnflow.distributed.utils import HandleManager
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.utils import local_rank, local_world_size
 from libgnnflow import SamplingResult
@@ -43,6 +44,7 @@ class DistributedTemporalSampler:
         self._partition_table = self._dgraph.get_partition_table()
         self._num_partitions = self._dgraph.num_partitions()
 
+        self._handle_manager = HandleManager()
         self._sampling_thread = threading.Thread(target=self._sampling_loop)
         self._sampling_task_queue = Queue()
         self._sampling_thread.start()
@@ -50,7 +52,7 @@ class DistributedTemporalSampler:
     def _sampling_loop(self):
         while True:
             while not self._sampling_task_queue.empty():
-                target_vertices, timestamps, layer, snapshot, result, callback, \
+                target_vertices, timestamps, layer, snapshot, result, \
                     handle = self._sampling_task_queue.get()
 
                 ret = self.sample_layer_local(
@@ -58,8 +60,8 @@ class DistributedTemporalSampler:
 
                 self._transform_output(ret, result)
 
-                callback(handle)
-            time.sleep(0.01)
+                self._handle_manager.mark_done(handle)
+            time.sleep(0.001)
 
     def _transform_output(self, input: SamplingResult, output: SamplingResultTorch):
         output.row = torch.from_numpy(input.row())
@@ -72,9 +74,14 @@ class DistributedTemporalSampler:
         output.eids = torch.from_numpy(input.eids())
 
     def enqueue_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
-                              layer: int, snapshot: int, result:  SamplingResultTorch, callback: Callable, handle: int):
+                              layer: int, snapshot: int, result:  SamplingResultTorch):
+        handle = self._handle_manager.allocate_handle()
         self._sampling_task_queue.put(
-            (target_vertices, timestamps, layer, snapshot, result, callback, handle))
+            (target_vertices, timestamps, layer, snapshot, result, handle))
+        return handle
+
+    def poll(self, handle: int):
+        return self._handle_manager.poll(handle)
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -268,6 +275,7 @@ class DistributedTemporalSampler:
         """
         logging.debug("Rank %d: sampling layer %d, snapshot %d, %d target vertices",
                       self._rank, layer, snapshot, len(target_vertices))
+        self._dgraph.wait_for_all_updates_to_finish()
         ret = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot, False)
         return ret

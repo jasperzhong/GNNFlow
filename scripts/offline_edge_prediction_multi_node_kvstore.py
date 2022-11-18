@@ -1,10 +1,12 @@
 import argparse
+import datetime
 import logging
 import math
 import os
 import random
 import time
 
+import psutil
 import numpy as np
 import torch
 import torch.distributed
@@ -43,7 +45,7 @@ parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.00001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
@@ -67,6 +69,11 @@ parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
+
+# dataset
+parser.add_argument("--chunks", help="num of dataset chunks",
+                    type=int, default=1)
+
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
@@ -74,6 +81,8 @@ logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
+
+start = time.time()
 
 
 def set_seed(seed):
@@ -123,11 +132,14 @@ def main():
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group('gloo')
+        torch.distributed.init_process_group(
+            'gloo', timeout=datetime.timedelta(seconds=18000))
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
         args.partition &= args.num_nodes > 1
+        mem = psutil.virtual_memory().percent
+        logging.info("memory usage after init process group: {}".format(mem))
     else:
         args.local_rank = args.rank = 0
         args.local_world_size = args.world_size = 1
@@ -140,6 +152,47 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
+    full_data = None
+    node_feats = None
+    edge_feats = None
+    kvstore_client = None
+    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
+    if args.partition:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank)
+        graph_services.set_dgraph(dgraph)
+        dgraph = graph_services.get_dgraph()
+        mem = psutil.virtual_memory().percent
+        logging.info("memory usage: {}".format(mem))
+        gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
+                                       args.initial_ingestion_batch_size,
+                                       args.ingestion_batch_size, args.partition_strategy,
+                                       args.num_nodes, data_config["undirected"], args.data,
+                                       args.dim_memory, args.chunks)
+        # every worker will have a kvstore_client
+        dim_node, dim_edge = graph_services.get_dim_node_edge()
+        kvstore_client = KVStoreClient(
+            dgraph.get_partition_table(),
+            dgraph.num_partitions(), args.local_world_size,
+            args.local_rank, dim_node, dim_edge, args.dim_memory)
+    else:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank, dataset_df=full_data)
+        # put the features in shared memory when using distributed training
+        node_feats, edge_feats = load_feat(
+            args.data, shared_memory=args.distributed,
+            local_rank=args.local_rank, local_world_size=args.local_world_size)
+
+        dim_node = 0 if node_feats is None else node_feats.shape[1]
+        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+
+
+    num_nodes = dgraph.num_vertices()
+    num_edges = dgraph.num_edges()
+
+    logging.info("use chunks build graph done")
     train_data, val_data, test_data, full_data = load_dataset(args.data)
     train_rand_sampler = RandEdgeSampler(
         train_data['src'].values, train_data['dst'].values)
@@ -147,11 +200,13 @@ def main():
         full_data['src'].values, full_data['dst'].values)
     test_rand_sampler = RandEdgeSampler(
         full_data['src'].values, full_data['dst'].values)
-
+    logging.info("make sampler done")
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
-    val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
-    test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
-
+    val_ds = EdgePredictionDataset(
+        val_data, val_rand_sampler)
+    test_ds = EdgePredictionDataset(
+        test_data, test_rand_sampler)
+    logging.info("make dataset done")
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
@@ -185,44 +240,12 @@ def main():
     test_loader = torch.utils.data.DataLoader(
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
-
-    node_feats = None
-    edge_feats = None
-    kvstore_client = None
-    args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
-    if args.partition:
-        dgraph = build_dynamic_graph(
-            **data_config, device=args.local_rank)
-        graph_services.set_dgraph(dgraph)
-        dgraph = graph_services.get_dgraph()
-        gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
-                                       args.initial_ingestion_batch_size,
-                                       args.ingestion_batch_size, args.partition_strategy,
-                                       args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory)
-        # every worker will have a kvstore_client
-        dim_node, dim_edge = graph_services.get_dim_node_edge()
-        kvstore_client = KVStoreClient(
-            dgraph.get_partition_table(),
-            dgraph.num_partitions(), args.local_world_size,
-            args.local_rank, dim_node, dim_edge, args.dim_memory)
-    else:
-        dgraph = build_dynamic_graph(
-            **data_config, device=args.local_rank, dataset_df=full_data)
-        # put the features in shared memory when using distributed training
-        node_feats, edge_feats = load_feat(
-            args.data, shared_memory=args.distributed,
-            local_rank=args.local_rank, local_world_size=args.local_world_size)
-
-        dim_node = 0 if node_feats is None else node_feats.shape[1]
-        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
-
-    num_nodes = dgraph.num_vertices()
-    num_edges = dgraph.num_edges()
+    logging.info("make dataloader done")
+    dataset_end = time.time()
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
-    logging.debug("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
+    logging.info("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
 
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed,
@@ -239,13 +262,12 @@ def main():
     else:
         assert isinstance(dgraph, DynamicGraph)
         sampler = TemporalSampler(dgraph, **model_config)
-
+    build_graph_end = time.time()
     if args.distributed:
-        # NB: it seems that DySAT needs this parameter. I don't know why.
-        find_unused_parameters = True if args.model == "DySAT" else False
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], find_unused_parameters=find_unused_parameters)
+            model, device_ids=[args.local_rank], find_unused_parameters=True)
 
+    # pinned_nfeat_buffs, pinned_efeat_buffs = None, None
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
         dim_node, dim_edge)
@@ -272,7 +294,12 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
-
+    before_train_end = time.time()
+    logging.info("load time: {}".format(dataset_end - start))
+    logging.info("build graph time: {}".format(build_graph_end - dataset_end))
+    logging.info("other time: {}".format(before_train_end - build_graph_end))
+    logging.info("init time: {}".format(build_graph_end - start))
+    logging.info("before train time: {}".format(before_train_end - start))
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device)
 

@@ -64,6 +64,11 @@ class Cache:
             assert kvstore_client is not None, 'kvstore_client must be provided when using ' \
                 'distributed training'
             assert neg_sample_ratio > 0, 'neg_sample_ratio must be positive'
+        else:
+            if node_feats is not None and node_feats.dtype == torch.bool:
+                node_feats = node_feats.to(torch.float32)
+            if edge_feats is not None and edge_feats.dtype == torch.bool:
+                edge_feats = edge_feats.to(torch.float32)
 
         # NB: cache_ratio == 0 means no cache
         assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
