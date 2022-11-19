@@ -105,10 +105,10 @@ class RandomStartBatchSampler(BatchSampler):
     def reset(self):
         self.reorder = self.num_chunks > 1
         l = self.batch_size // self.chunk_size
-        randint = int(random.randint(0, l-1))
+        randint = random.randint(0, l-1)
         if self.world_size > 1:
             torch.distributed.broadcast(randint, src=0)
-        self.random_size = randint * self.chunk_size
+        self.random_size = int(randint) * self.chunk_size
         if self.random_size == 0:
             self.reorder = False
 
