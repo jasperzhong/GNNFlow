@@ -115,8 +115,7 @@ class DistributedTemporalSampler:
 
         if self._dynamic_scheduling:
             weight = all_sampling_time.clone()
-            # mean and softmax
-            weight = weight - weight.mean(dim=1)
+            weight = weight.sum(dim=1, keepdim=True) / weight
             weight = torch.softmax(weight, dim=1)
             self._sampling_weight_matrix = weight
 
