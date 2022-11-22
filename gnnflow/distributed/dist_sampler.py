@@ -103,7 +103,7 @@ class DistributedTemporalSampler:
         all_sampling_time = torch.stack(all_sampling_time)
         all_sampling_time = all_sampling_time.reshape(
             self._num_partitions, self._local_world_size, self._num_partitions)
-        all_sampling_time = all_sampling_time.sum(dim=2)
+        all_sampling_time = all_sampling_time.mean(dim=2)
 
         return all_sampling_time
 
