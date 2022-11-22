@@ -120,6 +120,8 @@ class DistributedTemporalSampler:
             self._sampling_weight_matrix = weight
             if self._local_rank == 0:
                 print(f"weight: {weight}")
+        
+        self._sampling_time.zero_()
 
         return all_sampling_time
 
