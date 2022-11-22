@@ -122,7 +122,7 @@ class DistributedTemporalSampler:
             self._sampling_weight_matrix += (1 - self._beta) * weight
 
         # reset
-        self._sampling_time.zero_()
+        # self._sampling_time.zero_()
 
         return result
 
