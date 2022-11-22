@@ -99,11 +99,11 @@ class DistributedTemporalSampler:
             sampling_time) for _ in range(self._num_partitions * self._local_world_size)]
         torch.distributed.all_gather(all_sampling_time, sampling_time)
 
-        # merge by local machine
+        # merge by partition
         all_sampling_time = torch.stack(all_sampling_time)
         all_sampling_time = all_sampling_time.reshape(
             self._num_partitions, self._local_world_size, self._num_partitions)
-        all_sampling_time = all_sampling_time.sum(dim=1)
+        all_sampling_time = all_sampling_time.sum(dim=2)
 
         return all_sampling_time
 
