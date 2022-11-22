@@ -188,7 +188,6 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-
     num_nodes = dgraph.num_vertices() + 1
     num_edges = dgraph.num_edges()
 
@@ -365,9 +364,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
+                    all_sampling_time = sampler.get_sampling_time()
+
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+
+                    if args.distributed:
+                        logging.info('Sampling time: {}'.format(all_sampling_time))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time

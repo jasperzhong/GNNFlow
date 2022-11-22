@@ -49,6 +49,9 @@ class DistributedTemporalSampler:
         self._sampling_task_queue = Queue()
         self._sampling_thread.start()
 
+        # profiling
+        self._sampling_time = torch.zeros(self._num_partitions)
+
     def _sampling_loop(self):
         while True:
             while not self._sampling_task_queue.empty():
@@ -82,6 +85,25 @@ class DistributedTemporalSampler:
 
     def poll(self, handle: int):
         return self._handle_manager.poll(handle)
+
+    def get_sampling_time(self):
+        """
+        Get the sampling time of all partitions.
+
+        Returns:
+            sampling time of all partitions. shape: [num_partition, num_partition]
+        """
+        sampling_time = self._sampling_time.clone()
+        # local group per machine
+        local_group_rank = self._rank // self._local_world_size
+        local_group = torch.distributed.new_group(range(local_group_rank * self._local_world_size,
+                                                        (local_group_rank + 1) * self._local_world_size))
+        torch.distributed.all_reduce(sampling_time, group=local_group)
+        # gather all
+        all_sampling_time = torch.zeros(
+            self._num_partitions, self._num_partitions)
+        torch.distributed.all_gather(all_sampling_time, sampling_time)
+        return all_sampling_time
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -142,12 +164,15 @@ class DistributedTemporalSampler:
             partition_timestamps = torch.from_numpy(
                 timestamps[partition_mask]).contiguous()
 
+            # static scheduling
             worker_rank = partition_id * self._local_world_size + self._local_rank
             if worker_rank == self._rank:
                 logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
+                start = time.time()
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
+                self._sampling_time[partition_id] += time.time() - start
             else:
                 logging.debug(
                     "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
@@ -159,11 +184,13 @@ class DistributedTemporalSampler:
 
         # collect sampling results
         sampling_results = []
-        for future in futures:
+        for i, future in enumerate(futures):
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
+                start = time.time()
                 sampling_results.append(future.wait())
+                self._sampling_time[i] += time.time() - start
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
