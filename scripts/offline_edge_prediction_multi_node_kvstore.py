@@ -94,7 +94,6 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-set_seed(args.seed)
 
 
 def evaluate(dataloader, sampler, model, criterion, cache, device):
@@ -147,6 +146,8 @@ def main():
         args.local_world_size = args.world_size = 1
 
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
+
+    set_seed(args.seed + args.rank)
 
     model_config, data_config = get_default_config(args.model, args.data)
 

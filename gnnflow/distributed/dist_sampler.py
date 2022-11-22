@@ -118,6 +118,8 @@ class DistributedTemporalSampler:
             weight = weight.sum(dim=1, keepdim=True) / weight
             weight = torch.softmax(weight, dim=1)
             self._sampling_weight_matrix = weight
+            if self._local_rank == 0:
+                print(f"weight: {weight}")
 
         return all_sampling_time
 
