@@ -100,10 +100,10 @@ class DistributedTemporalSampler:
                                                         (local_group_rank + 1) * self._local_world_size))
         torch.distributed.all_reduce(sampling_time, group=local_group)
         # gather all
-        all_sampling_time = torch.zeros(
-            self._num_partitions, self._num_partitions)
+        all_sampling_time = [torch.zeros_like(
+            sampling_time) for _ in range(self._num_partitions)]
         torch.distributed.all_gather(all_sampling_time, sampling_time)
-        return all_sampling_time
+        return torch.stack(all_sampling_time)
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """

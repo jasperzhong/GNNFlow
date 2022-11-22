@@ -320,7 +320,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_e = 0
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
-    logging.info('Start training...')
+    logging.info('Start training... distributed: {}'.format(args.distributed))
     for e in range(args.epoch):
         model.train()
         # TODO: now reset do nothing when using distributed
@@ -371,7 +371,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
                     if args.distributed:
-                        logging.info('Sampling time: {}'.format(all_sampling_time))
+                        print('Sampling time: ', all_sampling_time)
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
