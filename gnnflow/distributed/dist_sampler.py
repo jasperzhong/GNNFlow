@@ -56,8 +56,7 @@ class DistributedTemporalSampler:
         # profiling
         self._sampling_time = torch.zeros(self._num_partitions)
         if dynamic_scheduling:
-            self._generator = torch.Generator()
-            self._sampling_weight_matrix = torch.ones(
+            self._sampling_weight_matrix = np.ones(
                 self._num_partitions, self._local_world_size)
 
     def _sampling_loop(self):
@@ -192,8 +191,8 @@ class DistributedTemporalSampler:
                     # use weight matrix to decide which partition to sample
                     weight_matrix = self._sampling_weight_matrix[partition_id]
                     worker_rank = partition_id * self._local_world_size + \
-                        torch.multinomial(weight_matrix, 1,
-                                          generator=self._generator).item()
+                        np.random.choice(
+                            self._local_world_size, p=weight_matrix)
 
                 logging.debug(
                     "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
