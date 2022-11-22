@@ -44,6 +44,11 @@ class DistributedTemporalSampler:
         self._partition_table = self._dgraph.get_partition_table()
         self._num_partitions = self._dgraph.num_partitions()
 
+        local_group_rank = self._rank // self._local_world_size
+        local_ranks = list(range(local_group_rank * self._local_world_size,
+                                 (local_group_rank + 1) * self._local_world_size))
+        self._local_group = torch.distributed.new_group(local_ranks)
+
         self._handle_manager = HandleManager()
         self._sampling_thread = threading.Thread(target=self._sampling_loop)
         self._sampling_task_queue = Queue()
@@ -95,10 +100,9 @@ class DistributedTemporalSampler:
         """
         sampling_time = self._sampling_time.clone()
         # local group per machine
-        local_group_rank = self._rank // self._local_world_size
-        local_group = torch.distributed.new_group(range(local_group_rank * self._local_world_size,
-                                                        (local_group_rank + 1) * self._local_world_size))
-        torch.distributed.all_reduce(sampling_time, group=local_group)
+        print("enter all reduce, local group: ", self._local_group)
+        torch.distributed.all_reduce(sampling_time, group=self._local_group)
+        print("Rank %d: sampling time: %s" % (self._rank, sampling_time))
         # gather all
         all_sampling_time = [torch.zeros_like(
             sampling_time) for _ in range(self._num_partitions)]
