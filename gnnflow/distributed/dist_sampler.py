@@ -1,5 +1,6 @@
 import logging
 import threading
+import random
 import time
 from queue import Queue
 from typing import List
@@ -25,16 +26,19 @@ class DistributedTemporalSampler:
     Distributed Temporal Sampler API
     """
 
-    def __init__(self, sampler: TemporalSampler, dgraph: DistributedDynamicGraph):
+    def __init__(self, sampler: TemporalSampler, dgraph: DistributedDynamicGraph,
+                 dynamic_scheduling: bool = False):
         """
         Initialize the distributed temporal sampler.
 
         Args:
             sampler (TemporalSampler): The temporal sampler.
             dgraph (DistributedDynamicGraph): The distributed dynamic graph.
+            dynamic_scheduling (bool): Whether to use dynamic scheduling.
         """
         self._sampler = sampler
         self._dgraph = dgraph
+        self._dynamic_scheduling = dynamic_scheduling
 
         self._rank = torch.distributed.get_rank()
         self._local_rank = local_rank()
@@ -178,6 +182,13 @@ class DistributedTemporalSampler:
             else:
                 logging.debug(
                     "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
+
+                if self._dynamic_scheduling:
+                    # idea: schedule local_rank == 0 remote work to other local ranks
+                    if self._local_rank == 0:
+                        worker_rank = partition_id * self._local_world_size + \
+                            random.randint(1, self._local_world_size - 1)
+
                 futures.append(rpc.rpc_async(
                     'worker{}'.format(worker_rank),
                     graph_services.sample_layer_local,
