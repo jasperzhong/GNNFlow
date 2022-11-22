@@ -56,8 +56,10 @@ class DistributedTemporalSampler:
         # profiling
         self._sampling_time = torch.zeros(self._num_partitions)
         if dynamic_scheduling:
-            self._sampling_weight_matrix = np.ones(
-                (self._num_partitions, self._local_world_size))
+            x = np.ones((self._num_partitions, self._local_world_size))
+            # softmax
+            self._sampling_weight_matrix = np.exp(
+                x) / np.sum(np.exp(x), axis=1, keepdims=True)
 
     def _sampling_loop(self):
         while True:
