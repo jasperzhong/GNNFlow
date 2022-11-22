@@ -69,6 +69,8 @@ parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
+parser.add_argument("--dynamic-scheduling", action="store_true",
+                    help="whether to use dynamic scheduling")
 
 # dataset
 parser.add_argument("--chunks", help="num of dataset chunks",
@@ -256,7 +258,7 @@ def main():
     if args.distributed:
         assert isinstance(dgraph, DistributedDynamicGraph)
         sampler = TemporalSampler(dgraph._dgraph, **model_config)
-        graph_services.set_dsampler(sampler)
+        graph_services.set_dsampler(sampler, args.dynamic_scheduling)
         sampler = graph_services.get_dsampler()
     else:
         assert isinstance(dgraph, DynamicGraph)
@@ -372,7 +374,6 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
                     if args.distributed:
                         print('Sampling time: ', all_sampling_time)
-
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time

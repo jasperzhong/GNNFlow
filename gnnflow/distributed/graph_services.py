@@ -56,7 +56,7 @@ def get_dsampler() -> DistributedTemporalSampler:
     return DSAMPLER
 
 
-def set_dsampler(sampler: TemporalSampler):
+def set_dsampler(sampler: TemporalSampler, dynamic_scheduling: bool = False):
     """
     Set the distributed temporal sampler.
 
@@ -65,7 +65,7 @@ def set_dsampler(sampler: TemporalSampler):
     """
     global DSAMPLER
     dgraph = get_dgraph()
-    DSAMPLER = DistributedTemporalSampler(sampler, dgraph)
+    DSAMPLER = DistributedTemporalSampler(sampler, dgraph, dynamic_scheduling)
 
 
 def get_kvstore_server() -> KVStoreServer:
