@@ -1,3 +1,5 @@
+from gnnflow.utils import get_project_root_dir, load_dataset, load_feat
+from gnnflow.utils import RandEdgeSampler, get_project_root_dir, load_dataset, load_feat
 import logging
 import os
 import time
@@ -12,7 +14,9 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import RandEdgeSampler, get_project_root_dir, load_dataset, load_feat
+<< << << < HEAD
+== == == =
+>>>>>> > main
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
