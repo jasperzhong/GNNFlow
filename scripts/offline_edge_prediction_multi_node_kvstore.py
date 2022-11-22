@@ -371,7 +371,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
                     if args.distributed:
-                        logging.info('Sampling time: ', all_sampling_time)
+                        print('Sampling time: ', all_sampling_time)
 
 
         epoch_time = time.time() - epoch_time_start
@@ -406,7 +406,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
             if args.distributed:
-                logging.info('Sampling time: ', all_sampling_time)
+                print('Sampling time: ', all_sampling_time)
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
