@@ -58,7 +58,7 @@ class DistributedTemporalSampler:
         if dynamic_scheduling:
             self._beta = 0.5
             self._sampling_weight_matrix = torch.ones(
-                self._num_partitions, self._local_world_size)
+                self._num_partitions, self._local_world_size) / self._local_world_size
 
     def _sampling_loop(self):
         while True:
