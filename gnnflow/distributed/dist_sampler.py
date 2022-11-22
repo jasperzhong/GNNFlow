@@ -113,7 +113,7 @@ class DistributedTemporalSampler:
         all_sampling_time = all_sampling_time.mean(dim=2)
 
         if self._dynamic_scheduling:
-            self._sampling_weight_matrix = 1.0 / all_sampling_time
+            self._sampling_weight_matrix = torch.softmax(1.0 / all_sampling_time, dim=1)
 
         return all_sampling_time
 
