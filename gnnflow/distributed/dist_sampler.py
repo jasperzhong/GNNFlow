@@ -108,22 +108,23 @@ class DistributedTemporalSampler:
         torch.distributed.all_gather(all_sampling_time, sampling_time)
 
         # merge by partition
-        all_sampling_time = torch.stack(all_sampling_time)
-        all_sampling_time = all_sampling_time.reshape(
-            self._num_partitions, self._local_world_size, self._num_partitions)
-        all_sampling_time = all_sampling_time.mean(dim=2)
-
+        result = torch.zeros(self._num_partitions, self._local_world_size)
+        for i in range(self._num_partitions):
+            for j in range(self._local_world_size):
+                for i in range(self._num_partitions):
+                    result[i][j] = all_sampling_time[i * self._local_world_size + j][i]
+                
         if self._dynamic_scheduling:
-            weight = all_sampling_time.clone()
+            weight = result.clone()
             weight = weight.sum(dim=1, keepdim=True) / weight
             weight = torch.softmax(weight, dim=1)
             self._sampling_weight_matrix *= self._beta
             self._sampling_weight_matrix += (1 - self._beta) * weight
-        
+
         # reset
         self._sampling_time.zero_()
 
-        return all_sampling_time
+        return result
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
