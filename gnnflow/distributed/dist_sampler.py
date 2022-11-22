@@ -111,8 +111,8 @@ class DistributedTemporalSampler:
         result = torch.zeros(self._num_partitions, self._local_world_size)
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
-                for i in range(self._num_partitions):
-                    result[i][j] = all_sampling_time[i * self._local_world_size + j][i]
+                for k in range(self._num_partitions):
+                    result[i][j] = all_sampling_time[k * self._local_world_size + j][i]
                 
         if self._dynamic_scheduling:
             weight = result.clone()
