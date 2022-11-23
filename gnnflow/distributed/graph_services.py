@@ -248,7 +248,7 @@ def sample_layer_local_proxy(target_vertices: torch.Tensor, timestamps: torch.Te
     """
     dsampler = get_dsampler()
     return dsampler.dispatch_sampling_task(
-        target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
+        target_vertices, timestamps, layer, snapshot)
 
 
 def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):

@@ -325,7 +325,7 @@ class DistributedTemporalSampler:
             target_vertices, timestamps, layer, snapshot, False)
         return ret
 
-    def dispatch_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
+    def dispatch_sampling_task(self, target_vertices: torch.Tensor, timestamps: torch.Tensor,
                                layer: int, snapshot: int):
         """
         Dispatch sampling task to GPUs based on load table
@@ -350,8 +350,8 @@ class DistributedTemporalSampler:
 
         # send sampling task to the rank
         ret = rpc.rpc_sync("worker{}".format(min_load_global_rank),
-                            graph_services.sample_layer_local,
-                            args=(target_vertices, timestamps, layer, snapshot))
+                           graph_services.sample_layer_local,
+                           args=(target_vertices, timestamps, layer, snapshot))
 
         # update load table
         self._load_table[min_load_local_rank] -= len(target_vertices)
