@@ -332,7 +332,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         model.train()
         cache.reset()
         if e > 0:
-            model.reset()
+            model.module.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
