@@ -348,10 +348,15 @@ class DistributedTemporalSampler:
         # update load table
         load_table[min_load_local_rank] += len(target_vertices)
 
-        # send sampling task to the rank
-        ret = rpc.rpc_sync("worker{}".format(min_load_global_rank),
-                           graph_services.sample_layer_local,
-                           args=(target_vertices, timestamps, layer, snapshot))
+        if min_load_global_rank == self._rank:
+            # sample locally
+            ret = graph_services.sample_layer_local(
+                target_vertices, timestamps, layer, snapshot)
+        else:
+            # send sampling task to the rank
+            ret = rpc.rpc_sync("worker{}".format(min_load_global_rank),
+                               graph_services.sample_layer_local,
+                               args=(target_vertices, timestamps, layer, snapshot))
 
         # update load table
         self._load_table[min_load_local_rank] -= len(target_vertices)
