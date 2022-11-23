@@ -304,7 +304,7 @@ class Cache:
                     else:
                         if self.pinned_nfeat_buffs is not None:
                             torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
-                                            out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
+                                               out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
                             uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
                                 self.device, non_blocking=True)
                         else:
@@ -315,7 +315,7 @@ class Cache:
                 i += 1
                 b.srcdata['h'] = node_feature
 
-                if update_cache:
+                if update_cache and uncached_mask.sum() > 0:
                     self.update_node_cache(cached_node_index=cached_node_index,
                                            uncached_node_id=uncached_node_id_unique,
                                            uncached_node_feature=uncached_node_feature)
