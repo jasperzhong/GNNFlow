@@ -59,6 +59,7 @@ class DistributedTemporalSampler:
         if self._dynamic_scheduling:
             if self._local_rank == 0:
                 self._load_table = torch.ones(self._local_world_size)
+                self._load_table_lock = threading.Lock()
 
     def _sampling_loop(self):
         while True:
@@ -338,10 +339,11 @@ class DistributedTemporalSampler:
         """
         assert self._local_rank == 0
 
-        load_table = self._load_table
+        with self._load_table_lock:
+            load_table = self._load_table.clone()
 
         # find which rank to sample
-        weight = load_table.sum(dim=0, keepdim=True) / load_table
+        weight = load_table.sum(dim=1, keepdim=True) / load_table
         weight = torch.softmax(weight, dim=0)
         min_load_local_rank = int(torch.multinomial(weight, 1).item())
         min_load_global_rank = min_load_local_rank + \
@@ -349,7 +351,8 @@ class DistributedTemporalSampler:
 
         # update load table
         load = len(target_vertices)
-        load_table[min_load_local_rank] += load
+        with self._load_table_lock:
+            load_table[min_load_local_rank] += load
 
         if min_load_global_rank == self._rank:
             # sample locally
@@ -362,5 +365,6 @@ class DistributedTemporalSampler:
                                args=(target_vertices, timestamps, layer, snapshot))
 
         # update load table
-        self._load_table[min_load_local_rank] -= load
+        with self._load_table_lock:
+            self._load_table[min_load_local_rank] -= load
         return ret
