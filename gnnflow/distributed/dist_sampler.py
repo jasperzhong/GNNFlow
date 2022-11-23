@@ -112,7 +112,7 @@ class DistributedTemporalSampler:
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
                 for k in range(self._num_partitions):
-                    result[i][j] = all_sampling_time[k * self._local_world_size + j][i]
+                    result[i][j] += all_sampling_time[k * self._local_world_size + j][i]
                 
         if self._dynamic_scheduling:
             weight = result.clone()
