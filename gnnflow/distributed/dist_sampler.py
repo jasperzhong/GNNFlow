@@ -341,15 +341,12 @@ class DistributedTemporalSampler:
         load_table = self._load_table
 
         # find which rank to sample
-        min_load_local_rank = load_table.argmin()
+        min_load_local_rank = int(torch.multinomial(load_table, 1).item())
         min_load_global_rank = min_load_local_rank + \
             self._partition_id*self._local_world_size
 
         # update load table
         load = len(target_vertices)
-        if min_load_global_rank == self._rank:
-            load *= 2
-
         load_table[min_load_local_rank] += load
 
         if min_load_global_rank == self._rank:
