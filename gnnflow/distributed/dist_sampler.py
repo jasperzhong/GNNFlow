@@ -120,6 +120,8 @@ class DistributedTemporalSampler:
             weight = torch.softmax(weight, dim=1)
             self._sampling_weight_matrix *= self._beta
             self._sampling_weight_matrix += (1 - self._beta) * weight
+            if self._rank == 0:
+                print(self._sampling_weight_matrix)
 
         # reset
         self._sampling_time.zero_()
