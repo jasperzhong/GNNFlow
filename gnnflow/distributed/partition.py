@@ -521,7 +521,7 @@ class FennelEdgePartitioner(Partitioner):
             partition_size = (self._partition_table == i).sum().item()
 
             if partition_size >= self._partition_capacity or self._edges_partitioned_num_list[i] > (self._edges_partitioned / self._num_partitions):
-                partition_score.append(-1000)
+                partition_score.append(-1000000)
                 continue
 
             # calculate the neighbor in partition i
@@ -548,8 +548,8 @@ class FennelEdgePartitioner(Partitioner):
         debug_map[0] = loc_score
         debug_map[1] = bal_score
 
-        return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
-        # return int(np.argmax(partition_score)), debug_map
+        # return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
+        return int(np.argmax(partition_score)), debug_map
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
