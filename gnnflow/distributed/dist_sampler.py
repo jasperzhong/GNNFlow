@@ -1,6 +1,5 @@
 import logging
 import threading
-import random
 import time
 from queue import Queue
 from typing import List
@@ -47,6 +46,7 @@ class DistributedTemporalSampler:
         self._num_snapshots = self._sampler._num_snapshots
         self._partition_table = self._dgraph.get_partition_table()
         self._num_partitions = self._dgraph.num_partitions()
+        self._partition_id = self._rank // self._local_world_size
 
         self._handle_manager = HandleManager()
         self._sampling_thread = threading.Thread(target=self._sampling_loop)
@@ -55,17 +55,17 @@ class DistributedTemporalSampler:
 
         # profiling
         self._sampling_time = torch.zeros(1)
-        if dynamic_scheduling:
-            self._beta = 0.9
-            self._sampling_weight_matrix = torch.ones(
-                self._num_partitions, self._local_world_size) / self._local_world_size
+
+        if self._dynamic_scheduling:
+            if self._local_rank == 0:
+                self._load_table = torch.zeros(self._local_world_size)
 
     def _sampling_loop(self):
         while True:
             while not self._sampling_task_queue.empty():
                 target_vertices, timestamps, layer, snapshot, result, \
                     handle = self._sampling_task_queue.get()
-                
+
                 start = time.time()
                 ret = self.sample_layer_local(
                     target_vertices, timestamps, layer, snapshot)
@@ -111,15 +111,6 @@ class DistributedTemporalSampler:
         all_sampling_time = torch.stack(all_sampling_time)
         all_sampling_time = all_sampling_time.reshape(
             self._num_partitions, self._local_world_size)
-
-        if self._dynamic_scheduling:
-            weight = all_sampling_time.clone()
-            weight = weight.sum(dim=1, keepdim=True) / weight
-            weight = torch.softmax(weight, dim=1)
-            self._sampling_weight_matrix *= self._beta
-            self._sampling_weight_matrix += (1 - self._beta) * weight
-            if self._rank == 0:
-                print(self._sampling_weight_matrix)
 
         # reset
         self._sampling_time.zero_()
@@ -185,26 +176,30 @@ class DistributedTemporalSampler:
             partition_timestamps = torch.from_numpy(
                 timestamps[partition_mask]).contiguous()
 
-            # static scheduling
-            worker_rank = partition_id * self._local_world_size + self._local_rank
-            if worker_rank == self._rank:
+            if self._parition_id = partition_id:
                 logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
             else:
-                if self._dynamic_scheduling:
-                    # use weight matrix to decide which partition to sample
-                    weight_matrix = self._sampling_weight_matrix[partition_id]
-                    worker_rank = partition_id * self._local_world_size + \
-                        torch.multinomial(weight_matrix, 1).item()
+                if not self._dynamic_scheduling:
+                    # static scheduling
+                    worker_rank = partition_id * self._local_world_size + self._local_rank
+                    logging.debug(
+                        "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
 
-                logging.debug(
-                    "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
-                futures.append(rpc.rpc_async(
-                    'worker{}'.format(worker_rank),
-                    graph_services.sample_layer_local,
-                    args=(partition_vertices, partition_timestamps, layer, snapshot)))
+                    futures.append(rpc.rpc_async(
+                        'worker{}'.format(worker_rank),
+                        graph_services.sample_layer_local,
+                        args=(partition_vertices, partition_timestamps, layer, snapshot)))
+                else:
+                    # dynamic scheduling
+                    worker_rank = partition_id * self._local_world_size
+                    futures.append(rpc.rpc_async(
+                        'worker{}'.format(worker_rank),
+                        graph_services.sample_layer_local_proxy,
+                        args=(partition_vertices, partition_timestamps, layer, snapshot)))
+
             masks.append(partition_mask)
 
         # collect sampling results
@@ -213,7 +208,10 @@ class DistributedTemporalSampler:
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
-                sampling_results.append(future.wait())
+                if self._dynamic_scheduling:
+                    sampling_results.append(future.wait().to_here())
+                else:
+                    sampling_results.append(future.wait())
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
@@ -329,3 +327,36 @@ class DistributedTemporalSampler:
         ret = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot, False)
         return ret
+
+    def dispatch_sampling_task(self, target_vertices: np.ndarray, timestamps: np.ndarray,
+                               layer: int, snapshot: int):
+        """
+        Dispatch sampling task to GPUs based on load table
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+            layer: layer to sample.
+            snapshot: snapshot to sample.
+        """
+        assert self._local_rank == 0
+
+        load_table = self._load_table
+
+        # find which rank to sample
+        min_load_local_rank = load_table.argmin()
+        min_load_global_rank = min_load_local_rank + \
+            self._partition_id*self._local_world_size
+
+        # update load table
+        load_table[min_load_local_rank] += len(target_vertices)
+
+        # send sampling task to the rank
+        rref = rpc.remote("worker{}".format(min_load_global_rank),
+                          graph_services.sample_layer_local,
+                          args=(target_vertices, timestamps, layer, snapshot))
+
+        # update load table
+        self._load_table[min_load_local_rank] -= len(target_vertices)
+
+        return rref

@@ -232,6 +232,26 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     return ret
 
 
+def sample_layer_local_proxy(target_vertices: torch.Tensor, timestamps: torch.Tensor,
+                             layer: int, snapshot: int):
+    """
+    Dispatch the sample_layer_local request to the correct rank.
+
+    Args:
+        target_vertices (torch.Tensor): The target vertices.
+        timestamps (torch.Tensor): The timestamps.
+        layer (int): The layer.
+        snapshot (int): The snapshot.
+
+    Returns:
+        RemoteReference of SamplingResultTorch: The remote reference of the sampling result.
+    """
+    dsampler = get_dsampler()
+    rref = dsampler.dispatch_sampling_task(
+        target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
+    return rref
+
+
 def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
     """
     Push tensors to the remote workers for KVStore servers.
