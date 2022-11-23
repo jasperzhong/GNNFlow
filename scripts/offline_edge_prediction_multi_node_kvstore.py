@@ -401,6 +401,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 total_samples = metrics.tolist()
 
             all_sampling_time = sampler.get_sampling_time()
+            if args.rank == 0:
+                print(all_sampling_time)
+
             std = all_sampling_time.std(dim=1).mean()
             mean = all_sampling_time.mean(dim=1).mean()
             cv_sampling_time = std / mean
