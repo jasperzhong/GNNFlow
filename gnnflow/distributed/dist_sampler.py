@@ -340,17 +340,15 @@ class DistributedTemporalSampler:
         assert self._local_rank == 0
 
         with self._load_table_lock:
-            load_table = self._load_table.clone()
+            min_load_local_rank = int(torch.argmin(self._load_table).item())
 
-        # find which rank to sample
-        min_load_local_rank = int(torch.argmin(load_table).item())
         min_load_global_rank = min_load_local_rank + \
             self._partition_id*self._local_world_size
 
         # update load table
         load = len(target_vertices)
         with self._load_table_lock:
-            load_table[min_load_local_rank] += load
+            self._load_table[min_load_local_rank] += load
 
         if min_load_global_rank == self._rank:
             # sample locally
