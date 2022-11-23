@@ -54,7 +54,7 @@ class DistributedTemporalSampler:
         self._sampling_thread.start()
 
         # profiling
-        self._sampling_time = torch.zeros(self._num_partitions)
+        self._sampling_time = torch.zeros(1)
         if dynamic_scheduling:
             self._beta = 0
             self._sampling_weight_matrix = torch.ones(
@@ -65,9 +65,11 @@ class DistributedTemporalSampler:
             while not self._sampling_task_queue.empty():
                 target_vertices, timestamps, layer, snapshot, result, \
                     handle = self._sampling_task_queue.get()
-
+                
+                start = time.time()
                 ret = self.sample_layer_local(
                     target_vertices, timestamps, layer, snapshot)
+                self._sampling_time += time.time() - start
 
                 self._transform_output(ret, result)
 
@@ -106,16 +108,12 @@ class DistributedTemporalSampler:
         all_sampling_time = [torch.zeros_like(
             sampling_time) for _ in range(self._num_partitions * self._local_world_size)]
         torch.distributed.all_gather(all_sampling_time, sampling_time)
+        all_sampling_time = torch.stack(all_sampling_time)
+        all_sampling_time = all_sampling_time.reshape(
+            self._num_partitions, self._local_world_size)
 
-        # merge by partition
-        result = torch.zeros(self._num_partitions, self._local_world_size)
-        for i in range(self._num_partitions):
-            for j in range(self._local_world_size):
-                for k in range(self._num_partitions):
-                    result[i][j] += all_sampling_time[k * self._local_world_size + j][i]
-                
         if self._dynamic_scheduling:
-            weight = result.clone()
+            weight = all_sampling_time.clone()
             weight = weight.sum(dim=1, keepdim=True) / weight
             weight = torch.softmax(weight, dim=1)
             self._sampling_weight_matrix *= self._beta
@@ -126,7 +124,7 @@ class DistributedTemporalSampler:
         # reset
         self._sampling_time.zero_()
 
-        return result
+        return all_sampling_time
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -192,10 +190,8 @@ class DistributedTemporalSampler:
             if worker_rank == self._rank:
                 logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
-                start = time.time()
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
-                self._sampling_time[partition_id] += time.time() - start
             else:
                 if self._dynamic_scheduling:
                     # use weight matrix to decide which partition to sample
@@ -213,13 +209,11 @@ class DistributedTemporalSampler:
 
         # collect sampling results
         sampling_results = []
-        for i, future in enumerate(futures):
+        for future in futures:
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
-                start = time.time()
                 sampling_results.append(future.wait())
-                self._sampling_time[i] += time.time() - start
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
