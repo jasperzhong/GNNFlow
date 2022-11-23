@@ -58,7 +58,7 @@ class DistributedTemporalSampler:
 
         if self._dynamic_scheduling:
             if self._local_rank == 0:
-                self._load_table = torch.zeros(self._local_world_size) + 1e-4
+                self._load_table = torch.ones(self._local_world_size)
 
     def _sampling_loop(self):
         while True:
