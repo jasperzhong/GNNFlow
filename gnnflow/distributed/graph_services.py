@@ -56,7 +56,7 @@ def get_dsampler() -> DistributedTemporalSampler:
     return DSAMPLER
 
 
-def set_dsampler(sampler: TemporalSampler):
+def set_dsampler(sampler: TemporalSampler, dynamic_scheduling: bool = False):
     """
     Set the distributed temporal sampler.
 
@@ -65,7 +65,7 @@ def set_dsampler(sampler: TemporalSampler):
     """
     global DSAMPLER
     dgraph = get_dgraph()
-    DSAMPLER = DistributedTemporalSampler(sampler, dgraph)
+    DSAMPLER = DistributedTemporalSampler(sampler, dgraph, dynamic_scheduling)
 
 
 def get_kvstore_server() -> KVStoreServer:
@@ -230,6 +230,25 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
                   torch.distributed.get_rank(), handle, ret.num_src_nodes)
     return ret
+
+
+def sample_layer_local_proxy(target_vertices: torch.Tensor, timestamps: torch.Tensor,
+                             layer: int, snapshot: int) -> SamplingResultTorch:
+    """
+    Dispatch the sample_layer_local request to the correct rank.
+
+    Args:
+        target_vertices (torch.Tensor): The target vertices.
+        timestamps (torch.Tensor): The timestamps.
+        layer (int): The layer.
+        snapshot (int): The snapshot.
+
+    Returns:
+        torch.Tensor: The temporal neighbors of the vertex.
+    """
+    dsampler = get_dsampler()
+    return dsampler.dispatch_sampling_task(
+        target_vertices, timestamps, layer, snapshot)
 
 
 def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):

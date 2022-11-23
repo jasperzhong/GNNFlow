@@ -25,16 +25,19 @@ class DistributedTemporalSampler:
     Distributed Temporal Sampler API
     """
 
-    def __init__(self, sampler: TemporalSampler, dgraph: DistributedDynamicGraph):
+    def __init__(self, sampler: TemporalSampler, dgraph: DistributedDynamicGraph,
+                 dynamic_scheduling: bool = False):
         """
         Initialize the distributed temporal sampler.
 
         Args:
             sampler (TemporalSampler): The temporal sampler.
             dgraph (DistributedDynamicGraph): The distributed dynamic graph.
+            dynamic_scheduling (bool): Whether to use dynamic scheduling.
         """
         self._sampler = sampler
         self._dgraph = dgraph
+        self._dynamic_scheduling = dynamic_scheduling
 
         self._rank = torch.distributed.get_rank()
         self._local_rank = local_rank()
@@ -43,11 +46,20 @@ class DistributedTemporalSampler:
         self._num_snapshots = self._sampler._num_snapshots
         self._partition_table = self._dgraph.get_partition_table()
         self._num_partitions = self._dgraph.num_partitions()
+        self._partition_id = self._rank // self._local_world_size
 
         self._handle_manager = HandleManager()
         self._sampling_thread = threading.Thread(target=self._sampling_loop)
         self._sampling_task_queue = Queue()
         self._sampling_thread.start()
+
+        # profiling
+        self._sampling_time = torch.zeros(1)
+
+        if self._dynamic_scheduling:
+            if self._local_rank == 0:
+                self._load_table = torch.ones(self._local_world_size)
+                self._load_table_lock = threading.Lock()
 
     def _sampling_loop(self):
         while True:
@@ -55,8 +67,10 @@ class DistributedTemporalSampler:
                 target_vertices, timestamps, layer, snapshot, result, \
                     handle = self._sampling_task_queue.get()
 
+                start = time.time()
                 ret = self.sample_layer_local(
                     target_vertices, timestamps, layer, snapshot)
+                self._sampling_time += time.time() - start
 
                 self._transform_output(ret, result)
 
@@ -82,6 +96,27 @@ class DistributedTemporalSampler:
 
     def poll(self, handle: int):
         return self._handle_manager.poll(handle)
+
+    def get_sampling_time(self):
+        """
+        Get the sampling time of all partitions.
+
+        Returns:
+            sampling time of all partitions. shape: [num_partition, num_partition]
+        """
+        sampling_time = self._sampling_time.clone()
+        # all gather
+        all_sampling_time = [torch.zeros_like(
+            sampling_time) for _ in range(self._num_partitions * self._local_world_size)]
+        torch.distributed.all_gather(all_sampling_time, sampling_time)
+        all_sampling_time = torch.stack(all_sampling_time)
+        all_sampling_time = all_sampling_time.reshape(
+            self._num_partitions, self._local_world_size)
+
+        # reset
+        self._sampling_time.zero_()
+
+        return all_sampling_time
 
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
@@ -142,19 +177,30 @@ class DistributedTemporalSampler:
             partition_timestamps = torch.from_numpy(
                 timestamps[partition_mask]).contiguous()
 
-            worker_rank = partition_id * self._local_world_size + self._local_rank
-            if worker_rank == self._rank:
+            if self._partition_id == partition_id:
                 logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
             else:
-                logging.debug(
-                    "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
-                futures.append(rpc.rpc_async(
-                    'worker{}'.format(worker_rank),
-                    graph_services.sample_layer_local,
-                    args=(partition_vertices, partition_timestamps, layer, snapshot)))
+                if not self._dynamic_scheduling:
+                    # static scheduling
+                    worker_rank = partition_id * self._local_world_size + self._local_rank
+                    logging.debug(
+                        "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
+
+                    futures.append(rpc.rpc_async(
+                        'worker{}'.format(worker_rank),
+                        graph_services.sample_layer_local,
+                        args=(partition_vertices, partition_timestamps, layer, snapshot)))
+                else:
+                    # dynamic scheduling
+                    worker_rank = partition_id * self._local_world_size
+                    futures.append(rpc.rpc_async(
+                        'worker{}'.format(worker_rank),
+                        graph_services.sample_layer_local_proxy,
+                        args=(partition_vertices, partition_timestamps, layer, snapshot)))
+
             masks.append(partition_mask)
 
         # collect sampling results
@@ -278,4 +324,46 @@ class DistributedTemporalSampler:
         self._dgraph.wait_for_all_updates_to_finish()
         ret = self._sampler.sample_layer(
             target_vertices, timestamps, layer, snapshot, False)
+        return ret
+
+    def dispatch_sampling_task(self, target_vertices: torch.Tensor, timestamps: torch.Tensor,
+                               layer: int, snapshot: int):
+        """
+        Dispatch sampling task to GPUs based on load table
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+            layer: layer to sample.
+            snapshot: snapshot to sample.
+        """
+        assert self._local_rank == 0
+
+        with self._load_table_lock:
+            load_table = self._load_table
+
+            weight = load_table.sum(dim=0, keepdim=True) / load_table
+            weight = torch.softmax(weight, dim=0)
+            min_load_local_rank = int(torch.multinomial(weight, 1).item())
+            min_load_global_rank = min_load_local_rank + \
+                self._partition_id*self._local_world_size
+
+            # update load table
+            out_degree = self._dgraph.out_degree(target_vertices.numpy())
+            load = np.sum(out_degree)
+            self._load_table[min_load_local_rank] += load
+
+        if min_load_global_rank == self._rank:
+            # sample locally
+            ret = graph_services.sample_layer_local(
+                target_vertices, timestamps, layer, snapshot)
+        else:
+            # send sampling task to the rank
+            ret = rpc.rpc_sync("worker{}".format(min_load_global_rank),
+                               graph_services.sample_layer_local,
+                               args=(target_vertices, timestamps, layer, snapshot))
+
+        # update load table
+        with self._load_table_lock:
+            self._load_table[min_load_local_rank] -= load
         return ret
