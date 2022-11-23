@@ -538,7 +538,7 @@ class FennelEdgePartitioner(Partitioner):
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
-            bal_score.append(self._edges_partitioned_num_list[i])
+            bal_score.append(self._edges_partitioned_num_list[i].item())
             loc_score.append(locality_score)
 
             partition_score.append(
