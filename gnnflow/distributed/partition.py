@@ -507,6 +507,9 @@ class FennelEdgePartitioner(Partitioner):
 
     def fennelEdge(self, vid: int, dst_nodes: torch.Tensor):
         partition_score = []
+        debug_map = {}
+        loc_score = []
+        bal_score = []
 
         # hyper parameter
         alpha = (self._num_partitions ** 0.5) * \
@@ -535,13 +538,19 @@ class FennelEdgePartitioner(Partitioner):
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
+            bal_score.append(self._edges_partitioned_num_list[i])
+            loc_score.append(locality_score)
+
             partition_score.append(
                 locality_score - 0.01 * alpha * self._gamma * (self._edges_partitioned_num_list[i] ** (self._gamma - 1)))
 
         partition_score = np.array(partition_score)
 
+        debug_map[0] = loc_score
+        debug_map[1] = bal_score
+
         # return int(np.random.choice(np.where(partition_score == partition_score.max())[0]))
-        return int(np.argmax(partition_score))
+        return int(np.argmax(partition_score)), debug_map
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
@@ -557,14 +566,21 @@ class FennelEdgePartitioner(Partitioner):
         argsort_list = np.argsort(neighbour_size_list)
         # argsort_list = argsort_list[::-1]
 
+        ls = []
+        bs = []
+
         for i in range(len(unique_src_nodes)):
             sorted_idx = argsort_list[i]
 
-            pid = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
+            pid, debug_map = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
             partition_table[sorted_idx] = pid
             self._partition_table[int(unique_src_nodes[sorted_idx])] = pid
             self._out_degree[unique_src_nodes[sorted_idx]] += len(dst_nodes_list[sorted_idx])
 
+            ls.append(debug_map[0])
+            bs.append(debug_map[1])
+
+        print(np.min(ls), np.mean(ls), np.max(ls), np.min(bs), np.mean(bs), np.max(bs))
         return partition_table
 
 
