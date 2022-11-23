@@ -56,7 +56,7 @@ class DistributedTemporalSampler:
         # profiling
         self._sampling_time = torch.zeros(1)
         if dynamic_scheduling:
-            self._beta = 0
+            self._beta = 0.9
             self._sampling_weight_matrix = torch.ones(
                 self._num_partitions, self._local_world_size) / self._local_world_size
 
