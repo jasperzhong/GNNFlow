@@ -347,7 +347,7 @@ class DistributedTemporalSampler:
 
         # update load table
         load = len(target_vertices)
-        if min_load_global_rank != self._rank:
+        if min_load_global_rank == self._rank:
             load *= 2
 
         load_table[min_load_local_rank] += load
