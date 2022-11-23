@@ -79,7 +79,7 @@ class KVStoreServer:
 
     def reset_memory(self):
         with self._memory_lock:
-            for mem in zip(self._memory_map.values()):
+            for mem in iter(self._memory_map.values()):
                 mem.fill_(0)
 
 
