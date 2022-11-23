@@ -176,7 +176,7 @@ class DistributedTemporalSampler:
             partition_timestamps = torch.from_numpy(
                 timestamps[partition_mask]).contiguous()
 
-            if self._parition_id = partition_id:
+            if self._partition_id == partition_id:
                 logging.debug(
                     "worker %d call local sample_layer_local", self._rank)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
