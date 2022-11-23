@@ -514,7 +514,8 @@ class FennelEdgePartitioner(Partitioner):
 
         local_partition_table = self._partition_table[dst_nodes]
 
-        print("edge partition list is {}\n".format(self._edges_partitioned_num_list))
+        if torch.max(self._edges_partitioned_num_list) > 0.0:
+            print("edge partition list is {}, benchmark:{} \n".format(self._edges_partitioned_num_list, (self._edges_partitioned / self._num_partitions)))
 
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
