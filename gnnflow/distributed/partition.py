@@ -501,7 +501,7 @@ class FennelEdgePartitioner(Partitioner):
                 torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
             # update the length of each size counter
-            self._edges_partitioned_num_list[i] += len(partitions[i])
+            self._edges_partitioned_num_list[i] += len(partitions[i].src_nodes)
 
         return partitions
 
@@ -513,9 +513,6 @@ class FennelEdgePartitioner(Partitioner):
             self._edges_partitioned / (self._max_node ** 1.5)
 
         local_partition_table = self._partition_table[dst_nodes]
-
-        if torch.max(self._edges_partitioned_num_list) > 0.0:
-            print("edge partition list is {}, benchmark:{} \n".format(self._edges_partitioned_num_list, (self._edges_partitioned / self._num_partitions)))
 
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
