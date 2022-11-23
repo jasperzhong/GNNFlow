@@ -326,8 +326,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
-        # TODO: now reset do nothing when using distributed
         cache.reset()
+        if e > 0:
+            model.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
@@ -369,7 +370,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+                        train_loader)/1), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -412,7 +413,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             break
 
     if args.rank == 0:
-        logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+        logging.info('Avg epoch time: {}'.format(epoch_time_sum / e))
 
     if args.distributed:
         torch.distributed.barrier()

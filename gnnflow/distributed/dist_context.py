@@ -14,9 +14,6 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-<< << << < HEAD
-== == == =
->>>>>> > main
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
