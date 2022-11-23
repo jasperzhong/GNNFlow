@@ -11,7 +11,8 @@ class LFUCache(Cache):
     Least-frequently-used (LFU) Cache
     """
 
-    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+    def __init__(self, edge_cache_ratio: int, node_cache_ratio: int,
+                 num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
@@ -26,7 +27,9 @@ class LFUCache(Cache):
         Initialize the cache
 
         Args:
-            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            edge_cache_ratio: The edge ratio of the cache size to the total number of nodes or edges
+                    range: [0, 1].
+            node_cache_ratio: The node ratio of the cache size to the total number of nodes or edges
                     range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
@@ -38,8 +41,11 @@ class LFUCache(Cache):
             pinned_nfeat_buffs: The pinned memory buffers for node features
             pinned_efeat_buffs: The pinned memory buffers for edge features
             kvstore_client: The KVStore_Client for fetching features when using distributed
+                    training
+            distributed: Whether to use distributed training
+            neg_sample_ratio: The ratio of negative samples to positive samples
         """
-        super(LFUCache, self).__init__(cache_ratio, num_nodes,
+        super(LFUCache, self).__init__(edge_cache_ratio, node_cache_ratio, num_nodes,
                                        num_edges, device, node_feats,
                                        edge_feats, dim_node_feat,
                                        dim_edge_feat, pinned_nfeat_buffs,
@@ -95,7 +101,7 @@ class LFUCache(Cache):
                 self.cache_index_to_edge_id[cache_edge_id] = keys.to(
                     self.device)
                 self.cache_edge_map[keys] = cache_edge_id
-                
+
                 self.cache_edge_count[self.cache_index_to_edge_id] += 1
         else:
             if self.edge_feats is not None:

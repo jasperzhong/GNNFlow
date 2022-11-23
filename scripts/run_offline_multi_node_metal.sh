@@ -4,9 +4,10 @@ INTERFACE="ens8"
 MODEL=$1
 DATA=$2
 CACHE="${3:-LFUCache}"
-CACHE_RATIO="${4:-0.2}" # default 20% of cache
-PARTITION_STRATEGY="${5:-hash}"
-CHUNKS="${6:-1}"
+EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
+NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
+PARTITION_STRATEGY="${6:-hash}"
+CHUNKS="${7:-1}"
 
 HOST_NODE_ADDR=172.31.44.144
 HOST_NODE_PORT=29400
@@ -30,7 +31,7 @@ cmd="torchrun \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
     --rdzv_conf is_host=$IS_HOST \
     offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
-    --cache $CACHE --cache-ratio $CACHE_RATIO \
+    --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO\
     --partition --ingestion-batch-size 100000 \
     --initial-ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \

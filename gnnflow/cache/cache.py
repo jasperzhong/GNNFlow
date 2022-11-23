@@ -12,7 +12,8 @@ class Cache:
     Feature cache on GPU
     """
 
-    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+    def __init__(self, edge_cache_ratio: int, node_cache_ratio: int,
+                 num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
@@ -27,7 +28,9 @@ class Cache:
         Initialize the cache
 
         Args:
-            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            edge_cache_ratio: The edge ratio of the cache size to the total number of nodes or edges
+                    range: [0, 1].
+            node_cache_ratio: The node ratio of the cache size to the total number of nodes or edges
                     range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
@@ -71,11 +74,13 @@ class Cache:
                 edge_feats = edge_feats.to(torch.float32)
 
         # NB: cache_ratio == 0 means no cache
-        assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
+        assert edge_cache_ratio >= 0 and edge_cache_ratio <= 1, 'edge_cache_ratio must be in [0, 1]'
+        assert edge_cache_ratio >= 0 and edge_cache_ratio <= 1, 'node_cache_ratio must be in [0, 1]'
 
-        self.cache_ratio = cache_ratio
-        self.node_capacity = int(cache_ratio * num_nodes)
-        self.edge_capacity = int(cache_ratio * num_edges)
+        self.edge_cache_ratio = edge_cache_ratio
+        self.node_cache_ratio = node_cache_ratio
+        self.node_capacity = int(node_cache_ratio * num_nodes)
+        self.edge_capacity = int(edge_cache_ratio * num_edges)
 
         self.num_nodes = num_nodes
         self.num_edges = num_edges
@@ -199,7 +204,7 @@ class Cache:
         """
         if self.dim_node_feat != 0 and new_num_nodes > self.num_nodes:
             self.num_nodes = new_num_nodes
-            self.node_capacity = int(self.cache_ratio * self.num_nodes)
+            self.node_capacity = int(self.node_cache_ratio * self.num_nodes)
             self.cache_node_buffer.resize_(
                 self.node_capacity, self.dim_node_feat)
             self.cache_node_flag.resize_(self.num_nodes)
@@ -208,7 +213,7 @@ class Cache:
 
         if self.dim_edge_feat != 0 and new_num_edges > self.num_edges:
             self.num_edges = new_num_edges
-            self.edge_capacity = int(self.cache_ratio * self.num_edges)
+            self.edge_capacity = int(self.edge_cache_ratio * self.num_edges)
             self.cache_edge_buffer.resize_(
                 self.edge_capacity, self.dim_edge_feat)
             self.cache_edge_flag.resize_(self.num_edges)

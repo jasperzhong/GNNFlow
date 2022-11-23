@@ -57,8 +57,10 @@ parser.add_argument("--seed", type=int, default=42)
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
                     '|'.join(cache_names))
-parser.add_argument("--cache-ratio", type=float, default=0,
-                    help="cache ratio for feature cache")
+parser.add_argument("--edge-cache-ratio", type=float, default=0,
+                    help="edge cache ratio for feature cache")
+parser.add_argument("--node-cache-ratio", type=float, default=0,
+                    help="node cache ratio for feature cache")
 
 # distributed
 parser.add_argument("--partition", action="store_true",
@@ -275,7 +277,9 @@ def main():
         dim_node, dim_edge)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
+    cache = caches.__dict__[args.cache](args.edge_cache_ratio,
+                                        args.node_cache_ratio,
+                                        num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,
                                         dim_node, dim_edge,
