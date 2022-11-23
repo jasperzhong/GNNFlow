@@ -56,7 +56,9 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     full_data = pd.read_csv(path)
     assert isinstance(full_data, pd.DataFrame)
 
+    # if 'Unnamed: 0' in full_data.columns:
     full_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
+
     train_end = full_data['ext_roll'].values.searchsorted(1)
     val_end = full_data['ext_roll'].values.searchsorted(2)
     train_data = full_data[:train_end]
@@ -87,8 +89,8 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     dataset_path = os.path.join(data_dir, dataset)
-    node_feat_path = os.path.join(dataset_path, 'node_features.pt')
-    edge_feat_path = os.path.join(dataset_path, 'edge_features.pt')
+    node_feat_path = os.path.join(dataset_path, 'node_features.npy')
+    edge_feat_path = os.path.join(dataset_path, 'edge_features.npy')
 
     if not os.path.exists(node_feat_path) and \
             not os.path.exists(edge_feat_path):
@@ -99,14 +101,12 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     edge_feats = None
     if not shared_memory or (shared_memory and local_rank == 0):
         if os.path.exists(node_feat_path):
-            node_feats = torch.load(node_feat_path)
-            if node_feats.dtype == torch.bool:
-                node_feats = node_feats.type(torch.float32)
+            node_feats = np.load(node_feat_path, allow_pickle=False)
+            node_feats = torch.from_numpy(node_feats)
 
         if os.path.exists(edge_feat_path):
-            edge_feats = torch.load(edge_feat_path)
-            if edge_feats.dtype == torch.bool:
-                edge_feats = edge_feats.type(torch.float32)
+            edge_feats = np.load(edge_feat_path, allow_pickle=False)
+            edge_feats = torch.from_numpy(edge_feats)
 
     if shared_memory:
         node_feats_shm, edge_feats_shm = None, None
@@ -179,6 +179,7 @@ def build_dynamic_graph(
         insertion_policy: str,
         undirected: bool,
         device: int = 0,
+        adaptive_block_size: bool = False,
         dataset_df: Optional[pd.DataFrame] = None,
         *args, **kwargs) -> DynamicGraph:
     """
@@ -196,6 +197,7 @@ def build_dynamic_graph(
             valid options: ("insert" or "replace") (case insensitive).
         undirected: whether the graph is undirected.
         device: the device to use.
+        adaptive_block_size: whether to use adaptive block size.
     """
     if dataset_df is None:
         src = dst = ts = eids = None
@@ -214,7 +216,8 @@ def build_dynamic_graph(
         insertion_policy,
         src, dst, ts, eids,
         undirected,
-        device)
+        device,
+        adaptive_block_size)
 
     return dgraph
 

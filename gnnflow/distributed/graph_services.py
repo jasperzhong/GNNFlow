@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.distributed
@@ -10,10 +10,6 @@ from gnnflow.distributed.common import SamplingResultTorch
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.distributed.dist_sampler import DistributedTemporalSampler
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.distributed.utils import HandleManager
-
-global handle_manager
-handle_manager = HandleManager()
 
 global DGRAPH
 global DSAMPLER
@@ -110,8 +106,10 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
     dgraph = get_dgraph()
     logging.debug("Rank %d: Adding %d edges to the dynamic graph.",
                   torch.distributed.get_rank(), source_vertices.size(0))
-    dgraph.add_edges(source_vertices.numpy(),
-                     target_vertices.numpy(), timestamps.numpy(), eids.numpy())
+
+    dgraph.enqueue_add_edges_task(source_vertices.numpy(),
+                                  target_vertices.numpy(), timestamps.numpy(), eids.numpy())
+    # NB: no need to wait for the task to finish
 
 
 def set_graph_metadata(num_vertices: int, num_edges: int, max_vertex_id: int, num_partitions: int):
@@ -220,19 +218,14 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     logging.debug("Rank %d: receiving sample_layer_local request. #target_vertices: %d",
                   torch.distributed.get_rank(), target_vertices.size(0))
 
-    def callback(handle: int):
-        global handle_manager
-        handle_manager.mark_done(handle)
-
     dsampler = get_dsampler()
     ret = SamplingResultTorch()
-    handle = handle_manager.allocate_handle()
-    dsampler.enqueue_sampling_task(
-        target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret, callback, handle)
+    handle = dsampler.enqueue_sampling_task(
+        target_vertices.numpy(), timestamps.numpy(), layer, snapshot, ret)
 
     # Wait for the sampling task to finish.
-    while not handle_manager.poll(handle):
-        time.sleep(0.01)
+    while not dsampler.poll(handle):
+        time.sleep(0.001)
 
     logging.debug("Rank %d: Sampling task %d finished. num sampled vertices: %d",
                   torch.distributed.get_rank(), handle, ret.num_src_nodes)
