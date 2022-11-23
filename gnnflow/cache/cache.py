@@ -285,31 +285,32 @@ class Cache:
                 node_feature[cache_mask] = self.cache_node_buffer[cached_node_index]
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
-                uncached_node_id = nodes[uncached_mask]
-                uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
-                    uncached_node_id, return_inverse=True)
+                if uncached_mask.sum() > 0:
+                    uncached_node_id = nodes[uncached_mask]
+                    uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
+                        uncached_node_id, return_inverse=True)
 
-                if self.distributed:
-                    if self.pinned_nfeat_buffs is not None:
-                        # TODO: maybe fetch local and remote features separately
-                        self.pinned_nfeat_buffs[
-                            i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
-                            uncached_node_id_unique.cpu(), mode='node')
-                        uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                            self.device, non_blocking=True).float()
+                    if self.distributed:
+                        if self.pinned_nfeat_buffs is not None:
+                            # TODO: maybe fetch local and remote features separately
+                            self.pinned_nfeat_buffs[
+                                i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
+                                uncached_node_id_unique.cpu(), mode='node')
+                            uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                                self.device, non_blocking=True).float()
+                        else:
+                            uncached_node_feature = self.kvstore_client.pull(
+                                uncached_node_id_unique.cpu(), mode='node').to(self.device).float()
                     else:
-                        uncached_node_feature = self.kvstore_client.pull(
-                            uncached_node_id_unique.cpu(), mode='node').to(self.device).float()
-                else:
-                    if self.pinned_nfeat_buffs is not None:
-                        torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
-                                           out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
-                        uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                            self.device, non_blocking=True)
-                    else:
-                        uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
-                            self.device, non_blocking=True)
-                node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
+                        if self.pinned_nfeat_buffs is not None:
+                            torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
+                                            out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
+                            uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                                self.device, non_blocking=True)
+                        else:
+                            uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
+                                self.device, non_blocking=True)
+                    node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
 
                 i += 1
                 b.srcdata['h'] = node_feature
