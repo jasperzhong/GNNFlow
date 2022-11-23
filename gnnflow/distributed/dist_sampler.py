@@ -208,10 +208,7 @@ class DistributedTemporalSampler:
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
-                if self._dynamic_scheduling:
-                    sampling_results.append(future.wait().to_here())
-                else:
-                    sampling_results.append(future.wait())
+                sampling_results.append(future.wait())
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
@@ -352,11 +349,10 @@ class DistributedTemporalSampler:
         load_table[min_load_local_rank] += len(target_vertices)
 
         # send sampling task to the rank
-        rref = rpc.remote("worker{}".format(min_load_global_rank),
-                          graph_services.sample_layer_local,
-                          args=(target_vertices, timestamps, layer, snapshot))
+        ret = rpc.rpc_sync("worker{}".format(min_load_global_rank),
+                            graph_services.sample_layer_local,
+                            args=(target_vertices, timestamps, layer, snapshot))
 
         # update load table
         self._load_table[min_load_local_rank] -= len(target_vertices)
-
-        return rref
+        return ret

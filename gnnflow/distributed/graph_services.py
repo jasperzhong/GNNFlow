@@ -233,7 +233,7 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
 
 
 def sample_layer_local_proxy(target_vertices: torch.Tensor, timestamps: torch.Tensor,
-                             layer: int, snapshot: int):
+                             layer: int, snapshot: int) -> SamplingResultTorch:
     """
     Dispatch the sample_layer_local request to the correct rank.
 
@@ -244,12 +244,11 @@ def sample_layer_local_proxy(target_vertices: torch.Tensor, timestamps: torch.Te
         snapshot (int): The snapshot.
 
     Returns:
-        RemoteReference of SamplingResultTorch: The remote reference of the sampling result.
+        torch.Tensor: The temporal neighbors of the vertex.
     """
     dsampler = get_dsampler()
-    rref = dsampler.dispatch_sampling_task(
+    return dsampler.dispatch_sampling_task(
         target_vertices.numpy(), timestamps.numpy(), layer, snapshot)
-    return rref
 
 
 def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
