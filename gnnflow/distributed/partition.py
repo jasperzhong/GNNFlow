@@ -548,8 +548,8 @@ class FennelEdgePartitioner(Partitioner):
         debug_map[0] = loc_score
         debug_map[1] = bal_score
 
-        # return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
-        return int(np.argmax(partition_score)), debug_map
+        return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
+        # return int(np.argmax(partition_score)), debug_map
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
