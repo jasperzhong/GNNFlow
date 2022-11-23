@@ -350,6 +350,9 @@ class DistributedTemporalSampler:
 
         # update load table
         load = len(target_vertices)
+        if min_load_global_rank != self._rank:
+            load *= 1.2
+
         with self._load_table_lock:
             self._load_table[min_load_local_rank] += load
 
