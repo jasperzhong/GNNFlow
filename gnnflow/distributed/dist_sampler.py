@@ -346,7 +346,11 @@ class DistributedTemporalSampler:
             self._partition_id*self._local_world_size
 
         # update load table
-        load_table[min_load_local_rank] += len(target_vertices)
+        load = len(target_vertices)
+        if min_load_global_rank != self._rank:
+            load *= 2
+
+        load_table[min_load_local_rank] += load
 
         if min_load_global_rank == self._rank:
             # sample locally
@@ -359,5 +363,5 @@ class DistributedTemporalSampler:
                                args=(target_vertices, timestamps, layer, snapshot))
 
         # update load table
-        self._load_table[min_load_local_rank] -= len(target_vertices)
+        self._load_table[min_load_local_rank] -= load
         return ret
