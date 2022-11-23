@@ -473,6 +473,9 @@ class FennelEdgePartitioner(Partitioner):
             # update the out degree
             self._out_degree[src_nodes[mask]] += 1
 
+            # add to partition
+            self._edges_partitioned_num_list[i] += len(src_nodes[mask])
+
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
@@ -500,9 +503,6 @@ class FennelEdgePartitioner(Partitioner):
                            timestamps[unassigned_mask][mask]]),
                 torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
-            # update the length of each size counter
-            self._edges_partitioned_num_list[i] += len(partitions[i].src_nodes)
-
         return partitions
 
     def fennelEdge(self, vid: int, dst_nodes: torch.Tensor):
@@ -520,9 +520,9 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
 
-            # if partition_size >= self._partition_capacity or self._edges_partitioned_num_list[i] > (self._edges_partitioned / self._num_partitions):
-            #     partition_score.append(-1000000)
-            #     continue
+            if self._edges_partitioned_num_list[i] > 1.20 *  (self._edges_partitioned / self._num_partitions):
+                partition_score.append(-1000000)
+                continue
 
             # calculate the neighbor in partition i
             neighbour_in_partition_size = (
