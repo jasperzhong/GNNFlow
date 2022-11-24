@@ -505,6 +505,16 @@ class FennelEdgePartitioner(Partitioner):
 
         return partitions
 
+    def edge_set_normalize(self, arr, t_min, t_max):
+        # explicit function to normalize array
+        norm_arr = []
+        diff = t_max - t_min
+        diff_arr = max(arr) - min(arr)
+        for i in arr:
+            temp = (((i - min(arr)) * diff) / diff_arr) + t_min
+            norm_arr.append(temp)
+        return norm_arr
+
     def fennelEdge(self, vid: int, dst_nodes: torch.Tensor):
         partition_score = []
         debug_map = {}
@@ -516,6 +526,8 @@ class FennelEdgePartitioner(Partitioner):
             self._edges_partitioned / (self._max_node ** 1.5)
 
         local_partition_table = self._partition_table[dst_nodes]
+
+        load_balance_score = []
 
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
@@ -538,12 +550,20 @@ class FennelEdgePartitioner(Partitioner):
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
-            partition_score.append(1000 * locality_score - (self._num_partitions) * (self._edges_partitioned_num_list[i] / self._edges_partitioned))
+            load_balance_score.append(self._edges_partitioned_num_list[i] / self._edges_partitioned)
+            partition_score.append(locality_score)
+
+        load_balance_score = self.edge_set_normalize(load_balance_score, -10, 10)
+
+        for i in range(self._num_partitions):
+            partition_score[i] += load_balance_score[i]
 
         partition_score = np.array(partition_score)
 
         return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
         # return int(np.argmax(partition_score)), debug_map
+
+
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
