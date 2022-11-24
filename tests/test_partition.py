@@ -84,7 +84,7 @@ class TestPartition(unittest.TestCase):
             for idx, row in batch.iterrows():
                 u = int(row['src'])
                 v = int(row['dst'])
-                if ptablein[u] != -1 and ptablein[v] != -1 and (ptablein[u] != ptablein[v]):
+                if ptablein[u] != ptablein[v]:
                     edge_cut += 1
 
             edge_cut_list.append(
