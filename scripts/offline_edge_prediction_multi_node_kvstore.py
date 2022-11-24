@@ -211,7 +211,7 @@ def main():
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed and args.data not in ['GDELT', 'MAG']:
+    if args.distributed and args.data not in ['GDELT', 'MAG', 'REDDIT']:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
