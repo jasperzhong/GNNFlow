@@ -520,7 +520,7 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
 
-            if self._edges_partitioned_num_list[i] > 1.20 * (self._edges_partitioned / self._num_partitions):
+            if self._edges_partitioned_num_list[i] > 1.10 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-1000000)
                 continue
 
