@@ -237,6 +237,6 @@ class TestPartition(unittest.TestCase):
         print("Ptable is {}".format(ptable))
         print("Total Time Usage: {} seconds\n".format(overall_end - overall_start))
         print("Load factor is:{} \n".format(load_factor))
-        print("Edge Cut Percentage is :{}%;".format(np.average(edge_cut_list)))
+        print("Edge Cut Percentage is :{}%;".format(edge_cut_list))
         print("========== Test Finished (DataSet:{}, Method:{}, BatchSize:{}) =========\n\n".format(dataset_name, p_stgy, ingestion_batch_size))
 
