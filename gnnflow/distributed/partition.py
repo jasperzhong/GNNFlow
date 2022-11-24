@@ -560,6 +560,9 @@ class FennelEdgePartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
+        if len(partition_score) == 0:
+            print("ZROOOO!")
+
         return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
         # return int(np.argmax(partition_score)), debug_map
 
