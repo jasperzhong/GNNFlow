@@ -1,4 +1,4 @@
-from gnnflow.utils import get_project_root_dir, load_dataset, load_feat
+from gnnflow.utils import get_project_root_dir, load_dataset, load_feat, local_world_size
 from gnnflow.utils import RandEdgeSampler, get_project_root_dir, load_dataset, load_feat
 import logging
 import os
@@ -20,7 +20,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                initial_ingestion_batch_size: int,
                ingestion_batch_size: int, partition_strategy: str,
                num_partitions: int, undirected: bool, data_name: str,
-               use_memory: int, chunk: int):
+               dim_memory: int, chunk: int):
     """
     Initialize the distributed environment.
 
@@ -33,7 +33,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         num_partitions (int): The number of partitions to split the dataset into.
         undirected (bool): Whether the graph is undirected.
         data_name (str): the dataset name of the dataset for loading features.
-        use_memory (bool): if the kvstore need to initialize the memory.
+        dim_memory (int): the dimension of memory
         chunk (int): the number of chunks of the dataset
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
@@ -67,7 +67,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                            ingestion_batch_size,
                                            undirected, node_feats, edge_feats,
-                                           use_memory)
+                                           dim_memory)
                 del dataset
         else:
             # for those datasets that don't need chunks
@@ -75,7 +75,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
-                                       use_memory)
+                                       dim_memory)
             train_rand_sampler = RandEdgeSampler(
                 train_data['src'].values, train_data['dst'].values)
             val_rand_sampler = RandEdgeSampler(
@@ -87,6 +87,67 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 train_rand_sampler, val_rand_sampler, test_rand_sampler)
             del train_data
             del dataset
+        # node feature/memory
+        partition_table = graph_services.get_partition_table()
+        dim_edge = graph_services.get_dim_edge()
+        if node_feats is not None:
+            futures = []
+            for partition_id in reversed(range(dispatcher._num_partitions)):
+                # the KVStore server is in local_rank 0
+                partition_mask = partition_table == partition_id
+                assert partition_mask.sum() > 0  # should not be 0
+                vertices = torch.arange(len(partition_table), dtype=torch.long)
+                partition_vertices = vertices[partition_mask]
+                keys = partition_vertices.contiguous()
+                kvstore_rank = partition_id * local_world_size()
+                if node_feats is not None:
+                    features = node_feats[keys]
+
+                    rpc.rpc_sync("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                 args=(keys, features, 'node'))
+                    del keys
+                    del features
+                    # futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                    #                              args=(keys, features, 'node')))
+                logging.info(
+                    "partition: {} dispatch done".format(partition_id))
+                mem = psutil.virtual_memory().percent
+                logging.info("peak memory usage: {}".format(mem))
+            mem = psutil.virtual_memory().percent
+            logging.info("peak memory usage: {}".format(mem))
+            del node_feats
+
+            for future in futures:
+                future.wait()
+
+        if dim_memory > 0:
+            for partition_id in range(dispatcher._num_partitions):
+                partition_mask = partition_table == partition_id
+                assert partition_mask.sum() > 0  # should not be 0
+                vertices = torch.arange(
+                    len(partition_table), dtype=torch.long)
+                partition_vertices = vertices[partition_mask]
+                keys = partition_vertices.contiguous()
+                kvstore_rank = partition_id * local_world_size()
+                # use None as value and just init keys here.
+                memory = torch.zeros(
+                    (len(keys), dim_memory), dtype=torch.float32)
+                memory_ts = torch.zeros(len(keys), dtype=torch.float32)
+                dim_raw_message = 2 * dim_memory + dim_edge
+                mailbox = torch.zeros(
+                    (len(keys), dim_raw_message), dtype=torch.float32)
+                mailbox_ts = torch.zeros(
+                    (len(keys), ), dtype=torch.float32)
+                all_mem = torch.cat((memory,
+                                    memory_ts.unsqueeze(dim=1),
+                                    mailbox,
+                                    mailbox_ts.unsqueeze(dim=1),
+                                     ), dim=1)
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                             args=(keys, all_mem, 'memory')))
+
+            for future in futures:
+                future.wait()
 
     # check
     torch.distributed.barrier()

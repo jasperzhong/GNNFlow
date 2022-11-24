@@ -170,10 +170,19 @@ class Dispatcher:
                 kvstore_rank = partition_id * local_world_size()
                 if node_feats is not None:
                     features = node_feats[keys]
-                    futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                                 args=(keys, features, 'node')))
+                    if self._rank == 0:
+                        graph_services.push_tensors(keys, features, 'node')
+                    else:
+                        rpc.rpc_sync("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                     args=(keys, features, 'node'))
+                    del keys
+                    del features
+                    # futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                    #                              args=(keys, features, 'node')))
                 logging.info(
                     "partition: {} dispatch done".format(partition_id))
+                mem = psutil.virtual_memory().percent
+                logging.info("peak memory usage: {}".format(mem))
             mem = psutil.virtual_memory().percent
             logging.info("peak memory usage: {}".format(mem))
             del node_feats
