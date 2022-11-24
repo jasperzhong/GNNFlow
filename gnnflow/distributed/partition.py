@@ -520,7 +520,7 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
 
-            if self._edges_partitioned_num_list[i] > 1.2 * (self._edges_partitioned / self._num_partitions):
+            if self._edges_partitioned_num_list[i] > 1.15 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-1000000)
                 continue
 
@@ -538,15 +538,9 @@ class FennelEdgePartitioner(Partitioner):
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
-            bal_score.append(self._edges_partitioned_num_list[i].item())
-            loc_score.append(locality_score)
-
-            partition_score.append(10 * locality_score - (self._num_partitions) * (self._edges_partitioned_num_list[i] / self._edges_partitioned))
+            partition_score.append(100 * locality_score - (self._num_partitions) * (self._edges_partitioned_num_list[i] / self._edges_partitioned))
 
         partition_score = np.array(partition_score)
-
-        debug_map[0] = loc_score
-        debug_map[1] = bal_score
 
         # return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
         return int(np.argmax(partition_score)), debug_map
@@ -579,8 +573,6 @@ class FennelEdgePartitioner(Partitioner):
             # update the edge partition num_list
             self._edges_partitioned_num_list[pid] += len(dst_nodes_list[sorted_idx])
 
-            ls.append(debug_map[0])
-            bs.append(debug_map[1])
 
         # print(np.min(ls), np.mean(ls), np.max(ls), np.min(bs), np.mean(bs), np.max(bs))
         return partition_table
