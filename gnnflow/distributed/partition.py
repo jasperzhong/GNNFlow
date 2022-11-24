@@ -520,7 +520,7 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
 
-            if self._edges_partitioned_num_list[i] > 1.10 * (self._edges_partitioned / self._num_partitions):
+            if self._edges_partitioned_num_list[i] > 1.15 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-1000000)
                 continue
 
@@ -541,15 +541,15 @@ class FennelEdgePartitioner(Partitioner):
             bal_score.append(self._edges_partitioned_num_list[i].item())
             loc_score.append(locality_score)
 
-            partition_score.append(locality_score - (self._edges_partitioned_num_list[i] / self._edges_partitioned))
+            partition_score.append(locality_score - (2 * self._num_partitions) * (self._edges_partitioned_num_list[i] / self._edges_partitioned))
 
         partition_score = np.array(partition_score)
 
         debug_map[0] = loc_score
         debug_map[1] = bal_score
 
-        return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
-        # return int(np.argmax(partition_score)), debug_map
+        # return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
+        return int(np.argmax(partition_score)), debug_map
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
