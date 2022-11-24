@@ -710,7 +710,7 @@ class FenneLitePartitioner(Partitioner):
             #     partition_score.append(-2147483647)
             #     continue
 
-            if self._edges_partitioned_num_list[i] > 1.50 * (self._edges_partitioned / self._num_partitions):
+            if self._edges_partitioned_num_list[i] > 1.35 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-2147483646)
                 continue
 
