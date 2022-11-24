@@ -45,16 +45,19 @@ class KVStoreServer:
 
         if mode == 'node':
             with self._node_feat_lock:
+                keys = keys.tolist()
                 for key, tensor in zip(keys, tensors):
-                    self._node_feat_map[int(key)] = tensor
+                    self._node_feat_map[key] = tensor
         elif mode == 'edge':
             with self._edge_feat_lock:
+                keys = keys.tolist()
                 for key, tensor in zip(keys, tensors):
-                    self._edge_feat_map[int(key)] = tensor
+                    self._edge_feat_map[key] = tensor
         elif mode == 'memory':
             with self._memory_lock:
+                keys = keys.tolist()
                 for key, tensor in zip(keys, tensors):
-                    self._memory_map[int(key)] = tensor
+                    self._memory_map[key] = tensor
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
