@@ -736,8 +736,8 @@ class LDGLightPartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
-        return np.random.choice(np.where(partition_score == partition_score.max())[0])
-        # return np.argmax(partition_score)
+        # return np.random.choice(np.where(partition_score == partition_score.max())[0])
+        return np.argmax(partition_score)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
