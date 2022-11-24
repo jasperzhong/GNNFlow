@@ -12,7 +12,8 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import get_project_root_dir, load_dataset, load_feat
+from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset,
+                           load_feat)
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
@@ -39,6 +40,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      rpc_timeout=1800,
+                     num_worker_threads=32,
                      _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
@@ -70,11 +72,21 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 del dataset
         else:
             # for those datasets that don't need chunks
-            _, _, _, dataset = load_dataset(data_name)
+            train_data, _, _, dataset = load_dataset(data_name)
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
                                        use_memory)
+            train_rand_sampler = RandEdgeSampler(
+                train_data['src'].values, train_data['dst'].values)
+            val_rand_sampler = RandEdgeSampler(
+                dataset['src'].values, dataset['dst'].values)
+            test_rand_sampler = RandEdgeSampler(
+                dataset['src'].values, dataset['dst'].values)
+            logging.info("make sampler done")
+            dispatcher.broadcast_rand_sampler(
+                train_rand_sampler, val_rand_sampler, test_rand_sampler)
+            del train_data
             del dataset
 
     # check

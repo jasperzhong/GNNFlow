@@ -16,6 +16,9 @@ global DSAMPLER
 global KVSTORE_SERVER
 global DIM_NODE
 global DIM_EDGE
+global TRAIN_RAND_SAMPLER
+global TEST_RAND_SAMPLER
+global VAL_RAND_SAMPLER
 
 
 def get_dgraph() -> DistributedDynamicGraph:
@@ -56,7 +59,7 @@ def get_dsampler() -> DistributedTemporalSampler:
     return DSAMPLER
 
 
-def set_dsampler(sampler: TemporalSampler):
+def set_dsampler(sampler: TemporalSampler, dynamic_scheduling: bool = False):
     """
     Set the distributed temporal sampler.
 
@@ -65,7 +68,7 @@ def set_dsampler(sampler: TemporalSampler):
     """
     global DSAMPLER
     dgraph = get_dgraph()
-    DSAMPLER = DistributedTemporalSampler(sampler, dgraph)
+    DSAMPLER = DistributedTemporalSampler(sampler, dgraph, dynamic_scheduling)
 
 
 def get_kvstore_server() -> KVStoreServer:
@@ -232,6 +235,25 @@ def sample_layer_local(target_vertices: torch.Tensor, timestamps: torch.Tensor,
     return ret
 
 
+def sample_layer_local_proxy(target_vertices: torch.Tensor, timestamps: torch.Tensor,
+                             layer: int, snapshot: int) -> SamplingResultTorch:
+    """
+    Dispatch the sample_layer_local request to the correct rank.
+
+    Args:
+        target_vertices (torch.Tensor): The target vertices.
+        timestamps (torch.Tensor): The timestamps.
+        layer (int): The layer.
+        snapshot (int): The snapshot.
+
+    Returns:
+        torch.Tensor: The temporal neighbors of the vertex.
+    """
+    dsampler = get_dsampler()
+    return dsampler.dispatch_sampling_task(
+        target_vertices, timestamps, layer, snapshot)
+
+
 def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
     """
     Push tensors to the remote workers for KVStore servers.
@@ -356,3 +378,37 @@ def get_dim_node_edge() -> Tuple[int, int]:
             "The dim_node has not been initialized.")
 
     return DIM_NODE, DIM_EDGE
+
+
+def set_rand_sampler(train_rand_sampler, val_rand_sampler, test_rand_sampler):
+    """
+    Set rand edge sampler
+    """
+    global TRAIN_RAND_SAMPLER
+    global TEST_RAND_SAMPLER
+    global VAL_RAND_SAMPLER
+    TRAIN_RAND_SAMPLER = train_rand_sampler
+    TEST_RAND_SAMPLER = test_rand_sampler
+    VAL_RAND_SAMPLER = val_rand_sampler
+
+
+def get_rand_sampler():
+    """
+    Get rand edge sampler
+
+    Returns:
+        train, val, test rand sampler
+    """
+    global TRAIN_RAND_SAMPLER
+    if TRAIN_RAND_SAMPLER is None:
+        raise RuntimeError(
+            "The TRAIN_RAND_SAMPLER has not been initialized.")
+    global TEST_RAND_SAMPLER
+    if TEST_RAND_SAMPLER is None:
+        raise RuntimeError(
+            "The TEST_RAND_SAMPLER has not been initialized.")
+    global VAL_RAND_SAMPLER
+    if VAL_RAND_SAMPLER is None:
+        raise RuntimeError(
+            "The VAL_RAND_SAMPLER has not been initialized.")
+    return TRAIN_RAND_SAMPLER, VAL_RAND_SAMPLER, TEST_RAND_SAMPLER

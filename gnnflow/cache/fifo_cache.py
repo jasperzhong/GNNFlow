@@ -11,7 +11,8 @@ class FIFOCache(Cache):
     First-in-first-out cache
     """
 
-    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+    def __init__(self, edge_cache_ratio: int, node_cache_ratio: int,
+                 num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
@@ -26,7 +27,9 @@ class FIFOCache(Cache):
         Initialize the cache
 
         Args:
-            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            edge_cache_ratio: The edge ratio of the cache size to the total number of nodes or edges
+                    range: [0, 1].
+            node_cache_ratio: The node ratio of the cache size to the total number of nodes or edges
                     range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
@@ -42,7 +45,7 @@ class FIFOCache(Cache):
             distributed: Whether to use distributed training
             neg_sample_ratio: The ratio of negative samples to positive samples
         """
-        super(FIFOCache, self).__init__(cache_ratio, num_nodes, num_edges, device,
+        super(FIFOCache, self).__init__(edge_cache_ratio, node_cache_ratio, num_nodes, num_edges, device,
                                         node_feats, edge_feats, dim_node_feat, dim_edge_feat,
                                         pinned_nfeat_buffs, pinned_efeat_buffs,
                                         kvstore_client, distributed, neg_sample_ratio)

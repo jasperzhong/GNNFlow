@@ -29,7 +29,7 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
                            build_dynamic_graph, get_pinned_buffers,
-                           get_project_root_dir, load_dataset, load_feat,
+                           get_project_root_dir, load_dataset, load_feat, load_partitioned_dataset,
                            mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
@@ -57,8 +57,10 @@ parser.add_argument("--seed", type=int, default=42)
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
                     '|'.join(cache_names))
-parser.add_argument("--cache-ratio", type=float, default=0,
-                    help="cache ratio for feature cache")
+parser.add_argument("--edge-cache-ratio", type=float, default=0,
+                    help="edge cache ratio for feature cache")
+parser.add_argument("--node-cache-ratio", type=float, default=0,
+                    help="node cache ratio for feature cache")
 
 # distributed
 parser.add_argument("--partition", action="store_true",
@@ -69,6 +71,8 @@ parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
+parser.add_argument("--dynamic-scheduling", action="store_true",
+                    help="whether to use dynamic scheduling")
 
 # dataset
 parser.add_argument("--chunks", help="num of dataset chunks",
@@ -90,9 +94,6 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-set_seed(args.seed)
 
 
 def evaluate(dataloader, sampler, model, criterion, cache, device):
@@ -146,6 +147,8 @@ def main():
 
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
+    set_seed(args.seed + args.rank)
+
     model_config, data_config = get_default_config(args.model, args.data)
 
     if args.distributed:
@@ -188,19 +191,15 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-
     num_nodes = dgraph.num_vertices() + 1
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    train_data, val_data, test_data, full_data = load_dataset(args.data)
-    train_rand_sampler = RandEdgeSampler(
-        train_data['src'].values, train_data['dst'].values)
-    val_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
-    test_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
+    # get rand sampler
+    train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
+    train_data, val_data, test_data = load_partitioned_dataset(
+        args.data, rank=args.rank, world_size=args.world_size)
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
         val_data, val_rand_sampler)
@@ -212,7 +211,7 @@ def main():
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed:
+    if args.distributed and args.data not in ['GDELT', 'MAG']:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -223,7 +222,7 @@ def main():
             world_size=args.world_size)
     else:
         train_sampler = RandomStartBatchSampler(
-            SequentialSampler(train_ds), batch_size=batch_size, drop_last=False)
+            SequentialSampler(train_ds), batch_size=batch_size, drop_last=False, world_size=args.world_size)
         val_sampler = BatchSampler(
             SequentialSampler(val_ds), batch_size=batch_size, drop_last=False)
 
@@ -257,7 +256,7 @@ def main():
     if args.distributed:
         assert isinstance(dgraph, DistributedDynamicGraph)
         sampler = TemporalSampler(dgraph._dgraph, **model_config)
-        graph_services.set_dsampler(sampler)
+        graph_services.set_dsampler(sampler, args.dynamic_scheduling)
         sampler = graph_services.get_dsampler()
     else:
         assert isinstance(dgraph, DynamicGraph)
@@ -273,7 +272,9 @@ def main():
         dim_node, dim_edge)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
+    cache = caches.__dict__[args.cache](args.edge_cache_ratio,
+                                        args.node_cache_ratio,
+                                        num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,
                                         dim_node, dim_edge,
@@ -321,15 +322,17 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_e = 0
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
-    logging.info('Start training...')
+    logging.info('Start training... distributed: {}'.format(args.distributed))
     for e in range(args.epoch):
         model.train()
-        # TODO: now reset do nothing when using distributed
         cache.reset()
+        if e > 0:
+            model.module.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
         total_samples = 0
+        cv_sampling_time = 0
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
@@ -365,10 +368,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
-                if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+                    all_sampling_time = sampler.get_sampling_time()
+                    std = all_sampling_time.std(dim=1).mean()
+                    mean = all_sampling_time.mean(dim=1).mean()
+                    cv_sampling_time += std / mean
 
+                if args.rank == 0:
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
+                        train_loader)), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
+                        
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
@@ -394,9 +402,17 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
                 total_samples = metrics.tolist()
 
+            all_sampling_time = sampler.get_sampling_time()
+            if args.rank == 0:
+                print(all_sampling_time)
+
+            std = all_sampling_time.std(dim=1).mean()
+            mean = all_sampling_time.mean(dim=1).mean()
+            cv_sampling_time += std / mean
+
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f}".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
@@ -410,7 +426,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             break
 
     if args.rank == 0:
-        logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+        logging.info('Avg epoch time: {}'.format(epoch_time_sum / e))
 
     if args.distributed:
         torch.distributed.barrier()

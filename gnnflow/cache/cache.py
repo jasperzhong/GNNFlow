@@ -12,7 +12,8 @@ class Cache:
     Feature cache on GPU
     """
 
-    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+    def __init__(self, edge_cache_ratio: int, node_cache_ratio: int,
+                 num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
@@ -27,7 +28,9 @@ class Cache:
         Initialize the cache
 
         Args:
-            cache_ratio: The ratio of the cache size to the total number of nodes or edges
+            edge_cache_ratio: The edge ratio of the cache size to the total number of nodes or edges
+                    range: [0, 1].
+            node_cache_ratio: The node ratio of the cache size to the total number of nodes or edges
                     range: [0, 1].
             num_nodes: The number of nodes in the graph
             num_edges: The number of edges in the graph
@@ -71,11 +74,13 @@ class Cache:
                 edge_feats = edge_feats.to(torch.float32)
 
         # NB: cache_ratio == 0 means no cache
-        assert cache_ratio >= 0 and cache_ratio <= 1, 'cache_ratio must be in [0, 1]'
+        assert edge_cache_ratio >= 0 and edge_cache_ratio <= 1, 'edge_cache_ratio must be in [0, 1]'
+        assert edge_cache_ratio >= 0 and edge_cache_ratio <= 1, 'node_cache_ratio must be in [0, 1]'
 
-        self.cache_ratio = cache_ratio
-        self.node_capacity = int(cache_ratio * num_nodes)
-        self.edge_capacity = int(cache_ratio * num_edges)
+        self.edge_cache_ratio = edge_cache_ratio
+        self.node_cache_ratio = node_cache_ratio
+        self.node_capacity = int(node_cache_ratio * num_nodes)
+        self.edge_capacity = int(edge_cache_ratio * num_edges)
 
         self.num_nodes = num_nodes
         self.num_edges = num_edges
@@ -161,7 +166,7 @@ class Cache:
                 cache_edge_id = torch.arange(
                     len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
-                    self.device)
+                    self.device).float()
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id[cache_edge_id] = keys.to(
                     self.device)
@@ -199,7 +204,7 @@ class Cache:
         """
         if self.dim_node_feat != 0 and new_num_nodes > self.num_nodes:
             self.num_nodes = new_num_nodes
-            self.node_capacity = int(self.cache_ratio * self.num_nodes)
+            self.node_capacity = int(self.node_cache_ratio * self.num_nodes)
             self.cache_node_buffer.resize_(
                 self.node_capacity, self.dim_node_feat)
             self.cache_node_flag.resize_(self.num_nodes)
@@ -208,7 +213,7 @@ class Cache:
 
         if self.dim_edge_feat != 0 and new_num_edges > self.num_edges:
             self.num_edges = new_num_edges
-            self.edge_capacity = int(self.cache_ratio * self.num_edges)
+            self.edge_capacity = int(self.edge_cache_ratio * self.num_edges)
             self.cache_edge_buffer.resize_(
                 self.edge_capacity, self.dim_edge_feat)
             self.cache_edge_flag.resize_(self.num_edges)
@@ -280,36 +285,37 @@ class Cache:
                 node_feature[cache_mask] = self.cache_node_buffer[cached_node_index]
                 # fetch the uncached features
                 uncached_mask = ~cache_mask
-                uncached_node_id = nodes[uncached_mask]
-                uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
-                    uncached_node_id, return_inverse=True)
+                if uncached_mask.sum() > 0:
+                    uncached_node_id = nodes[uncached_mask]
+                    uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
+                        uncached_node_id, return_inverse=True)
 
-                if self.distributed:
-                    if self.pinned_nfeat_buffs is not None:
-                        # TODO: maybe fetch local and remote features separately
-                        self.pinned_nfeat_buffs[
-                            i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
-                            uncached_node_id_unique.cpu(), mode='node')
-                        uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                            self.device, non_blocking=True)
+                    if self.distributed:
+                        if self.pinned_nfeat_buffs is not None:
+                            # TODO: maybe fetch local and remote features separately
+                            self.pinned_nfeat_buffs[
+                                i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
+                                uncached_node_id_unique.cpu(), mode='node')
+                            uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                                self.device, non_blocking=True).float()
+                        else:
+                            uncached_node_feature = self.kvstore_client.pull(
+                                uncached_node_id_unique.cpu(), mode='node').to(self.device).float()
                     else:
-                        uncached_node_feature = self.kvstore_client.pull(
-                            uncached_node_id_unique.cpu(), mode='node').to(self.device)
-                else:
-                    if self.pinned_nfeat_buffs is not None:
-                        torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
-                                           out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
-                        uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                            self.device, non_blocking=True)
-                    else:
-                        uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
-                            self.device, non_blocking=True)
-                node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
+                        if self.pinned_nfeat_buffs is not None:
+                            torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
+                                               out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
+                            uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                                self.device, non_blocking=True)
+                        else:
+                            uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
+                                self.device, non_blocking=True)
+                    node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
 
                 i += 1
                 b.srcdata['h'] = node_feature
 
-                if update_cache:
+                if update_cache and uncached_mask.sum() > 0:
                     self.update_node_cache(cached_node_index=cached_node_index,
                                            uncached_node_id=uncached_node_id_unique,
                                            uncached_node_feature=uncached_node_feature)
@@ -365,10 +371,10 @@ class Cache:
                                     i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
                                         uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
                                 uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
-                                    self.device, non_blocking=True)
+                                    self.device, non_blocking=True).float()
                             else:
                                 uncached_edge_feature = self.kvstore_client.pull(
-                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device)
+                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device).float()
                         else:
                             uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                                 uncached_edge_id, return_inverse=True)
@@ -400,7 +406,7 @@ class Cache:
                         self.neg_sample_ratio + 2)
                     nid = mfgs[-1][0].srcdata['ID'][:num_edges]
                     self.target_edge_features = self.kvstore_client.pull(
-                        torch.from_numpy(eid), mode='edge', nid=nid)
+                        torch.from_numpy(eid), mode='edge', nid=nid).float()
                 else:
                     self.target_edge_features = self.edge_feats[eid]
 
