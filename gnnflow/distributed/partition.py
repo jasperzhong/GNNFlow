@@ -814,8 +814,8 @@ class DGLMetisPartitioner(Partitioner):
                 src_list.append(unique_src_nodes[i].item())
                 dst_list.append(dst_nodes_list[i][j].item())
 
-        src_list = np.array(src_list)
-        dst_list = np.array(dst_list)
+        src_list = torch.from_numpy(np.array(src_list))
+        dst_list = torch.from_numpy(np.array(dst_list))
 
         g = dgl.graph((src_list, dst_list))
         b_ntype = torch.zeros(g.num_nodes(), dtype=torch.int8)
