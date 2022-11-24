@@ -628,6 +628,9 @@ class LDGLightPartitioner(Partitioner):
 
         # key: NID -> value: List[num_partitions]
         self._neighbor_memory = torch.zeros(num_partitions, 30000)
+
+        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.int32)
+
         # ideal partition capacity
         self._partition_capacity = 0
         # edges partitioned
@@ -659,6 +662,8 @@ class LDGLightPartitioner(Partitioner):
 
             # enable memory
             self._neighbor_memory[i][dst_nodes[mask]] = self._neighbor_memory[i][dst_nodes[mask]] + 1
+
+            self._edges_partitioned_num_list[i] += len(src_nodes[mask])
 
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
@@ -722,6 +727,9 @@ class LDGLightPartitioner(Partitioner):
             #     partition_score.append(-2147483647)
             #     continue
 
+            if self._edges_partitioned_num_list[i] > 1.10 * (self._edges_partitioned / self._num_partitions):
+                partition_score.append(-2147483646)
+
             neighbour_in_partition_size = self._neighbor_memory[i][vid]
 
             partition_score.append(neighbour_in_partition_size - 0.8 * alpha * gamma * (partition_size ** (gamma - 1)))
@@ -742,6 +750,8 @@ class LDGLightPartitioner(Partitioner):
             self._partition_table[int(unique_src_nodes[i])] = pid
 
             self._neighbor_memory[pid][dst_nodes_list[i]] = self._neighbor_memory[pid][dst_nodes_list[i]] + 1
+
+            self._edges_partitioned_num_list[pid] += len(dst_nodes_list[i])
 
         return partition_table
 
