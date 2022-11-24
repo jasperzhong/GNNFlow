@@ -71,21 +71,11 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 del dataset
         else:
             # for those datasets that don't need chunks
-            train_data, _, _, dataset = load_dataset(data_name)
+            _, _, _, dataset = load_dataset(data_name)
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
                                        dim_memory)
-            train_rand_sampler = RandEdgeSampler(
-                train_data['src'].values, train_data['dst'].values)
-            val_rand_sampler = RandEdgeSampler(
-                dataset['src'].values, dataset['dst'].values)
-            test_rand_sampler = RandEdgeSampler(
-                dataset['src'].values, dataset['dst'].values)
-            logging.info("make sampler done")
-            dispatcher.broadcast_rand_sampler(
-                train_rand_sampler, val_rand_sampler, test_rand_sampler)
-            del train_data
             del dataset
         # deal with unpartitioned nodes
         partition_table = dispatcher._partitioner._partition_table
@@ -168,6 +158,19 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
             for future in futures:
                 future.wait()
+
+        # deal with rand sampler
+        train_data, _, _, _ = load_dataset(data_name)
+        train_rand_sampler = RandEdgeSampler(
+            train_data['src'].values, train_data['dst'].values)
+        val_rand_sampler = RandEdgeSampler(
+            dataset['src'].values, dataset['dst'].values)
+        test_rand_sampler = RandEdgeSampler(
+            dataset['src'].values, dataset['dst'].values)
+        logging.info("make sampler done")
+        dispatcher.broadcast_rand_sampler(
+            train_rand_sampler, val_rand_sampler, test_rand_sampler)
+        del train_data
 
     # check
     torch.distributed.barrier()
