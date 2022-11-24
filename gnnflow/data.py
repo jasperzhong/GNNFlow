@@ -1,5 +1,4 @@
 import collections
-import random
 import re
 from typing import Iterable, Iterator, List, Optional, Union
 
@@ -63,7 +62,7 @@ class RandomStartBatchSampler(BatchSampler):
 
     def __init__(self, sampler: Union[Sampler[int], Iterable[int]],
                  batch_size: int, drop_last: bool,
-                 num_chunks: int = 1):
+                 num_chunks: int = 1, world_size: int = 1):
         """
         Args:
             sampler: Base class for all Samplers.
@@ -73,6 +72,7 @@ class RandomStartBatchSampler(BatchSampler):
                 the size of dataset is not divisible by the batch size, then the
                 last batch will be smaller.
             num_chunks: Number of chunks to split the batch into.
+            world_size: For GDELT and MAG distributed training
         """
         super(RandomStartBatchSampler, self).__init__(sampler, batch_size,
                                                       drop_last)
@@ -82,6 +82,9 @@ class RandomStartBatchSampler(BatchSampler):
         self.chunk_size = batch_size // num_chunks
         self.reorder = self.num_chunks > 1
         self.random_size = batch_size
+        self.local_rank = local_rank()
+        self.device = torch.device('cuda', self.local_rank)
+        self.world_size = world_size
 
     def __iter__(self) -> Iterator[List[int]]:
         self.reset()
@@ -103,7 +106,11 @@ class RandomStartBatchSampler(BatchSampler):
     def reset(self):
         self.reorder = self.num_chunks > 1
         l = self.batch_size // self.chunk_size
-        self.random_size = int(random.randint(0, l - 1) * self.chunk_size)
+        randint = torch.randint(
+            0, self.num_chunks, size=(1,), device=self.device)
+        if self.world_size > 1:
+            torch.distributed.broadcast(randint, src=0)
+        self.random_size = int(randint) * self.chunk_size
         if self.random_size == 0:
             self.reorder = False
 
