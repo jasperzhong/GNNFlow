@@ -17,13 +17,17 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel", "fennel_edge"], [500000], [100000], [False]))
+        itertools.product(["hash", "fennel", "fennel_edge"], [300000], [100000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
-        dataset_name = 'REDDIT'
+        dataset_name = 'GDELT'
         p_stgy = partition_strategy
         num_p = 4
         undirected = True
+
+        if dataset_name == 'GDELT' or dataset_name == 'MAG':
+            undirected = False
+
         _, _, _, dataset = load_dataset(dataset_name)
         dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
 
