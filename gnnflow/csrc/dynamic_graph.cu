@@ -267,16 +267,8 @@ std::vector<std::size_t> DynamicGraph::out_degree(
     const std::vector<NIDType>& nodes) const {
   std::vector<size_t> out_degrees;
   for (auto& node : nodes) {
-    size_t out_degree = 0;
-    {
-      auto& list = h_copy_of_d_node_table_[node];
-      auto block = list.tail;
-      while (block != nullptr) {
-        out_degree += block->size;
-        block = block->prev;
-      }
-    }
-    out_degrees.push_back(out_degree);
+    auto h_list = h_copy_of_d_node_table_[node];
+    out_degrees.push_back(h_list.num_edges);
   }
   return out_degrees;
 }
