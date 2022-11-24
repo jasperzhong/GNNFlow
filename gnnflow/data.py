@@ -1,5 +1,4 @@
 import collections
-import random
 import re
 from typing import Iterable, Iterator, List, Optional, Union
 

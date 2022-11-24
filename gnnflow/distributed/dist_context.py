@@ -1,5 +1,3 @@
-from gnnflow.utils import get_project_root_dir, load_dataset, load_feat
-from gnnflow.utils import RandEdgeSampler, get_project_root_dir, load_dataset, load_feat
 import logging
 import os
 import time
@@ -14,6 +12,8 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
+from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset,
+                           load_feat)
 
 
 def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
@@ -40,6 +40,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      rpc_timeout=1800,
+                     num_worker_threads=32,
                      _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
