@@ -6,10 +6,11 @@ import os
 import random
 import time
 
-import psutil
 import numpy as np
+import psutil
 import torch
 import torch.distributed
+import torch.distributed.rpc
 import torch.nn
 import torch.nn.parallel
 import torch.utils.data
@@ -27,10 +28,9 @@ from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.models.dgnn import DGNN
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
-                           build_dynamic_graph, get_pinned_buffers,
-                           get_project_root_dir, load_dataset, load_feat, load_partitioned_dataset,
-                           mfgs_to_cuda)
+from gnnflow.utils import (EarlyStopMonitor, build_dynamic_graph, get_pinned_buffers,
+                           get_project_root_dir,  load_feat,
+                           load_partitioned_dataset, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT']
@@ -314,6 +314,7 @@ def main():
 
     if args.distributed:
         torch.distributed.barrier()
+        torch.distributed.rpc.shutdown()
 
 
 def train(train_loader, val_loader, sampler, model, optimizer, criterion,
@@ -321,9 +322,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    all_total_samples = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training... distributed: {}'.format(args.distributed))
-    logging.info('train_loader_len={}, val_load_len={}'.format(len(train_loader), len(val_loader)))
+    logging.info('train_loader_len={}, val_load_len={}'.format(
+        len(train_loader), len(val_loader)))
     for e in range(args.epoch):
         model.train()
         cache.reset()
@@ -377,9 +380,10 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
-                        
+
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
+        all_total_samples += total_samples
 
         # Validation
         val_start = time.time()
@@ -427,8 +431,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             break
 
     if args.rank == 0:
-        logging.info('Avg epoch time: {:.4f} | Avg throughput: {:.4f}'.format(epoch_time_sum / e, 
-            e * total_samples * args.world_size / epoch_time_sum))
+        logging.info('Avg epoch time: {:.4f} | Avg throughput: {:.4f}'.format(epoch_time_sum / e,
+                                                                              all_total_samples * args.world_size / epoch_time_sum))
 
     if args.distributed:
         torch.distributed.barrier()
