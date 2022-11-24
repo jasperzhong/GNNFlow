@@ -120,7 +120,7 @@ _reddit_default_config = {
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
     "undirected": True,
-    "node_feature": True,
+    "node_feature": False,
     "edge_feature": True,
     "batch_size": 600
 }

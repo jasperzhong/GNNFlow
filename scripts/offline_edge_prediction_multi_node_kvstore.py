@@ -323,6 +323,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training... distributed: {}'.format(args.distributed))
+    logging.info('train_loader_len={}, val_load_len={}'.format(len(train_loader), len(val_loader)))
     for e in range(args.epoch):
         model.train()
         cache.reset()
