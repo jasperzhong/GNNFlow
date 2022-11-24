@@ -737,8 +737,6 @@ class LDGLightPartitioner(Partitioner):
 
         partition_score = np.array(partition_score)
 
-        print(np.argmax(partition_score))
-
         return np.random.choice(np.where(partition_score == partition_score.max())[0])
         # return np.argmax(partition_score)
 
