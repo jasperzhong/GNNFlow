@@ -87,6 +87,26 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 train_rand_sampler, val_rand_sampler, test_rand_sampler)
             del train_data
             del dataset
+        # deal with unpartitioned nodes
+        partition_table = dispatcher._partitioner._partition_table
+        unassigned_nodes_index = (
+            partition_table == -1).nonzero().squeeze(dim=1)
+        logging.info("len of unassigned nodes: {}".format(
+            len(unassigned_nodes_index)))
+
+        if len(unassigned_nodes_index) > 0:
+            partition_id = torch.arange(
+                len(unassigned_nodes_index), dtype=torch.int8) % dispatcher._num_partitions
+            partition_table[unassigned_nodes_index] = partition_id
+
+        dim_node = 0 if node_feats is None else node_feats.shape[1]
+        dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+
+        del edge_feats
+        dispatcher.broadcast_graph_metadata()
+        dispatcher.broadcast_partition_table()
+        dispatcher.broadcast_node_edge_dim(dim_node, dim_edge)
+
         # node feature/memory
         partition_table = graph_services.get_partition_table()
         dim_edge = graph_services.get_dim_edge()
