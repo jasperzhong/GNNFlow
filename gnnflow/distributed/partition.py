@@ -419,7 +419,7 @@ class LDGPartitioner(Partitioner):
             if vid in self._neighbor_memory.keys():
                 neighbour_in_partition_size = len(self._neighbor_memory[vid][i])
 
-            partition_score.append(neighbour_in_partition_size - 0.7 * alpha * gamma * (partition_size ** (gamma - 1)))
+            partition_score.append(neighbour_in_partition_size * (1 - partition_size / (1.1 * self._partition_capacity)))
 
         partition_score = np.array(partition_score)
 
