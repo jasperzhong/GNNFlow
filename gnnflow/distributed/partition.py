@@ -811,8 +811,8 @@ class DGLMetisPartitioner(Partitioner):
 
         for i in range(len(unique_src_nodes)):
             for j in range(len(dst_nodes_list[i])):
-                src_list.append(unique_src_nodes[i])
-                dst_list.append(dst_nodes_list[i][j])
+                src_list.append(unique_src_nodes[i].item())
+                dst_list.append(dst_nodes_list[i][j].item())
 
         src_list = np.array(src_list)
         dst_list = np.array(dst_list)
