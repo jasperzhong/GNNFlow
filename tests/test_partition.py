@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel", "fennel_edge"], [300000], [100000], [False]))
+        itertools.product(["hash", "fennel", "fennel_edge"], [10000], [10000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
         dataset_name = 'GDELT'
