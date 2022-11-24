@@ -427,7 +427,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             break
 
     if args.rank == 0:
-        logging.info('Avg epoch time: {}'.format(epoch_time_sum / e))
+        logging.info('Avg epoch time: {:.4f} | Avg throughput: {:.4f}'.format(epoch_time_sum / e, 
+            e * total_samples * args.world_size / epoch_time_sum))
 
     if args.distributed:
         torch.distributed.barrier()

@@ -36,7 +36,7 @@ cmd="torchrun \
     --initial-ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \
     --num-workers 8 --chunks $CHUNKS \
-    --epoch 10 --lr 0.0001"
+    --epoch 5 --lr 0.0001"
 
 rm -rf /dev/shm/rmm_pool_*
 
