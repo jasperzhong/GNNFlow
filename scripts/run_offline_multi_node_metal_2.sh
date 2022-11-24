@@ -34,7 +34,6 @@ cmd="torchrun \
     --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO\
     --partition --ingestion-batch-size 10000 \
     --initial-ingestion-batch-size 100000 \
-    --num-chunks 4 \
     --partition-strategy $PARTITION_STRATEGY \
     --num-workers 8 --chunks $CHUNKS \
     --epoch 10 --lr 0.0001"
