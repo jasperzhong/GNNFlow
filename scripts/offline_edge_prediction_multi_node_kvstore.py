@@ -194,13 +194,7 @@ def main():
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    # train_data, val_data, test_data, full_data = load_dataset(args.data)
-    # train_rand_sampler = RandEdgeSampler(
-    #     train_data['src'].values, train_data['dst'].values)
-    # val_rand_sampler = RandEdgeSampler(
-    #     full_data['src'].values, full_data['dst'].values)
-    # test_rand_sampler = RandEdgeSampler(
-    #     full_data['src'].values, full_data['dst'].values)
+    # get rand sampler
     train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
     train_data, val_data, test_data = load_partitioned_dataset(
