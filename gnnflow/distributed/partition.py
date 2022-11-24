@@ -729,6 +729,7 @@ class LDGLightPartitioner(Partitioner):
 
             if self._edges_partitioned_num_list[i] > 1.10 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-2147483646)
+                continue
 
             neighbour_in_partition_size = self._neighbor_memory[i][vid]
 
@@ -737,8 +738,9 @@ class LDGLightPartitioner(Partitioner):
         partition_score = np.array(partition_score)
 
         print(np.argmax(partition_score))
-        # return np.random.choice(np.where(partition_score == partition_score.max())[0])
-        return np.argmax(partition_score)
+
+        return np.random.choice(np.where(partition_score == partition_score.max())[0])
+        # return np.argmax(partition_score)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
