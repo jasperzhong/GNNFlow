@@ -773,21 +773,14 @@ class DGLMetisPartitioner(Partitioner):
         pt = dgl.metis_partition_assignment(g, self._num_partitions, b_ntype, True, "k-way", "cut")
         print("end partition \n")
 
+        # update the partition table
+        self._partition_table = pt
+
         for i in range(self._num_partitions):
-            mask = pt == i
+            mask = pt[src_nodes] == i
 
-            # update the partition table
-            self._partition_table[src_nodes[mask]] = i
-
-            # no need to sort edges here
-            partitions[i] = Partition(
-                torch.cat([partitions[i].src_nodes,
-                           src_nodes[mask]]),
-                torch.cat([partitions[i].dst_nodes,
-                           dst_nodes[mask]]),
-                torch.cat([partitions[i].timestamps,
-                           timestamps[mask]]),
-                torch.cat([partitions[i].eids, eids[mask]]))
+            partitions.append(Partition(
+                src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
 
         # # partition the edges for the unseen source nodes
