@@ -35,7 +35,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 1000000 \
     --initial-ingestion-batch-size 1000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 8 --chunks $CHUNKS"
+    --num-workers 0 --chunks $CHUNKS"
 
 rm -rf /dev/shm/rmm_pool_*
 
