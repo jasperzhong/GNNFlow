@@ -765,38 +765,63 @@ class DGLMetisPartitioner(Partitioner):
 
         partitions = []
 
-        # partition the edges for the unseen source nodes
-        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+        # new logic
+        gt = dgl.graph((src_nodes, dst_nodes))
+        g = dgl.to_simple(gt)
+        b_ntype = torch.zeros(g.num_nodes(), dtype=torch.int8)
+        print("start partition lensrc: {}, lendst: {}, lenbntype: {}; num_partitions: {}\n".format(len(src_nodes), len(dst_nodes), len(b_ntype), self._num_partitions))
+        pt = dgl.metis_partition_assignment(g, self._num_partitions, b_ntype, True, "k-way", "cut")
+        print("end partition \n")
 
-        # dispatch edges to already assigned source nodes
         for i in range(self._num_partitions):
-            mask = self._partition_table[src_nodes] == i
-            partitions.append(Partition(
-                src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
-
-        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-            timestamps[unassigned_mask], eids[unassigned_mask])
-
-        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-        )
-
-        # merge the partitions
-        for i in range(self._num_partitions):
-            mask = partition_table_for_unseen_nodes == i
+            mask = pt == i
 
             # update the partition table
-            self._partition_table[src_nodes[unassigned_mask][mask]] = i
+            self._partition_table[src_nodes[mask]] = i
 
             # no need to sort edges here
             partitions[i] = Partition(
                 torch.cat([partitions[i].src_nodes,
-                           src_nodes[unassigned_mask][mask]]),
+                           src_nodes[mask]]),
                 torch.cat([partitions[i].dst_nodes,
-                           dst_nodes[unassigned_mask][mask]]),
+                           dst_nodes[mask]]),
                 torch.cat([partitions[i].timestamps,
-                           timestamps[unassigned_mask][mask]]),
-                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+                           timestamps[mask]]),
+                torch.cat([partitions[i].eids, eids[mask]]))
+
+
+        # # partition the edges for the unseen source nodes
+        # unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+        #
+        # # dispatch edges to already assigned source nodes
+        # for i in range(self._num_partitions):
+        #     mask = self._partition_table[src_nodes] == i
+        #     partitions.append(Partition(
+        #         src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
+        #
+        # partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+        #     src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+        #     timestamps[unassigned_mask], eids[unassigned_mask])
+        #
+        # assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+        # )
+        #
+        # # merge the partitions
+        # for i in range(self._num_partitions):
+        #     mask = partition_table_for_unseen_nodes == i
+        #
+        #     # update the partition table
+        #     self._partition_table[src_nodes[unassigned_mask][mask]] = i
+        #
+        #     # no need to sort edges here
+        #     partitions[i] = Partition(
+        #         torch.cat([partitions[i].src_nodes,
+        #                    src_nodes[unassigned_mask][mask]]),
+        #         torch.cat([partitions[i].dst_nodes,
+        #                    dst_nodes[unassigned_mask][mask]]),
+        #         torch.cat([partitions[i].timestamps,
+        #                    timestamps[unassigned_mask][mask]]),
+        #         torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
         return partitions
 
