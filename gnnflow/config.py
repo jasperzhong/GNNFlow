@@ -174,5 +174,5 @@ _mag_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": False,
-    "batch_size": 4000
+    "batch_size": 600
 }

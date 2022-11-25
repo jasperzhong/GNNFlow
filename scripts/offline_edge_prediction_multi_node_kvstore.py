@@ -203,6 +203,8 @@ def main():
     #     full_data['src'].values, full_data['dst'].values)
     train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     train_data, val_data, test_data = load_partitioned_dataset(
         args.data, rank=args.rank, world_size=args.world_size)
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
@@ -211,6 +213,8 @@ def main():
     test_ds = EdgePredictionDataset(
         test_data, test_rand_sampler)
     logging.info("make dataset done")
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
@@ -250,7 +254,8 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
     logging.info("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
-
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed,
                  kvstore_client=kvstore_client)
@@ -306,6 +311,8 @@ def main():
     logging.info("other time: {}".format(before_train_end - build_graph_end))
     logging.info("init time: {}".format(build_graph_end - start))
     logging.info("before train time: {}".format(before_train_end - start))
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device)
 

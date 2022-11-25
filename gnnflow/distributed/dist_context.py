@@ -113,12 +113,12 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 if node_feats is not None:
                     features = node_feats[keys]
 
-                    rpc.rpc_sync("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                 args=(keys, features, 'node'))
-                    del keys
-                    del features
-                    # futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                    #                              args=(keys, features, 'node')))
+                    # rpc.rpc_sync("worker%d" % kvstore_rank, graph_services.push_tensors,
+                    #              args=(keys, features, 'node'))
+                    # del keys
+                    # del features
+                    futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
+                                                 args=(keys, features, 'node')))
                 logging.info(
                     "partition: {} dispatch done".format(partition_id))
                 mem = psutil.virtual_memory().percent
@@ -160,7 +160,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 future.wait()
 
         # deal with rand sampler
-        train_data, _, _, _ = load_dataset(data_name)
+        train_data, _, _, dataset = load_dataset(data_name)
         train_rand_sampler = RandEdgeSampler(
             train_data['src'].values, train_data['dst'].values)
         val_rand_sampler = RandEdgeSampler(
@@ -171,6 +171,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         dispatcher.broadcast_rand_sampler(
             train_rand_sampler, val_rand_sampler, test_rand_sampler)
         del train_data
+        del dataset
 
     # check
     torch.distributed.barrier()
