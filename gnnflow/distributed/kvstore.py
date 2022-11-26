@@ -1,6 +1,7 @@
-from typing import List, Optional, Tuple
 import threading
+from typing import List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.distributed.rpc as rpc
 
@@ -43,6 +44,8 @@ class KVStoreServer:
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
 
+        tensors = tensors.numpy()
+
         if mode == 'node':
             with self._node_feat_lock:
                 keys = keys.tolist()
@@ -72,18 +75,18 @@ class KVStoreServer:
             List[torch.Tensor]: The tensors.
         """
         if mode == 'node':
-            return torch.stack(list(map(self._node_feat_map.get, keys.tolist())))
+            return torch.from_numpy(np.stack(list(map(self._node_feat_map.get, keys.tolist()))))
         elif mode == 'edge':
-            return torch.stack(list(map(self._edge_feat_map.get, keys.tolist())))
+            return torch.from_numpy(np.stack(list(map(self._edge_feat_map.get, keys.tolist()))))
         elif mode == 'memory':
-            return torch.stack(list(map(self._memory_map.get, keys.tolist())))
+            return torch.from_numpy(np.stack(list(map(self._memory_map.get, keys.tolist()))))
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
     def reset_memory(self):
         with self._memory_lock:
             for mem in iter(self._memory_map.values()):
-                mem.fill_(0)
+                mem.fill(0)
 
 
 class KVStoreClient:
