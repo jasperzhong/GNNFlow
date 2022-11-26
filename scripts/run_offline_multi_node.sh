@@ -33,7 +33,9 @@ cmd="torchrun \
     --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO\
     --partition --ingestion-batch-size 100000 \
     --initial-ingestion-batch-size 500000 \
-    --partition-strategy $PARTITION_STRATEGY"
+    --partition-strategy $PARTITION_STRATEGY \
+    --epochs 5
+    "
 
 echo $cmd
 LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
