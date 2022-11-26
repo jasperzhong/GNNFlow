@@ -34,7 +34,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 100000 \
     --initial-ingestion-batch-size 500000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --epochs 5
+    --epoch 5
     "
 
 echo $cmd
