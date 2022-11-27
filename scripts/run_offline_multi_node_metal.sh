@@ -12,7 +12,7 @@ CHUNKS="${7:-1}"
 HOST_NODE_ADDR=172.31.44.144
 HOST_NODE_PORT=29400
 NNODES=4
-NPROC_PER_NODE=8
+NPROC_PER_NODE=1
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
@@ -35,7 +35,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 1000000 \
     --initial-ingestion-batch-size 1000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 0 --chunks $CHUNKS"
+    --num-workers 8 --chunks $CHUNKS"
 
 rm -rf /dev/shm/rmm_pool_*
 
