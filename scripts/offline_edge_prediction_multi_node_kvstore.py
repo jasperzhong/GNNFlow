@@ -190,8 +190,9 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-    num_nodes = dgraph.max_vertex_id()
-    # num_nodes = dgraph.num_vertices() + 1
+    num_nodes = dgraph.max_vertex_id() + 1
+    logging.info("max_vertex id {}".format(dgraph.max_vertex_id()))
+    logging.info("num vertices: {}".format(dgraph.num_vertices()))
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
