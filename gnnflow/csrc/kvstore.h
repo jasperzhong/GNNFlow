@@ -12,7 +12,8 @@ namespace gnnflow {
 class KVStore {
  public:
   using Key = unsigned int;
-  explicit KVStore(int num_threads = 8) : num_threads_(num_threads) {}
+  explicit KVStore(int num_threads = 8)
+      : num_threads_(num_threads), lookup_time_(0), stack_time_(0) {}
   ~KVStore() = default;
 
   void set(const std::vector<Key>& keys, const at::Tensor& values);
@@ -28,6 +29,8 @@ class KVStore {
  private:
   absl::flat_hash_map<Key, at::Tensor> store_;
   int num_threads_;
+  float lookup_time_;
+  float stack_time_;
 };
 
 }  // namespace gnnflow
