@@ -88,10 +88,8 @@ class KVStoreServer:
             List[torch.Tensor]: The tensors.
         """
         # sort keys and restore order
-        keys, order = torch.sort(keys)
-        keys = keys.tolist()
-        order = order.tolist()
         if self._use_cpp_kvstore:
+            keys = keys.tolist()
             if mode == 'node':
                 return self._node_feat_kvstore.get(keys)
             elif mode == 'edge':
@@ -99,6 +97,9 @@ class KVStoreServer:
             elif mode == 'memory':
                 return self._memory_kvstore.get(keys)
         else:
+            keys, order = torch.sort(keys)
+            keys = keys.tolist()
+            order = order.tolist()
             if mode == 'node':
                 tensors = list(map(self._node_feat_map.get, keys))
             elif mode == 'edge':
