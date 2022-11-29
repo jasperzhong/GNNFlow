@@ -17,7 +17,8 @@ at::Tensor KVStore::get(const std::vector<Key>& keys) {
   auto sorted_keys = sort_vector(keys, indices);
 
   std::vector<at::Tensor> values(size);
-  // #pragma omp parallel for num_threads(num_threads_) schedule(static)
+#pragma omp parallel for default(none) shared(store_, sorted_keys, values) \
+    firstprivate(size) num_threads(num_threads_)
   for (size_t i = 0; i < size; ++i) {
     values[i] = store_[sorted_keys[i]];
   }
