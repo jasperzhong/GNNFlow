@@ -17,7 +17,7 @@ class KVStore {
 
   void set(const std::vector<Key>& keys, const at::Tensor& values);
 
-  at::Tensor get(const std::vector<Key>& keys) const;
+  at::Tensor get(const std::vector<Key>& keys);
 
   std::size_t memory_usage() const {
     // only count the memory usage of the map
