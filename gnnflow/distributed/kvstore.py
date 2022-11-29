@@ -90,6 +90,7 @@ class KVStoreServer:
         # sort keys and restore order
         keys, order = torch.sort(keys)
         keys = keys.tolist()
+        order = order.tolist()
         if self._use_cpp_kvstore:
             if mode == 'node':
                 return self._node_feat_kvstore.get(keys)
