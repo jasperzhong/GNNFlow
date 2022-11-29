@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 from typing import List, Optional, Tuple
@@ -29,6 +30,7 @@ class KVStoreServer:
             self._node_feat_kvstore = KVStore()
             self._edge_feat_kvstore = KVStore()
             self._memory_kvstore = KVStore()
+            logging.info("Use C++ KVStore.")
         else:
             self._node_feat_map = {}
             self._edge_feat_map = {}
@@ -37,6 +39,7 @@ class KVStoreServer:
             self._node_feat_lock = threading.Lock()
             self._edge_feat_lock = threading.Lock()
             self._memory_lock = threading.Lock()
+            logging.info("Use Python KVStore.")
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
