@@ -6,19 +6,20 @@
 
 #include "common.h"
 #include "dynamic_graph.h"
+#include "kvstore.h"
 #include "temporal_sampler.h"
 
 namespace py = pybind11;
 
 using namespace gnnflow;
 
-template <typename T>
-inline py::array vec2npy(const std::vector<T> &vec) {
-  // need to let python garbage collector handle C++ vector memory
+template <typename t>
+inline py::array vec2npy(const std::vector<t> &vec) {
+  // need to let python garbage collector handle c++ vector memory
   // see https://github.com/pybind/pybind11/issues/1042
-  auto v = new std::vector<T>(vec);
+  auto v = new std::vector<t>(vec);
   auto capsule = py::capsule(
-      v, [](void *v) { delete reinterpret_cast<std::vector<T> *>(v); });
+      v, [](void *v) { delete reinterpret_cast<std::vector<t> *>(v); });
   return py::array(v->size(), v->data(), capsule);
 }
 
@@ -70,12 +71,12 @@ PYBIND11_MODULE(libgnnflow, m) {
                                    vec2npy(std::get<1>(neighbors)),
                                    vec2npy(std::get<2>(neighbors)));
            })
-      .def("avg_linked_list_length", [](const DynamicGraph &dgraph) {
-        return dgraph.avg_linked_list_length();
-      })
-      .def("get_graph_memory_usage", [](const DynamicGraph &dgraph) {
-        return dgraph.graph_mem_usage();
-      })
+      .def("avg_linked_list_length",
+           [](const DynamicGraph &dgraph) {
+             return dgraph.avg_linked_list_length();
+           })
+      .def("get_graph_memory_usage",
+           [](const DynamicGraph &dgraph) { return dgraph.graph_mem_usage(); })
       .def("get_metadata_memory_usage", [](DynamicGraph &dgraph) {
         return dgraph.graph_metadata_mem_usage();
       });
@@ -112,4 +113,10 @@ PYBIND11_MODULE(libgnnflow, m) {
            py::arg("prop_time"), py::arg("seed"))
       .def("sample", &TemporalSampler::Sample)
       .def("sample_layer", &TemporalSampler::SampleLayer);
+
+  py::class_<KVStore>(m, "KVStore")
+      .def(py::init<int>(), py::arg("num_threads") = 4)
+      .def("set", &KVStore::set)
+      .def("get", &KVStore::get)
+      .def("memory_usage", &KVStore::memory_usage);
 }

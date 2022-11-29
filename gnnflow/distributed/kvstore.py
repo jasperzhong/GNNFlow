@@ -1,12 +1,13 @@
+import os
 import threading
 from typing import List, Optional, Tuple
 
-import numpy as np
 import torch
 import torch.distributed.rpc as rpc
 
 from gnnflow.distributed import graph_services
 from gnnflow.utils import local_world_size, rank
+from libgnnflow import KVStore
 
 
 class KVStoreServer:
@@ -22,15 +23,20 @@ class KVStoreServer:
     """
 
     def __init__(self):
+        self._use_cpp_kvstore = os.environ.get("USE_CPP_KVSTORE", "0") == "1"
         # keys -> tensors
-        self._node_feat_map = {}
-        self._edge_feat_map = {}
-        # include mem, mem_ts, mail, mail_ts
-        self._memory_map = {}
+        if self._use_cpp_kvstore:
+            self._node_feat_kvstore = KVStore()
+            self._edge_feat_kvstore = KVStore()
+            self._memory_kvstore = KVStore()
+        else:
+            self._node_feat_map = {}
+            self._edge_feat_map = {}
+            self._memory_map = {}
 
-        self._node_feat_lock = threading.Lock()
-        self._edge_feat_lock = threading.Lock()
-        self._memory_lock = threading.Lock()
+            self._node_feat_lock = threading.Lock()
+            self._edge_feat_lock = threading.Lock()
+            self._memory_lock = threading.Lock()
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -44,25 +50,29 @@ class KVStoreServer:
             tensors), "The number of keys {} and tensors {} must be the same.".format(
             len(keys), len(tensors))
 
-        # tensors = tensors.numpy()
-
-        if mode == 'node':
-            with self._node_feat_lock:
-                keys = keys.tolist()
-                for key, tensor in zip(keys, tensors):
-                    self._node_feat_map[key] = tensor
-        elif mode == 'edge':
-            with self._edge_feat_lock:
-                keys = keys.tolist()
-                for key, tensor in zip(keys, tensors):
-                    self._edge_feat_map[key] = tensor
-        elif mode == 'memory':
-            with self._memory_lock:
-                keys = keys.tolist()
-                for key, tensor in zip(keys, tensors):
-                    self._memory_map[key] = tensor
+        keys = keys.tolist()
+        if self._use_cpp_kvstore:
+            if mode == 'node':
+                self._node_feat_kvstore.set(keys, tensors)
+            elif mode == 'edge':
+                self._edge_feat_kvstore.set(keys, tensors)
+            elif mode == 'memory':
+                self._memory_kvstore.set(keys, tensors)
         else:
-            raise ValueError(f"Unknown mode: {mode}")
+            if mode == 'node':
+                with self._node_feat_lock:
+                    for key, tensor in zip(keys, tensors):
+                        self._node_feat_map[key] = tensor
+            elif mode == 'edge':
+                with self._edge_feat_lock:
+                    for key, tensor in zip(keys, tensors):
+                        self._edge_feat_map[key] = tensor
+            elif mode == 'memory':
+                with self._memory_lock:
+                    for key, tensor in zip(keys, tensors):
+                        self._memory_map[key] = tensor
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
 
     def pull(self, keys: torch.Tensor, mode: str) -> torch.Tensor:
         """
@@ -74,19 +84,32 @@ class KVStoreServer:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        if mode == 'node':
-            return torch.stack(list(map(self._node_feat_map.get, keys.tolist())))
-        elif mode == 'edge':
-            return torch.stack(list(map(self._edge_feat_map.get, keys.tolist())))
-        elif mode == 'memory':
-            return torch.stack(list(map(self._memory_map.get, keys.tolist())))
+        keys = keys.tolist()
+        if self._use_cpp_kvstore:
+            if mode == 'node':
+                return self._node_feat_kvstore.get(keys)
+            elif mode == 'edge':
+                return self._edge_feat_kvstore.get(keys)
+            elif mode == 'memory':
+                return self._memory_kvstore.get(keys)
         else:
-            raise ValueError(f"Unknown mode: {mode}")
+            if mode == 'node':
+                return torch.stack(list(map(self._node_feat_map.get, keys)))
+            elif mode == 'edge':
+                return torch.stack(list(map(self._edge_feat_map.get, keys)))
+            elif mode == 'memory':
+                return torch.stack(list(map(self._memory_map.get, keys)))
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
 
     def reset_memory(self):
-        with self._memory_lock:
-            for mem in iter(self._memory_map.values()):
-                mem.fill_(0)
+        if self._use_cpp_kvstore:
+            # TODO
+            pass
+        else:
+            with self._memory_lock:
+                for mem in iter(self._memory_map.values()):
+                    mem.fill_(0)
 
 
 class KVStoreClient:
