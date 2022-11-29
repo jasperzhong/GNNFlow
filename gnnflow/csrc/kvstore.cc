@@ -27,16 +27,20 @@ at::Tensor KVStore::get(const std::vector<Key>& keys) {
   }
   lookup_time_ += std::chrono::duration_cast<std::chrono::microseconds>(
                       std::chrono::system_clock::now() - start)
-                      .count();
+                      .count() /
+                  1000.0;
 
   start = std::chrono::system_clock::now();
   auto tensor = at::stack(values);
   stack_time_ += std::chrono::duration_cast<std::chrono::microseconds>(
                      std::chrono::system_clock::now() - start)
-                     .count();
+                     .count() /
+                 1000.0;
 
-  std::cout << "lookup time: " << lookup_time_ << " us"
-            << "\tstack time: " << stack_time_ << " us" << std::endl;
+  std::cout << "lookup time: " << lookup_time_ << " ms"
+            << "\tstack time: " << stack_time_ << " ms"
+            << "\tstack ratio: " << stack_time_ / (lookup_time_ + stack_time_)
+            << std::endl;
   return tensor;
 }
 }  // namespace gnnflow
