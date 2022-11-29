@@ -3,6 +3,7 @@
 
 #include <torch/extension.h>
 
+#include <mutex>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -31,6 +32,7 @@ class KVStore {
   int num_threads_;
   float lookup_time_;
   float stack_time_;
+  std::mutex mutex_;
 };
 
 }  // namespace gnnflow
