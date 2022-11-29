@@ -15,7 +15,7 @@ void KVStore::set(const std::vector<Key>& keys, const at::Tensor& values) {
 }
 
 at::Tensor KVStore::get(const std::vector<Key>& keys) {
-  const auto size = keys.size();
+  auto size = keys.size();
   // sort the keys
   // auto indices = stable_sort_indices(keys);
   // auto sorted_keys = sort_vector(keys, indices);
@@ -35,7 +35,8 @@ at::Tensor KVStore::get(const std::vector<Key>& keys) {
   }
 
   start = std::chrono::system_clock::now();
-  auto tensor = at::stack(values);
+  // cat then reshape
+  auto tensor = at::cat(values).reshape({size, -1});
   {
     std::lock_guard<std::mutex> lock(mutex_);
     stack_time_ += std::chrono::duration_cast<std::chrono::microseconds>(
@@ -48,6 +49,7 @@ at::Tensor KVStore::get(const std::vector<Key>& keys) {
             << "\tstack time: " << stack_time_ << " ms"
             << "\tstack ratio: " << stack_time_ / (lookup_time_ + stack_time_)
             << std::endl;
+
   return tensor;
 }
 }  // namespace gnnflow
