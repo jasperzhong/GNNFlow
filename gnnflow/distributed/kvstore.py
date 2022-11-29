@@ -110,7 +110,7 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
 
             tensors = [tensors[i] for i in order]
-            return torch.stack(tensors)
+            return torch.cat(tensors).reshape(len(keys), -1)
 
     def reset_memory(self):
         if self._use_cpp_kvstore:

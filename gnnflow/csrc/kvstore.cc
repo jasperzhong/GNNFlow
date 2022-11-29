@@ -36,7 +36,8 @@ at::Tensor KVStore::get(const std::vector<Key>& keys) {
 
   start = std::chrono::system_clock::now();
   // cat then reshape
-  auto tensor = at::cat(values).reshape({size, -1});
+  auto tensor = at::cat(values).reshape({static_cast<int64_t>(size), -1});
+
   {
     std::lock_guard<std::mutex> lock(mutex_);
     stack_time_ += std::chrono::duration_cast<std::chrono::microseconds>(
