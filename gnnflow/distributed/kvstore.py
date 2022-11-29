@@ -27,9 +27,9 @@ class KVStoreServer:
         self._use_cpp_kvstore = os.environ.get("USE_CPP_KVSTORE", "0") == "1"
         # keys -> tensors
         if self._use_cpp_kvstore:
-            self._node_feat_kvstore = KVStore(num_threads=8)
-            self._edge_feat_kvstore = KVStore(num_threads=8)
-            self._memory_kvstore = KVStore(num_threads=8)
+            self._node_feat_kvstore = KVStore(num_threads=0)
+            self._edge_feat_kvstore = KVStore(num_threads=0)
+            self._memory_kvstore = KVStore(num_threads=0)
             logging.info("Use C++ KVStore.")
         else:
             self._node_feat_map = {}
