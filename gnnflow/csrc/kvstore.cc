@@ -1,6 +1,7 @@
 #include "kvstore.h"
 
 #include "utils.h"
+#include <iostream>
 
 namespace gnnflow {
 void KVStore::set(const std::vector<Key>& keys, const at::Tensor& values) {
@@ -13,6 +14,7 @@ void KVStore::set(const std::vector<Key>& keys, const at::Tensor& values) {
 
 at::Tensor KVStore::get(const std::vector<Key>& keys) {
   auto size = keys.size();
+  std::cout << "size: " << size << std::endl;
   // sort the keys
   auto indices = stable_sort_indices(keys);
   auto sorted_keys = sort_vector(keys, indices);
