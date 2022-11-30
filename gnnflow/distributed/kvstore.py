@@ -87,9 +87,8 @@ class KVStoreServer:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        # sort keys and restore order
+        keys = keys.tolist()
         if self._use_cpp_kvstore:
-            keys = keys.tolist()
             if mode == 'node':
                 return torch.stack(self._node_feat_kvstore.get(keys))
             elif mode == 'edge':
@@ -97,25 +96,18 @@ class KVStoreServer:
             elif mode == 'memory':
                 return torch.stack(self._memory_kvstore.get(keys))
         else:
-            keys, order = torch.sort(keys)
-            keys = keys.tolist()
-            order = order.tolist()
             if mode == 'node':
-                tensors = list(map(self._node_feat_map.get, keys))
+                return torch.stack(list(map(self._node_feat_map.get, keys)))
             elif mode == 'edge':
-                tensors = list(map(self._edge_feat_map.get, keys))
+                return torch.stack(list(map(self._edge_feat_map.get, keys)))
             elif mode == 'memory':
-                tensors = list(map(self._memory_map.get, keys))
+                return torch.stack(list(map(self._memory_map.get, keys)))
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
-            tensors = [tensors[i] for i in order]
-            return torch.cat(tensors).reshape(len(keys), -1)
-
     def reset_memory(self):
         if self._use_cpp_kvstore:
-            # TODO
-            pass
+            self._memory_kvstore.fill_zeros()
         else:
             with self._memory_lock:
                 for mem in iter(self._memory_map.values()):

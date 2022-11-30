@@ -115,7 +115,7 @@ PYBIND11_MODULE(libgnnflow, m) {
       .def("sample_layer", &TemporalSampler::SampleLayer);
 
   py::class_<KVStore>(m, "KVStore")
-      .def(py::init<int>(), py::arg("num_threads") = 4)
+      .def(py::init<>())
       .def("set", &KVStore::set)
       .def("get", &KVStore::get)
       .def("memory_usage", &KVStore::memory_usage);
