@@ -91,7 +91,7 @@ class KVStoreServer:
         if self._use_cpp_kvstore:
             keys = keys.tolist()
             if mode == 'node':
-                return torch.stack(self._node_feat_kvstore.get(keys)
+                return torch.stack(self._node_feat_kvstore.get(keys))
             elif mode == 'edge':
                 return torch.stack(self._edge_feat_kvstore.get(keys))
             elif mode == 'memory':
