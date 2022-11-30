@@ -15,7 +15,6 @@ void KVStore::set(py::list keys, const at::Tensor& values) {
 py::list KVStore::get(py::list keys) {
   auto num_keys = static_cast<std::size_t>(py::len(keys));
   std::vector<at::Tensor> values(num_keys);
-#pragma omp parallel for num_threads(4)
   for (size_t i = 0; i < num_keys; ++i) {
     values[i] = store_[py::cast<Key>(keys[i])];
   }

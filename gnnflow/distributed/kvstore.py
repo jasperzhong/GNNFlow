@@ -25,13 +25,14 @@ class KVStoreServer:
 
     def __init__(self):
         self._use_cpp_kvstore = os.environ.get("USE_CPP_KVSTORE", "0") == "1"
+        self._not_use_map = os.environ.get("NOT_USE_MAP", "0") == "1"
         # keys -> tensors
         if self._use_cpp_kvstore:
             self._node_feat_kvstore = KVStore()
             self._edge_feat_kvstore = KVStore()
             self._memory_kvstore = KVStore()
             logging.info("Use C++ KVStore.")
-        else:
+        elif not self._not_use_map:
             self._node_feat_map = {}
             self._edge_feat_map = {}
             self._memory_map = {}
@@ -40,6 +41,16 @@ class KVStoreServer:
             self._edge_feat_lock = threading.Lock()
             self._memory_lock = threading.Lock()
             logging.info("Use Python KVStore.")
+        else:
+            logging.info("No KVStore.")
+
+            self._node_feat = None
+            self._edge_feat = None
+            self._memory = None
+
+            self._nids = []
+            self._eids = []
+            self._mids = []
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -61,7 +72,7 @@ class KVStoreServer:
                 self._edge_feat_kvstore.set(keys, tensors)
             elif mode == 'memory':
                 self._memory_kvstore.set(keys, tensors)
-        else:
+        elif not self._not_use_map:
             if mode == 'node':
                 with self._node_feat_lock:
                     for key, tensor in zip(keys, tensors):
@@ -74,6 +85,31 @@ class KVStoreServer:
                 with self._memory_lock:
                     for key, tensor in zip(keys, tensors):
                         self._memory_map[key] = tensor
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
+        else:
+            keys = sorted(keys)
+            if mode == 'node':
+                if self._node_feat is None:
+                    self._node_feat = tensors
+                else:
+                    self._node_feat = torch.cat(
+                        [self._node_feat, tensors], dim=0)
+                self._nids.extend(keys)
+            elif mode == 'edge':
+                if self._edge_feat is None:
+                    self._edge_feat = tensors
+                else:
+                    self._edge_feat = torch.cat(
+                        [self._edge_feat, tensors], dim=0)
+                self._eids.extend(keys)
+            elif mode == 'memory':
+                if self._memory is None:
+                    self._memory = tensors
+                else:
+                    self._memory = torch.cat(
+                        [self._memory, tensors], dim=0)
+                self._mids.extend(keys)
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
@@ -95,7 +131,7 @@ class KVStoreServer:
                 return torch.stack(self._edge_feat_kvstore.get(keys))
             elif mode == 'memory':
                 return torch.stack(self._memory_kvstore.get(keys))
-        else:
+        elif not self._not_use_map:
             if mode == 'node':
                 return torch.stack(list(map(self._node_feat_map.get, keys)))
             elif mode == 'edge':
@@ -104,6 +140,43 @@ class KVStoreServer:
                 return torch.stack(list(map(self._memory_map.get, keys)))
             else:
                 raise ValueError(f"Unknown mode: {mode}")
+        else:
+            if mode == 'node':
+                indices = []
+                j = 0
+                for i, nid in enumerate(self._nids):
+                    if j < len(keys):
+                        if nid == keys[j]:
+                            indices.append(i)
+                            j += 1
+                    else:
+                        break
+
+                return self._node_feat[indices]
+            elif mode == 'edge':
+                indices = []
+                j = 0
+                for i, eid in enumerate(self._eids):
+                    if j < len(keys):
+                        if eid == keys[j]:
+                            indices.append(i)
+                            j += 1
+                    else:
+                        break
+
+                return self._edge_feat[indices]
+            elif mode == 'memory':
+                indices = []
+                j = 0
+                for i, mid in enumerate(self._mids):
+                    if j < len(keys):
+                        if mid == keys[j]:
+                            indices.append(i)
+                            j += 1
+                    else:
+                        break
+
+                return self._memory[indices]
 
     def reset_memory(self):
         if self._use_cpp_kvstore:
