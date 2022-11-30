@@ -118,5 +118,6 @@ PYBIND11_MODULE(libgnnflow, m) {
       .def(py::init<>())
       .def("set", &KVStore::set)
       .def("get", &KVStore::get)
-      .def("memory_usage", &KVStore::memory_usage);
+      .def("memory_usage", &KVStore::memory_usage)
+      .def("fill_zeros", &KVStore::fill_zeros);
 }
