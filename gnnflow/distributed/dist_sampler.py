@@ -49,6 +49,11 @@ class DistributedTemporalSampler:
         self._sampling_task_queue = Queue()
         self._sampling_thread.start()
 
+        self._sample_node_num_list_agg100 = []
+        self._cnt = 0
+        for i in range(self._num_partitions):
+            self._sample_node_num_list_agg100.append(0.0)
+
     def _sampling_loop(self):
         while True:
             while not self._sampling_task_queue.empty():
@@ -167,7 +172,18 @@ class DistributedTemporalSampler:
             masks.append(partition_mask)
 
         # print the results
-        print("Rank:{} Sample Size is {} \n".format(self._rank, sampling_nodes_num))
+        for i in range(self._num_partitions):
+            self._sample_node_num_list_agg100[i] += sampling_nodes_num[i]
+            self._cnt += 1
+
+        if self._cnt == 100:
+            for i in range(self._num_partitions):
+                self._sample_node_num_list_agg100[i] /= self._cnt
+            print("Rank:{} Sample Size Aggregate 100 is {} \n".format(self._rank, self._sample_node_num_list_agg100))
+            for i in range(self._num_partitions):
+                self._sample_node_num_list_agg100[i] = 0.0
+            self._cnt = 0
+
 
         # collect sampling results
         sampling_results = []
