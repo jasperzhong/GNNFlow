@@ -133,6 +133,9 @@ class DistributedTemporalSampler:
 
         futures = []
         masks = []
+
+        sampling_nodes_num = []
+
         for partition_id in range(self._num_partitions):
             partition_mask = partition_ids == partition_id
             if partition_mask.sum() == 0:
@@ -148,6 +151,8 @@ class DistributedTemporalSampler:
                     "worker %d call local sample_layer_local", self._rank)
                 futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
                                                                  layer, snapshot))
+                # record the size
+                sampling_nodes_num.append(len(partition_vertices) * -1)
             else:
                 logging.debug(
                     "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
@@ -155,7 +160,14 @@ class DistributedTemporalSampler:
                     'worker{}'.format(worker_rank),
                     graph_services.sample_layer_local,
                     args=(partition_vertices, partition_timestamps, layer, snapshot)))
+
+                # record the size
+                sampling_nodes_num.append(len(partition_vertices))
+
             masks.append(partition_mask)
+
+        # print the results
+        print("Rank:{} Sample Size is {} \n".format(self._rank, sampling_nodes_num))
 
         # collect sampling results
         sampling_results = []
