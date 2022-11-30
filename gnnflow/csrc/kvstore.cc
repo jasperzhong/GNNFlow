@@ -3,24 +3,23 @@
 #include "utils.h"
 
 namespace gnnflow {
-void KVStore::set(const std::vector<Key>& keys, const at::Tensor& values) {
+void KVStore::set(py::list keys, const at::Tensor& values) {
   std::lock_guard<std::mutex> lock(mutex_);
-  const std::size_t size = keys.size();
-  for (size_t i = 0; i < size; ++i) {
-    store_[keys[i]] = values[i];
+  auto num_keys = static_cast<std::size_t>(py::len(keys));
+  for (std::size_t i = 0; i < num_keys; ++i) {
+    auto key = py::cast<Key>(keys[i]);
+    store_[key] = values[i];
   }
 }
 
-at::Tensor KVStore::get(const std::vector<Key>& keys) {
-  auto size = keys.size();
-  auto& first = store_[keys[0]];
-  at::Tensor values =
-      at::empty({static_cast<int64_t>(size), first.size(0)}, first.options());
-  for (size_t i = 0; i < size; ++i) {
-    values[i] = store_[keys[i]];
+py::list KVStore::get(py::list keys) {
+  auto num_keys = static_cast<std::size_t>(py::len(keys));
+  std::vector<at::Tensor> values(num_keys);
+  for (size_t i = 0; i < num_keys; ++i) {
+    values[i] = store_[py::cast<Key>(keys[i])];
   }
 
-  return values;
+  return py::cast(values);
 }
 
 void KVStore::fill_zeros() {
