@@ -18,7 +18,7 @@ class KVStore {
 
   void set(const std::vector<Key>& keys, const at::Tensor& values);
 
-  std::vector<at::Tensor> get(const std::vector<Key>& keys);
+  at::Tensor get(const std::vector<Key>& keys);
 
   void fill_zeros();
 

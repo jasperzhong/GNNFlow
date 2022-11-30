@@ -11,9 +11,11 @@ void KVStore::set(const std::vector<Key>& keys, const at::Tensor& values) {
   }
 }
 
-std::vector<at::Tensor> KVStore::get(const std::vector<Key>& keys) {
+at::Tensor KVStore::get(const std::vector<Key>& keys) {
   auto size = keys.size();
-  std::vector<at::Tensor> values(size);
+  auto& first = store_[keys[0]];
+  at::Tensor values =
+      at::empty({static_cast<int64_t>(size), first.size(0)}, first.options());
   for (size_t i = 0; i < size; ++i) {
     values[i] = store_[keys[i]];
   }
