@@ -46,11 +46,12 @@ class KVStoreServer:
 
             self._node_feat = None
             self._edge_feat = None
-            self._memory = None
+            # NB: memory would be updated
+            self._memory_map = {}
+            self._memory_lock = threading.Lock()
 
             self._nids = None
             self._eids = None
-            self._mids = None
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -113,17 +114,9 @@ class KVStoreServer:
                 else:
                     self._eids = torch.cat([self._eids, keys], dim=0)
             elif mode == 'memory':
-                if self._memory is None:
-                    self._memory = tensors
-                else:
-                    self._memory = torch.cat(
-                        [self._memory, tensors], dim=0)
-                if self._mids is None:
-                    self._mids = keys
-                else:
-                    self._mids = torch.cat([self._mids, keys], dim=0)
-                print("len(mids)=",len(self._mids))
-                print(self._mids)
+                with self._memory_lock:
+                    for key, tensor in zip(keys, tensors):
+                        self._memory_map[key] = tensor
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
@@ -163,25 +156,15 @@ class KVStoreServer:
                 indices = torch.searchsorted(self._eids, keys)
                 return self._edge_feat.index_select(0, indices)
             elif mode == 'memory':
-                try:
-                    indices = torch.searchsorted(self._mids, keys)
-                    out = self._memory.index_select(0, indices)
-                    return out
-                except:
-                    print("keys:", keys)
-                    print("indices:", indices)
-                    print("mids:", self._mids)
-                    raise
+                keys = keys.tolist()
+                return torch.stack(list(map(self._memory_map.get, keys)))
 
     def reset_memory(self):
         if self._use_cpp_kvstore:
             self._memory_kvstore.fill_zeros()
-        elif not self._not_use_map:
+        else:
             for mem in iter(self._memory_map.values()):
                 mem.fill_(0)
-        else:
-            if self._memory is not None:
-                self._memory.fill_(0)
 
 
 class KVStoreClient:

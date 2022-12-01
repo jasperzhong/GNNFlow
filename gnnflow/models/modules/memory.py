@@ -257,7 +257,7 @@ class Memory:
                                  mail,
                                  mail_ts.unsqueeze(dim=1)),
                                 dim=1)
-            # self.kvstore_client.push(nid, all_mem, mode='memory')
+            self.kvstore_client.push(nid, all_mem, mode='memory')
         else:
             # update mailbox first
             self.mailbox[nid] = mail
