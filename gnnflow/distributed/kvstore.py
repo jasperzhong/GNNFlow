@@ -166,8 +166,9 @@ class KVStoreServer:
                     out = self._memory.index_select(0, indices)
                     return out
                 except:
-                    print(keys)
-                    print(self._mids)
+                    print("keys:", keys)
+                    print("indices:", indices)
+                    print("mids:", self._mids)
                     raise
 
     def reset_memory(self):
