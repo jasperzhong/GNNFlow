@@ -102,7 +102,6 @@ class KVStoreServer:
                     self._nids = keys
                 else:
                     self._nids = torch.cat([self._nids, keys], dim=0)
-                print("nids: ", len(self._nids))
             elif mode == 'edge':
                 if self._edge_feat is None:
                     self._edge_feat = tensors
@@ -123,7 +122,8 @@ class KVStoreServer:
                     self._mids = keys
                 else:
                     self._mids = torch.cat([self._mids, keys], dim=0)
-                print("mids: ", len(self._mids))
+                    # TODO: no need to sort but there is a bug in the current implementation
+                    self._mids = torch.sort(self._mids)[0]
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
@@ -157,10 +157,10 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
             if mode == 'node':
-                indices = torch.searchsorted(self._nids, keys) 
+                indices = torch.searchsorted(self._nids, keys)
                 return self._node_feat.index_select(0, indices)
             elif mode == 'edge':
-                indices = torch.searchsorted(self._eids, keys) 
+                indices = torch.searchsorted(self._eids, keys)
                 return self._edge_feat.index_select(0, indices)
             elif mode == 'memory':
                 try:
