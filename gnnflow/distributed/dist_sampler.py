@@ -174,7 +174,8 @@ class DistributedTemporalSampler:
         # print the results
         for i in range(self._num_partitions):
             self._sample_node_num_list_agg100[i] += sampling_nodes_num[i]
-            self._cnt += 1
+
+        self._cnt += 1
 
         if self._cnt == 100:
             for i in range(self._num_partitions):
