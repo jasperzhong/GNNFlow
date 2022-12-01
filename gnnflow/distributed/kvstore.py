@@ -149,14 +149,11 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
             if mode == 'node':
-                return self._node_feat.index_select(
-                    0, torch.tensor([self._nid_to_idx[nid] for nid in keys]))
+                return self._node_feat[[self._nid_to_idx[nid] for nid in keys]]
             elif mode == 'edge':
-                return self._edge_feat.index_select(
-                    0, torch.tensor([self._eid_to_idx[eid] for eid in keys]))
+                return self._edge_feat[[self._eid_to_idx[eid] for eid in keys]]
             elif mode == 'memory':
-                return self._memory.index_select(
-                    0, torch.tensor([self._mid_to_idx[mid] for mid in keys]))
+                return self._memory[[self._mid_to_idx[mid] for mid in keys]]
 
     def reset_memory(self):
         if self._use_cpp_kvstore:
