@@ -89,6 +89,9 @@ class KVStoreServer:
             else:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
+            # sort keys and tensors
+            keys, indices = torch.sort(keys)
+            tensors = tensors[indices]
             if mode == 'node':
                 if self._node_feat is None:
                     self._node_feat = tensors
