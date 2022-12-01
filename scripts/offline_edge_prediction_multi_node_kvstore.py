@@ -425,14 +425,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 total_samples = metrics.tolist()
 
         if args.rank == 0:
-            print("aggregate sampler time:{}, fetch feat time: {}, train_time: {}, total:{}, theoretical total:{} \n".format(sampler_time_agg,
+            print("aggregate sampler time:{}, fetch feat time: {}, train_time: {}, reduce_time: {}, total:{}, theoretical total:{} \n".format(sampler_time_agg,
                                                                                                     fetch_feat_time_agg,
-                                                                                                    train_time_agg,
-                                                                                                    sampler_time_agg + train_time_agg + fetch_feat_time_agg, epoch_time))
+                                                                                                    train_time_agg, reduce_time_agg,
+                                                                                                    sampler_time_agg + train_time_agg + fetch_feat_time_agg + reduce_time_agg, epoch_time))
             # reset meter
             sampler_time_agg = 0
             fetch_feat_time_agg = 0
             train_time_agg = 0
+            reduce_time_agg = 0
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f}".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
