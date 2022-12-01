@@ -90,10 +90,11 @@ class KVStoreServer:
             else:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
-            # sort keys and tensors
-            keys, indices = torch.sort(keys)
-            tensors = tensors[indices]
             if mode == 'node':
+                # sort keys and tensors
+                keys, indices = torch.sort(keys)
+                tensors = tensors[indices]
+
                 if self._node_feat is None:
                     self._node_feat = tensors
                 else:
@@ -104,6 +105,10 @@ class KVStoreServer:
                 else:
                     self._nids = torch.cat([self._nids, keys], dim=0)
             elif mode == 'edge':
+                # sort keys and tensors
+                keys, indices = torch.sort(keys)
+                tensors = tensors[indices]
+
                 if self._edge_feat is None:
                     self._edge_feat = tensors
                 else:
@@ -114,6 +119,7 @@ class KVStoreServer:
                 else:
                     self._eids = torch.cat([self._eids, keys], dim=0)
             elif mode == 'memory':
+                keys = keys.tolist()
                 with self._memory_lock:
                     for key, tensor in zip(keys, tensors):
                         self._memory_map[key] = tensor
