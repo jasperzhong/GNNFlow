@@ -102,6 +102,7 @@ class KVStoreServer:
                     self._nids = keys
                 else:
                     self._nids = torch.cat([self._nids, keys], dim=0)
+                print("nids: ", len(self._nids))
             elif mode == 'edge':
                 if self._edge_feat is None:
                     self._edge_feat = tensors
@@ -122,6 +123,7 @@ class KVStoreServer:
                     self._mids = keys
                 else:
                     self._mids = torch.cat([self._mids, keys], dim=0)
+                print("mids: ", len(self._mids))
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
