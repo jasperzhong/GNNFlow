@@ -48,9 +48,9 @@ class KVStoreServer:
             self._edge_feat = None
             self._memory = None
 
-            self._nid_to_idx = {}
-            self._eid_to_idx = {}
-            self._mid_to_idx = {}
+            self._nids = None
+            self._eids = None
+            self._mids = None
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -89,34 +89,36 @@ class KVStoreServer:
             else:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
-            keys = keys.tolist()
             if mode == 'node':
-                current_size = len(self._nid_to_idx)
-                self._nid_to_idx.update(
-                    {nid: i for i, nid in enumerate(keys, current_size)})
                 if self._node_feat is None:
                     self._node_feat = tensors
                 else:
                     self._node_feat = torch.cat(
                         [self._node_feat, tensors], dim=0)
+                if self._nids is None:
+                    self._nids = keys
+                else:
+                    self._nids = torch.cat([self._nids, keys], dim=0)
             elif mode == 'edge':
-                current_size = len(self._eid_to_idx)
-                self._eid_to_idx.update(
-                    {eid: i for i, eid in enumerate(keys, current_size)})
                 if self._edge_feat is None:
                     self._edge_feat = tensors
                 else:
                     self._edge_feat = torch.cat(
                         [self._edge_feat, tensors], dim=0)
+                if self._eids is None:
+                    self._eids = keys
+                else:
+                    self._eids = torch.cat([self._eids, keys], dim=0)
             elif mode == 'memory':
-                current_size = len(self._mid_to_idx)
-                self._mid_to_idx.update(
-                    {mid: i for i, mid in enumerate(keys, current_size)})
                 if self._memory is None:
                     self._memory = tensors
                 else:
                     self._memory = torch.cat(
                         [self._memory, tensors], dim=0)
+                if self._mids is None:
+                    self._mids = keys
+                else:
+                    self._mids = torch.cat([self._mids, keys], dim=0)
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
@@ -130,8 +132,8 @@ class KVStoreServer:
         Returns:
             List[torch.Tensor]: The tensors.
         """
-        keys = keys.tolist()
         if self._use_cpp_kvstore:
+            keys = keys.tolist()
             if mode == 'node':
                 return torch.stack(self._node_feat_kvstore.get(keys))
             elif mode == 'edge':
@@ -139,6 +141,7 @@ class KVStoreServer:
             elif mode == 'memory':
                 return torch.stack(self._memory_kvstore.get(keys))
         elif not self._not_use_map:
+            keys = keys.tolist()
             if mode == 'node':
                 return torch.stack(list(map(self._node_feat_map.get, keys)))
             elif mode == 'edge':
@@ -149,11 +152,14 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
             if mode == 'node':
-                return self._node_feat[[self._nid_to_idx[nid] for nid in keys]]
+                indices = torch.searchsorted(self._nids, keys)
+                return self._node_feat.index_select(0, indices)
             elif mode == 'edge':
-                return self._edge_feat[[self._eid_to_idx[eid] for eid in keys]]
+                indices = torch.searchsorted(self._eids, keys)
+                return self._edge_feat.index_select(0, indices)
             elif mode == 'memory':
-                return self._memory[[self._mid_to_idx[mid] for mid in keys]]
+                indices = torch.searchsorted(self._mids, keys)
+                return self._memory.index_select(0, indices)
 
     def reset_memory(self):
         if self._use_cpp_kvstore:
@@ -162,7 +168,8 @@ class KVStoreServer:
             for mem in iter(self._memory_map.values()):
                 mem.fill_(0)
         else:
-            self._memory.fill_(0)
+            if self._memory is not None:
+                self._memory.fill_(0)
 
 
 class KVStoreClient:
