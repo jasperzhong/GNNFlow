@@ -16,9 +16,9 @@ class KVStore {
   KVStore() = default;
   ~KVStore() = default;
 
-  void set(py::list keys, const at::Tensor& values);
+  void set(const std::vector<Key>& keys, const at::Tensor& values);
 
-  py::list get(py::list keys);
+  std::vector<at::Tensor> get(const std::vector<Key>& keys);
 
   void fill_zeros();
 
