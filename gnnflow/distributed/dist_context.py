@@ -123,12 +123,12 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                     "partition: {} dispatch done".format(partition_id))
                 mem = psutil.virtual_memory().percent
                 logging.info("peak memory usage: {}".format(mem))
-            mem = psutil.virtual_memory().percent
-            logging.info("peak memory usage: {}".format(mem))
             del node_feats
 
             for future in futures:
                 future.wait()
+            mem = psutil.virtual_memory().percent
+            logging.info("node features done memory usage: {}".format(mem))
 
         if dim_memory > 0:
             for partition_id in range(dispatcher._num_partitions):
@@ -140,24 +140,31 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 keys = partition_vertices.contiguous()
                 kvstore_rank = partition_id * local_world_size()
                 # use None as value and just init keys here.
-                memory = torch.zeros(
-                    (len(keys), dim_memory), dtype=torch.float32)
-                memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-                dim_raw_message = 2 * dim_memory + dim_edge
-                mailbox = torch.zeros(
-                    (len(keys), dim_raw_message), dtype=torch.float32)
-                mailbox_ts = torch.zeros(
-                    (len(keys), ), dtype=torch.float32)
-                all_mem = torch.cat((memory,
-                                    memory_ts.unsqueeze(dim=1),
-                                    mailbox,
-                                    mailbox_ts.unsqueeze(dim=1),
-                                     ), dim=1)
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, all_mem, 'memory')))
+                # memory = torch.zeros(
+                #     (len(keys), dim_memory), dtype=torch.float32)
+                # memory_ts = torch.zeros(len(keys), dtype=torch.float32)
+                # dim_raw_message = 2 * dim_memory + dim_edge
+                # mailbox = torch.zeros(
+                #     (len(keys), dim_raw_message), dtype=torch.float32)
+                # mailbox_ts = torch.zeros(
+                #     (len(keys), ), dtype=torch.float32)
+                # all_mem = torch.cat((memory,
+                #                     memory_ts.unsqueeze(dim=1),
+                #                     mailbox,
+                #                     mailbox_ts.unsqueeze(dim=1),
+                #                      ), dim=1)
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.init_memory,
+                                             args=(keys, dim_memory, dim_edge)))
+                logging.info(
+                    "partition: {} memory dispatch done".format(partition_id))
+                mem = psutil.virtual_memory().percent
+                logging.info("peak memory usage: {}".format(mem))
 
             for future in futures:
                 future.wait()
+
+            mem = psutil.virtual_memory().percent
+            logging.info("memory dispatch done memory usage: {}".format(mem))
 
         # deal with rand sampler
         train_data, _, _, dataset = load_dataset(data_name)
