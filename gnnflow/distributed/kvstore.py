@@ -199,6 +199,7 @@ class KVStoreClient:
                  dim_edge_feat: int = 0,
                  dim_memory: int = 0):
         self._partition_table = partition_table
+
         self._num_partitions = num_partitions
         self._num_workers_per_machine = num_workers_per_machine
         self._local_rank = local_rank
