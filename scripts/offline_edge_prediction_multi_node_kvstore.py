@@ -322,6 +322,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training...')
+
+    sampler_time_agg = 0
+    fetch_feat_time_agg = 0
+    train_time_agg = 0
+
     for e in range(args.epoch):
         model.train()
         # TODO: now reset do nothing when using distributed
@@ -333,14 +338,27 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
+
+            sampler_time_start = time.time()
             # Sample
             mfgs = sampler.sample(target_nodes, ts)
+            sampler_time_end = time.time()
+
+            sampler_time_agg = (sampler_time_end - sampler_time_start)
 
             # Feature
             mfgs_to_cuda(mfgs, device)
+
+            fetch_feat_start = time.time()
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
+            fetch_feat_end = time.time()
+
+            fetch_feat_time_agg += (fetch_feat_end - fetch_feat_start)
+
             # Train
+            train_start = time.time()
+
             optimizer.zero_grad()
             pred_pos, pred_neg = model(
                 mfgs, edge_feats=cache.target_edge_features)
@@ -355,6 +373,10 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
 
+            train_end = time.time()
+
+            train_time_agg += (train_end - train_start)
+
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
@@ -365,9 +387,18 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
+
                 if args.rank == 0:
+                    print("aggregate sampler time:{}, fetch feat time: {}, train_time: {}, total:{}".format(sampler_time_agg, fetch_feat_time_agg, train_time_agg, sampler_time_agg + train_time_agg + fetch_feat_time_agg))
+                    # reset meter
+                    sampler_time_agg = 0
+                    fetch_feat_time_agg = 0
+                    train_time_agg = 0
+
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+
+
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
