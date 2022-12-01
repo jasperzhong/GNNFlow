@@ -155,14 +155,19 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
             if mode == 'node':
-                indices = torch.searchsorted(self._nids, keys)
+                indices = torch.searchsorted(self._nids, keys) 
                 return self._node_feat.index_select(0, indices)
             elif mode == 'edge':
-                indices = torch.searchsorted(self._eids, keys)
+                indices = torch.searchsorted(self._eids, keys) 
                 return self._edge_feat.index_select(0, indices)
             elif mode == 'memory':
-                indices = torch.searchsorted(self._mids, keys)
-                return self._memory.index_select(0, indices)
+                try:
+                    indices = torch.searchsorted(self._mids, keys)
+                    out = self._memory.index_select(0, indices)
+                except:
+                    print(keys)
+                    print(self._mids)
+                    raise
 
     def reset_memory(self):
         if self._use_cpp_kvstore:
