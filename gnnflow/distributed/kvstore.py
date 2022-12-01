@@ -122,8 +122,8 @@ class KVStoreServer:
                     self._mids = keys
                 else:
                     self._mids = torch.cat([self._mids, keys], dim=0)
-                    # TODO: no need to sort but there is a bug in the current implementation
-                    self._mids = torch.sort(self._mids)[0]
+                    print("len(mids)=",len(self._mids))
+                    print(self._mids)
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
