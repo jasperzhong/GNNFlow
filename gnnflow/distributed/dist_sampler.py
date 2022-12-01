@@ -50,9 +50,11 @@ class DistributedTemporalSampler:
         self._sampling_thread.start()
 
         self._sample_node_num_list_agg100 = []
+        self._sample_rt = []
         self._cnt = 0
         for i in range(self._num_partitions):
             self._sample_node_num_list_agg100.append(0.0)
+            self._sample_rt.append(0.0)
 
     def _sampling_loop(self):
         while True:
@@ -172,27 +174,40 @@ class DistributedTemporalSampler:
             masks.append(partition_mask)
 
         # print the results
-        for i in range(self._num_partitions):
-            self._sample_node_num_list_agg100[i] += sampling_nodes_num[i]
+        for cc in range(self._num_partitions):
+            self._sample_node_num_list_agg100[cc] += sampling_nodes_num[cc]
 
-        self._cnt += 1
-
-        if self._cnt == 100:
-            for i in range(self._num_partitions):
-                self._sample_node_num_list_agg100[i] /= self._cnt
-            print("Rank:{} Sample Size Aggregate 100 is {} \n".format(self._rank, self._sample_node_num_list_agg100))
-            for i in range(self._num_partitions):
-                self._sample_node_num_list_agg100[i] = 0.0
-            self._cnt = 0
 
 
         # collect sampling results
         sampling_results = []
+        j = 0
         for future in futures:
+            sst = time.time()
             if isinstance(future, SamplingResultTorch):
                 sampling_results.append(future)
             else:
                 sampling_results.append(future.wait())
+            eed = time.time()
+            self._sample_rt[j] += (eed - sst)
+            j += 1
+
+
+        self._cnt += 1
+
+        if self._cnt == 100:
+            for cc in range(self._num_partitions):
+                self._sample_node_num_list_agg100[cc] /= self._cnt
+                self._sample_rt[cc] /= self._cnt
+
+            print("Rank:{} Layer:{} Sample Size Aggregate 100 is {} \n".format(self._rank, layer, self._sample_node_num_list_agg100))
+            print("Sample Rt Agg 100 is {} \n".format(self._sample_rt))
+
+            for dd in range(self._num_partitions):
+                self._sample_node_num_list_agg100[dd] = 0.0
+                self._sample_rt[dd] = 0.0
+
+            self._cnt = 0
 
         # deal with non-partitioned nodes
         non_partition_mask = partition_ids == -1
