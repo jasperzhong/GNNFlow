@@ -345,7 +345,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             mfgs = sampler.sample(target_nodes, ts)
             sampler_time_end = time.time()
 
-            sampler_time_agg = (sampler_time_end - sampler_time_start)
+            sampler_time_agg += (sampler_time_end - sampler_time_start)
 
             # Feature
             mfgs_to_cuda(mfgs, device)
