@@ -164,6 +164,7 @@ class KVStoreServer:
                 try:
                     indices = torch.searchsorted(self._mids, keys)
                     out = self._memory.index_select(0, indices)
+                    return out
                 except:
                     print(keys)
                     print(self._mids)
