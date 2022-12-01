@@ -326,6 +326,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     sampler_time_agg = 0
     fetch_feat_time_agg = 0
     train_time_agg = 0
+    reduce_time_agg = 0
 
     for e in range(args.epoch):
         model.train()
@@ -378,7 +379,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             train_time_agg += (train_end - train_start)
 
             if (i+1) % args.print_freq == 0:
+
                 if args.distributed:
+                    reduce_time_start = time.time()
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
                                             cache_node_ratio_sum, total_samples],
                                            device=device)
@@ -386,6 +389,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     metrics /= args.world_size
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
+                    reduce_time_end = time.time()
+                    reduce_time_agg += (reduce_time_end - reduce_time_start)
 
 
                 if args.rank == 0:
