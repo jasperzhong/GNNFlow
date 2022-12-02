@@ -47,7 +47,7 @@ parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.00001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
-                    type=int, default=8)
+                    type=int, default=0)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
                     type=int, default=8)
 parser.add_argument("--print-freq", help="print frequency",
@@ -134,7 +134,7 @@ def main():
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(
-            'gloo', timeout=datetime.timedelta(seconds=18000))
+            'gloo', timeout=datetime.timedelta(seconds=36000))
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
@@ -191,13 +191,16 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-    num_nodes = dgraph.num_vertices() + 1
+    num_nodes = dgraph.max_vertex_id() + 1
+    logging.info("max_vertex id {}".format(dgraph.max_vertex_id()))
+    logging.info("num vertices: {}".format(dgraph.num_vertices()))
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    # get rand sampler
     train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     train_data, val_data, test_data = load_partitioned_dataset(
         args.data, rank=args.rank, world_size=args.world_size)
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
@@ -206,12 +209,14 @@ def main():
     test_ds = EdgePredictionDataset(
         test_data, test_rand_sampler)
     logging.info("make dataset done")
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed and args.data not in ['GDELT', 'MAG', 'REDDIT']:
+    if args.distributed and args.data not in ['REDDIT', 'GDELT', 'MAG']:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -245,7 +250,8 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
     logging.info("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
-
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed,
                  kvstore_client=kvstore_client)
@@ -264,7 +270,7 @@ def main():
     build_graph_end = time.time()
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], find_unused_parameters=True)
+            model, device_ids=[args.local_rank], find_unused_parameters=False)
 
     # pinned_nfeat_buffs, pinned_efeat_buffs = None, None
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
@@ -301,6 +307,8 @@ def main():
     logging.info("other time: {}".format(before_train_end - build_graph_end))
     logging.info("init time: {}".format(build_graph_end - start))
     logging.info("before train time: {}".format(before_train_end - start))
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device)
 
