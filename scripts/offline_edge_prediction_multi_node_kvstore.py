@@ -71,6 +71,8 @@ parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
+parser.add_argument("--dynamic-scheduling", action="store_true",
+                    help="whether to use dynamic scheduling")
 
 # dataset
 parser.add_argument("--chunks", help="num of dataset chunks",
@@ -92,9 +94,6 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-set_seed(args.seed)
 
 
 def evaluate(dataloader, sampler, model, criterion, cache, device):
@@ -147,6 +146,8 @@ def main():
         args.local_world_size = args.world_size = 1
 
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
+
+    set_seed(args.seed + args.rank)
 
     model_config, data_config = get_default_config(args.model, args.data)
 
@@ -268,7 +269,7 @@ def main():
     if args.distributed:
         assert isinstance(dgraph, DistributedDynamicGraph)
         sampler = TemporalSampler(dgraph._dgraph, **model_config)
-        graph_services.set_dsampler(sampler)
+        graph_services.set_dsampler(sampler, args.dynamic_scheduling)
         sampler = graph_services.get_dsampler()
     else:
         assert isinstance(dgraph, DynamicGraph)
@@ -335,8 +336,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    all_total_samples = 0
     early_stopper = EarlyStopMonitor()
-    logging.info('Start training...')
+    logging.info('Start training... distributed: {}'.format(args.distributed))
     for e in range(args.epoch):
         model.train()
         cache.reset()
@@ -346,6 +348,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
         total_samples = 0
+        cv_sampling_time = 0
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
@@ -381,9 +384,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
                         total_samples = metrics.tolist()
 
+                    all_sampling_time = sampler.get_sampling_time()
+                    std = all_sampling_time.std(dim=1).mean()
+                    mean = all_sampling_time.mean(dim=1).mean()
+                    cv_sampling_time += std / mean
+
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/1), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
+                        train_loader)), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -410,9 +418,19 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
                 total_samples = metrics.tolist()
 
+            all_sampling_time = sampler.get_sampling_time()
+            if args.rank == 0:
+                print(all_sampling_time)
+
+            std = all_sampling_time.std(dim=1).mean()
+            mean = all_sampling_time.mean(dim=1).mean()
+            cv_sampling_time += std / mean
+
+        all_total_samples += total_samples
+
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f}".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
@@ -426,7 +444,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             break
 
     if args.rank == 0:
-        logging.info('Avg epoch time: {}'.format(epoch_time_sum / e))
+        logging.info('Avg epoch time: {}, Avg train throughput: {}'.format(
+            epoch_time_sum / (e + 1), all_total_samples * args.world_size / epoch_time_sum))
 
     if args.distributed:
         torch.distributed.barrier()

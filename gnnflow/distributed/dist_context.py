@@ -40,6 +40,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      rpc_timeout=1800,
+                     num_worker_threads=32,
                      _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
@@ -71,7 +72,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 del dataset
         else:
             # for those datasets that don't need chunks
-            _, _, _, dataset = load_dataset(data_name)
+            train_data, _, _, dataset = load_dataset(data_name)
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
