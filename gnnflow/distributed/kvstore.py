@@ -25,7 +25,8 @@ class KVStoreServer:
 
     def __init__(self):
         self._use_cpp_kvstore = os.environ.get("USE_CPP_KVSTORE", "0") == "1"
-        self._not_use_map = os.environ.get("NOT_USE_MAP", "0") == "1"
+        # NB: default is not to use map
+        self._not_use_map = os.environ.get("NOT_USE_MAP", "1") == "1"
         # keys -> tensors
         if self._use_cpp_kvstore:
             self._node_feat_kvstore = KVStore()
@@ -42,7 +43,7 @@ class KVStoreServer:
             self._memory_lock = threading.Lock()
             logging.info("Use Python KVStore.")
         else:
-            logging.info("No KVStore.")
+            logging.info("No map.")
 
             self._node_feat = None
             self._edge_feat = None
