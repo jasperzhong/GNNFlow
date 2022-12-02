@@ -13,13 +13,13 @@ namespace py = pybind11;
 
 using namespace gnnflow;
 
-template <typename t>
-inline py::array vec2npy(const std::vector<t> &vec) {
-  // need to let python garbage collector handle c++ vector memory
+template <typename T>
+inline py::array vec2npy(const std::vector<T> &vec) {
+  // need to let python garbage collector handle C++ vector memory
   // see https://github.com/pybind/pybind11/issues/1042
-  auto v = new std::vector<t>(vec);
+  auto v = new std::vector<T>(vec);
   auto capsule = py::capsule(
-      v, [](void *v) { delete reinterpret_cast<std::vector<t> *>(v); });
+      v, [](void *v) { delete reinterpret_cast<std::vector<T> *>(v); });
   return py::array(v->size(), v->data(), capsule);
 }
 
