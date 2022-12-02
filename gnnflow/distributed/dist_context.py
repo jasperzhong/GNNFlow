@@ -127,6 +127,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
             logging.info("node features done memory usage: {}".format(mem))
 
         if dim_memory > 0:
+            futures = []
             for partition_id in range(dispatcher._num_partitions):
                 partition_mask = partition_table == partition_id
                 assert partition_mask.sum() > 0  # should not be 0
