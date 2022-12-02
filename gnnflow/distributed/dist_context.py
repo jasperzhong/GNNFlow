@@ -113,11 +113,6 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 kvstore_rank = partition_id * local_world_size()
                 if node_feats is not None:
                     features = node_feats[keys]
-
-                    # rpc.rpc_sync("worker%d" % kvstore_rank, graph_services.push_tensors,
-                    #              args=(keys, features, 'node'))
-                    # del keys
-                    # del features
                     futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                                  args=(keys, features, 'node')))
                 logging.info(
@@ -140,20 +135,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 partition_vertices = vertices[partition_mask]
                 keys = partition_vertices.contiguous()
                 kvstore_rank = partition_id * local_world_size()
-                # use None as value and just init keys here.
-                # memory = torch.zeros(
-                #     (len(keys), dim_memory), dtype=torch.float32)
-                # memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-                # dim_raw_message = 2 * dim_memory + dim_edge
-                # mailbox = torch.zeros(
-                #     (len(keys), dim_raw_message), dtype=torch.float32)
-                # mailbox_ts = torch.zeros(
-                #     (len(keys), ), dtype=torch.float32)
-                # all_mem = torch.cat((memory,
-                #                     memory_ts.unsqueeze(dim=1),
-                #                     mailbox,
-                #                     mailbox_ts.unsqueeze(dim=1),
-                #                      ), dim=1)
+
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.init_memory,
                                              args=(keys, dim_memory, dim_edge)))
                 logging.info(
