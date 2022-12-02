@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 
+import torch.utils
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 
@@ -33,14 +34,16 @@ class CustomBuildExt(build_ext):
         print("Building with CMake config: {}".format(config))
 
         ext_name = self.extensions[0].name
-        build_dir = self.get_ext_fullpath(ext_name).replace(self.get_ext_filename(ext_name), '')
+        build_dir = self.get_ext_fullpath(ext_name).replace(
+            self.get_ext_filename(ext_name), '')
         build_dir = os.path.abspath(build_dir)
 
         cmake_args = [
             "-DCMAKE_BUILD_TYPE={}".format(config),
             "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
             "-DPYTHON_EXECUTABLE:FILEPATH={}".format(sys.executable),
-            "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(build_dir)
+            "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(build_dir),
+            "-DCMAKE_PREFIX_PATH={}".format(torch.utils.cmake_prefix_path),
         ]
 
         cmake_build_args = ['--config', config, '--', '-j']
@@ -56,9 +59,8 @@ class CustomBuildExt(build_ext):
                 [cmake_bin, "--build", ".", *cmake_build_args])
         except subprocess.CalledProcessError as e:
             raise RuntimeError("CMake build failed") from e
-        
+
         os.chdir(curdir)
-        
 
 
 require_list = ["torch", "numpy"]

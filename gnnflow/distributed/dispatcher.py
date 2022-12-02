@@ -182,6 +182,7 @@ class Dispatcher:
                 future.wait()
 
         if dim_memory > 0:
+            logging.info("dispatch memory")
             for partition_id in range(self._num_partitions):
                 partition_mask = partition_table == partition_id
                 assert partition_mask.sum() > 0  # should not be 0
