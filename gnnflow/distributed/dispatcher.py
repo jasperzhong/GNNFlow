@@ -1,4 +1,3 @@
-import logging
 from typing import Optional
 
 import numpy as np
@@ -27,7 +26,8 @@ class Dispatcher:
         assert self._rank == 0, "Only rank 0 can initialize the dispatcher."
         self._num_partitions = num_partitions
         self._local_world_size = local_world_size()
-        self._partitioner = get_partitioner(partition_strategy, num_partitions)
+        self._partitioner = get_partitioner(
+            partition_strategy, num_partitions, self._local_world_size)
 
         self._num_edges = 0
         self._max_nodex = 0
@@ -35,7 +35,8 @@ class Dispatcher:
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor,
-                       edge_feats: Optional[torch.Tensor] = None):
+                       edge_feats: Optional[torch.Tensor] = None,
+                       partition_train_data: bool = False):
         """
         Dispatch the edges to the workers.
 
@@ -51,13 +52,12 @@ class Dispatcher:
         self._nodes.update(dst_nodes.tolist())
         self._num_edges += torch.unique(eids).size(0)
 
-        partitions = self._partitioner.partition(
-            src_nodes, dst_nodes, timestamps, eids)
+        partitions, evenly_partitioned_dataset = self._partitioner.partition(
+            src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=partition_train_data)
 
         self._max_node = self._partitioner._max_node
 
         # Dispatch the partitions to the workers.
-        futures = []
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
             for worker_id in range(self._local_world_size):
@@ -70,6 +70,19 @@ class Dispatcher:
                 else:
                     rpc.rpc_async("worker%d" % worker_rank, graph_services.add_edges,
                                   args=(*edges, ))
+
+        futures = []
+        # Dispatch the training samples to the workers.
+        if evenly_partitioned_dataset is not None:
+            for partition_id in range(self._num_partitions):
+                for worker_id in range(self._local_world_size):
+                    worker_rank = partition_id * self._local_world_size + worker_id
+                    dataset = evenly_partitioned_dataset[partition_id][worker_id]
+                    if worker_rank == self._rank:
+                        graph_services.add_train_data(*dataset)
+                    else:
+                        futures.append(rpc.rpc_async("worker%d" % worker_rank, graph_services.add_train_data,
+                                                     args=(*dataset, )))
 
         for partition_id, edges in enumerate(partitions):
             edges = list(edges)
@@ -89,7 +102,7 @@ class Dispatcher:
                         ingestion_batch_size: int, undirected: bool,
                         node_feats: Optional[torch.Tensor] = None,
                         edge_feats: Optional[torch.Tensor] = None,
-                        dim_memory: int = 0):
+                        dim_memory: int = 0, partition_train_data: bool = False):
         """
         partition the dataset to the workers.
 
@@ -101,6 +114,7 @@ class Dispatcher:
             node_feats (torch.Tensor): The node features of the dataset.
             edge_feats (torch.Tensor): The edge features of the dataset.
             dim_memory (int): The dimension of the memory.
+            partition_train_data (bool): Whether to partition the training data.
         """
         # Partition the dataset.
         futures = []
@@ -128,7 +142,8 @@ class Dispatcher:
             timestamps = torch.from_numpy(timestamps)
             eids = torch.from_numpy(eids)
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
-                                               timestamps, eids, edge_feats))
+                                               timestamps, eids, edge_feats,
+                                               partition_train_data))
 
             for future in futures:
                 future.wait()
@@ -136,7 +151,6 @@ class Dispatcher:
             t.update(len(batch))
 
         t.close()
-
 
     def broadcast_graph_metadata(self):
         """
