@@ -87,8 +87,15 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid)
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+
+            if args.use_memory:
+                # NB: no need to do backward here
+                # use one function
+                model.module.memory.update_mem_mail(
+                    **model.module.last_updated, edge_feats=cache.target_edge_features,
+                    neg_sample_ratio=1)
+
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -121,6 +128,7 @@ def main():
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
     model_config, data_config = get_default_config(args.model, args.data)
+    args.use_memory = model_config['use_memory']
 
     if args.distributed:
         # graph is stored in shared memory
@@ -290,8 +298,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Train
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+
+            if args.use_memory:
+                # NB: no need to do backward here
+                with torch.no_grad():
+                    # use one function
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))

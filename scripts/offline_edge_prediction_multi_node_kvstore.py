@@ -73,6 +73,9 @@ parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
 parser.add_argument("--dynamic-scheduling", action="store_true",
                     help="whether to use dynamic scheduling")
+parser.add_argument("--not-partition-train-data", action="store_true",
+                    help="whether not to partition the training data")
+
 
 # dataset
 parser.add_argument("--chunks", help="num of dataset chunks",
@@ -109,8 +112,13 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+            if args.use_memory:
+                # NB: no need to do backward here
+                # use one function
+                model.module.memory.update_mem_mail(
+                    **model.module.last_updated, edge_feats=cache.target_edge_features,
+                    neg_sample_ratio=1)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -150,6 +158,7 @@ def main():
     set_seed(args.seed + args.rank)
 
     model_config, data_config = get_default_config(args.model, args.data)
+    args.use_memory = model_config['use_memory']
 
     if args.distributed:
         # graph is stored in shared memory
@@ -173,7 +182,7 @@ def main():
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory, args.chunks)
+                                       args.dim_memory, args.chunks, not args.not_partition_train_data)
         # every worker will have a kvstore_client
         dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(
@@ -201,8 +210,13 @@ def main():
     logging.info("make sampler done")
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
+
     train_data, val_data, test_data = load_partitioned_dataset(
-        args.data, rank=args.rank, world_size=args.world_size)
+        args.data, rank=args.rank, world_size=args.world_size,
+        partition_train_data=not args.not_partition_train_data)
+    if not args.not_partition_train_data:
+        train_data = graph_services.get_train_data()
+
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
         val_data, val_rand_sampler)
@@ -354,8 +368,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 mfgs, eid, target_edge_features=args.use_memory)
             # Train
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+
+            if args.use_memory:
+                # NB: no need to do backward here
+                with torch.no_grad():
+                    # use one function
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -425,7 +446,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
 
-        if args.rank == 0 and e > 1 and val_ap > best_ap:
+        if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap
             torch.save(model.state_dict(), checkpoint_path)
