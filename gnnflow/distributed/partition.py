@@ -232,7 +232,7 @@ class Partitioner:
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
                 print("machine {} partition {} has {} edges".format(
-                    j, len(evenly_partitioned_dataset[i][j].src_nodes)))
+                    i, j, len(evenly_partitioned_dataset[i][j].src_nodes)))
                 assert len(evenly_partitioned_dataset[i][j].src_nodes) == len(
                     evenly_partitioned_dataset[0][0].src_nodes)
 
