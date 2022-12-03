@@ -207,8 +207,8 @@ def main():
 
     train_data, val_data, test_data = load_partitioned_dataset(
         args.data, rank=args.rank, world_size=args.world_size,
-        partition_train_data=args.partition_train_data)
-    if args.partition_train_data:
+        partition_train_data=args.partition_training_data)
+    if args.partition_training_data:
         train_data = graph_services.get_train_data()
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)

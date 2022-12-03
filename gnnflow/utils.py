@@ -67,7 +67,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     return train_data, val_data, test_data, full_data
 
 
-def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank: int = 0, world_size: int = 1, partition_train_data: bool = False):
+def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank: int = 0, world_size: int = 1, partition_training_data: bool = False):
     """
     Loads the partitioned dataset and returns the dataframes for the train, validation, test.
 
@@ -93,7 +93,7 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
         raise ValueError('{} does not exist'.format(train_path))
 
     train_data = None
-    if not partition_train_data:
+    if not partition_training_data:
         train_data = pd.read_csv(train_path)
     assert isinstance(train_data, pd.DataFrame)
     val_data = pd.read_csv(val_path)
