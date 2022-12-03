@@ -73,7 +73,7 @@ parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
 parser.add_argument("--dynamic-scheduling", action="store_true",
                     help="whether to use dynamic scheduling")
-parser.add_argument("--partition-training-data", action="store_true",
+parser.add_argument("--partition-train-data", action="store_true",
                     help="whether to partition the training data")
 
 
@@ -176,7 +176,7 @@ def main():
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory, args.chunks, args.partition_training_data)
+                                       args.dim_memory, args.chunks, args.partition_train_data)
         # every worker will have a kvstore_client
         dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(
@@ -207,8 +207,8 @@ def main():
 
     train_data, val_data, test_data = load_partitioned_dataset(
         args.data, rank=args.rank, world_size=args.world_size,
-        partition_train_data=args.partition_training_data)
-    if args.partition_training_data:
+        partition_train_data=args.partition_train_data)
+    if args.partition_train_data:
         train_data = graph_services.get_train_data()
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
