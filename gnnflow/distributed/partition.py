@@ -203,7 +203,7 @@ class Partitioner:
         for i in range(self._num_partitions):
             print("len(sorted_partitions[{}].src_nodes): {}".format(
                 i, len(sorted_partitions[i].src_nodes)))
-            assert len(sorted_partitions[i]) == avg_num_edges
+            assert len(sorted_partitions[i].src_nodes) == avg_num_edges
 
         # restore the order of partitions
         restored_partitions = [None] * self._num_partitions
