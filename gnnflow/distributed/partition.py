@@ -193,6 +193,12 @@ class Partitioner:
                 torch.cat([sorted_partitions[i - 1].eids,
                            sorted_partitions[i].eids[avg_num_edges:]]))
 
+            sorted_partitions[i] = Partition(
+                sorted_partitions[i].src_nodes[:avg_num_edges],
+                sorted_partitions[i].dst_nodes[:avg_num_edges],
+                sorted_partitions[i].timestamps[:avg_num_edges],
+                sorted_partitions[i].eids[:avg_num_edges])
+
         # check the number of edges in each partition
         for i in range(self._num_partitions):
             print("len(sorted_partitions[{}].src_nodes): {}".format(
@@ -226,9 +232,9 @@ class Partitioner:
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
                 print("machine {} partition {} has {} edges".format(
-                    j, len(evenly_partitioned_dataset[i][j])))
-                assert len(evenly_partitioned_dataset[i][j]) == len(
-                    evenly_partitioned_dataset[0][0])
+                    j, len(evenly_partitioned_dataset[i][j].src_nodes)))
+                assert len(evenly_partitioned_dataset[i][j].src_nodes) == len(
+                    evenly_partitioned_dataset[0][0].src_nodes)
 
         return evenly_partitioned_dataset
 
