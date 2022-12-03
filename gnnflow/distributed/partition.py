@@ -172,7 +172,7 @@ class Partitioner:
             A evenly partitioned dataset.
         """
         # average number of edges in each partition
-        avg_num_edges = sum([len(p) for p in partitions]
+        avg_num_edges = sum([len(p.src_nodes) for p in partitions]
                             ) // self._num_partitions
 
         # sort the partitions by the number of edges use argsort
@@ -223,7 +223,7 @@ class Partitioner:
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
                 print("machine {} partition {} has {} edges".format(
-                    i, j, len(evenly_partitioned_dataset[i][j])))
+                    j, len(evenly_partitioned_dataset[i][j])))
                 assert len(evenly_partitioned_dataset[i][j]) == len(
                     evenly_partitioned_dataset[0][0])
 
