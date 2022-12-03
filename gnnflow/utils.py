@@ -95,7 +95,7 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
     train_data = None
     if not partition_train_data:
         train_data = pd.read_csv(train_path)
-    assert isinstance(train_data, pd.DataFrame)
+        assert isinstance(train_data, pd.DataFrame)
     val_data = pd.read_csv(val_path)
     assert isinstance(val_data, pd.DataFrame)
     test_data = pd.read_csv(test_path)

@@ -219,6 +219,12 @@ class Partitioner:
 
             evenly_partitioned_dataset.append(partitioned_dataset)
 
+        # check the number of edges in each worker are the same
+        for i in range(self._num_partitions):
+            for j in range(self._local_world_size):
+                assert len(evenly_partitioned_dataset[i][j]) == len(
+                    evenly_partitioned_dataset[0][0])
+
         return evenly_partitioned_dataset
 
     def get_partition_table(self) -> torch.Tensor:
