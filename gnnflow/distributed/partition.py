@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import List, NamedTuple
 
 import numpy as np
@@ -19,21 +20,23 @@ class Partitioner:
     """
     Partition the dataset into multiple partitions.
 
-    NB: we partition the graph by the vertices, not the edges. Edges are 
+    NB: we partition the graph by the vertices, not the edges. Edges are
     partitioned by their source vertices.
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
+    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
         """
         Initialize the partitioner.
 
         Args:
             num_partitions (int): The number of partitions.
+            local_world_size (int): The number of processes in the local world.
             assign_with_dst_node (bool): Whether to assign the edges to the partition of the
                 asigned destination node. Default: False.
         """
         self._num_partitions = num_partitions
+        self._local_world_size = local_world_size
         self._assign_with_dst_node = assign_with_dst_node
 
         self._max_node = 0
@@ -50,7 +53,8 @@ class Partitioner:
         return self._num_partitions
 
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                  timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
+                  timestamps: torch.Tensor, eids: torch.Tensor,
+                  return_evenly_dataset: bool = False):
         """
         Partition the dataset into multiple partitions.
 
@@ -59,9 +63,12 @@ class Partitioner:
             dst_nodes (torch.Tensor): The destination nodes of the edges.
             timestamps (torch.Tensor): The timestamps of the edges.
             eids (torch.Tensor): The edge IDs of the edges.
+            return_evenly_dataset (bool): Whether to return the evenly partitioned dataset.
 
         Returns:
-            A list of partitions.
+            A list of partitions
+            A evenly partitioned dataset if return_evenly_dataset is True
+
         """
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
@@ -146,7 +153,73 @@ class Partitioner:
                            timestamps[unassigned_mask][mask]]),
                 torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
-        return partitions
+        evenly_partitioned_dataset = None
+        if return_evenly_dataset:
+            # make the partitions evenly
+            evenly_partitioned_dataset = self._make_partitions_evenly(
+                partitions)
+
+        return partitions, evenly_partitioned_dataset
+
+    def _make_partitions_evenly(self, partitions: List[Partition]):
+        """
+        Make the partitions evenly.
+
+        Args:
+            partitions (List[Partition]): The partitions.
+
+        Returns:
+            A evenly partitioned dataset.
+        """
+        # average number of edges in each partition
+        avg_num_edges = sum([len(p) for p in partitions]
+                            ) // self._num_partitions
+
+        # sort the partitions by the number of edges use argsort
+        sorted_idx = torch.argsort(
+            torch.tensor([len(p) for p in partitions])).tolist()
+        sorted_partitions = [deepcopy(partitions[i]) for i in sorted_idx]
+
+        # move addtional edges from the last partition to the next partition
+        for i in reversed(range(1, self._num_partitions)):
+            sorted_partitions[i - 1] = Partition(
+                torch.cat([sorted_partitions[i - 1].src_nodes,
+                           sorted_partitions[i].src_nodes[avg_num_edges:]]),
+                torch.cat([sorted_partitions[i - 1].dst_nodes,
+                           sorted_partitions[i].dst_nodes[avg_num_edges:]]),
+                torch.cat([sorted_partitions[i - 1].timestamps,
+                           sorted_partitions[i].timestamps[avg_num_edges:]]),
+                torch.cat([sorted_partitions[i - 1].eids,
+                           sorted_partitions[i].eids[avg_num_edges:]]))
+
+        # check the number of edges in each partition
+        for i in range(self._num_partitions):
+            assert len(sorted_partitions[i]) == avg_num_edges
+
+        # restore the order of partitions
+        restored_partitions = [None] * self._num_partitions
+        for i in range(self._num_partitions):
+            restored_partitions[sorted_idx[i]] = sorted_partitions[i]
+
+        # for each partition, divide the edges into evenly sized chunks to multiple workers (local_world_size) interleavely
+        evenly_partitioned_dataset = []
+        for i in range(self._num_partitions):
+            src_nodes = restored_partitions[i].src_nodes
+            dst_nodes = restored_partitions[i].dst_nodes
+            timestamps = restored_partitions[i].timestamps
+            eids = restored_partitions[i].eids
+
+            partitioned_dataset = []
+            for j in range(self._local_world_size):
+                partitioned_dataset.append(Partition(
+                    src_nodes[j::self._local_world_size],
+                    dst_nodes[j::self._local_world_size],
+                    timestamps[j::self._local_world_size],
+                    eids[j::self._local_world_size]))
+
+            evenly_partitioned_dataset.append(partitioned_dataset)
+
+        return evenly_partitioned_dataset
 
     def get_partition_table(self) -> torch.Tensor:
         """
@@ -160,7 +233,7 @@ class Partitioner:
     def _do_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                                        timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
         """
-        Partition the edges for the unseen source nodes. 
+        Partition the edges for the unseen source nodes.
 
         Args:
             src_nodes (torch.Tensor): The source nodes of the edges.
@@ -236,8 +309,8 @@ class LeastLoadedPartitioner(Partitioner):
     Different least-loaded algorithms differ in how to compute the load of a partition.
     """
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, assign_with_dst_node)
+    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, local_world_size: int, assign_with_dst_node)
         self._metrics = torch.zeros(num_partitions, dtype=torch.float32)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
@@ -291,8 +364,8 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
     average += (a1 + a2 + ... + ak - average * k) / (count + k)
     """
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, assign_with_dst_node)
+    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, local_world_size, assign_with_dst_node)
         self._num_edges = torch.zeros(num_partitions, dtype=torch.int64)
 
     def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
@@ -312,8 +385,8 @@ class FennelPartitioner(Partitioner):
     paper: http://www.vldb.org/pvldb/vol11/p1590-abbas.pdf
     """
 
-    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
-        super().__init__(num_partitions, assign_with_dst_node)
+    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
+        super().__init__(num_partitions, local_world_size, assign_with_dst_node)
 
         # ideal partition capacity
         self._partition_capacity = 0
@@ -419,33 +492,34 @@ class FennelPartitioner(Partitioner):
         return partition_table
 
 
-def get_partitioner(partition_strategy: str, num_partitions: int, assign_with_dst_node: bool = False):
+def get_partitioner(partition_strategy: str, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
     """
     Get the partitioner.
 
     Args:
         partition_strategy (str): The partitioning strategy.
         num_partitions (int): The number of partitions to split the dataset into.
+        local_world_size (int): The number of processes in the local world.
         assign_with_dst_node (bool): Whether to assign the edges to the partition of the destination node.
 
     Returns:
         Partitioner: The partitioner.
     """
     if partition_strategy == "hash":
-        return HashPartitioner(num_partitions, assign_with_dst_node)
+        return HashPartitioner(num_partitions, local_world_size, assign_with_dst_node)
     elif partition_strategy == "roundrobin":
         return RoundRobinPartitioner(
-            num_partitions, assign_with_dst_node)
+            num_partitions, local_world_size, assign_with_dst_node)
     elif partition_strategy == "edgecount":
         return LeastLoadedPartitionerByEdgeCount(
-            num_partitions, assign_with_dst_node)
+            num_partitions, local_world_size, assign_with_dst_node)
     elif partition_strategy == "timestampsum":
         return LeastLoadedPartitionerByTimestampSum(
-            num_partitions, assign_with_dst_node)
+            num_partitions, local_world_size, assign_with_dst_node)
     elif partition_strategy == "timestampavg":
         return LeastLoadedPartitionerByTimestampAvg(
-            num_partitions, assign_with_dst_node)
+            num_partitions, local_world_size, assign_with_dst_node)
     elif partition_strategy == "fennel":
-        return FennelPartitioner(num_partitions, assign_with_dst_node)
+        return FennelPartitioner(num_partitions, local_world_size, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)

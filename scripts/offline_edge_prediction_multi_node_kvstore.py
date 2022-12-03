@@ -73,6 +73,9 @@ parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
 parser.add_argument("--dynamic-scheduling", action="store_true",
                     help="whether to use dynamic scheduling")
+parser.add_argument("--partition-training-data", action="store_true",
+                    help="whether to partition the training data")
+
 
 # dataset
 parser.add_argument("--chunks", help="num of dataset chunks",
@@ -173,7 +176,7 @@ def main():
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory, args.chunks)
+                                       args.dim_memory, args.chunks, args.partition_training_data)
         # every worker will have a kvstore_client
         dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(
@@ -201,8 +204,13 @@ def main():
     logging.info("make sampler done")
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
+
     train_data, val_data, test_data = load_partitioned_dataset(
-        args.data, rank=args.rank, world_size=args.world_size)
+        args.data, rank=args.rank, world_size=args.world_size,
+        partition_train_data=args.partition_train_data)
+    if args.partition_train_data:
+        train_data = graph_services.get_train_data()
+
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
         val_data, val_rand_sampler)
@@ -425,7 +433,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
 
-        if args.rank == 0 and e > 1 and val_ap > best_ap:
+        if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap
             torch.save(model.state_dict(), checkpoint_path)
