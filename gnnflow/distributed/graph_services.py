@@ -23,6 +23,7 @@ global TEST_RAND_SAMPLER
 global VAL_RAND_SAMPLER
 
 global TRAIN_DATA
+TRAIN_DATA = None
 
 
 def get_dgraph() -> DistributedDynamicGraph:
