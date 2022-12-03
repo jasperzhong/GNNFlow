@@ -138,16 +138,16 @@ class Dispatcher:
                 eids = np.concatenate([eids, eids])
 
             src_nodes = torch.from_numpy(src_nodes)
-            dst_nodes=torch.from_numpy(dst_nodes)
-            timestamps=torch.from_numpy(timestamps)
-            eids=torch.from_numpy(eids)
+            dst_nodes = torch.from_numpy(dst_nodes)
+            timestamps = torch.from_numpy(timestamps)
+            eids = torch.from_numpy(eids)
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
                                                timestamps, eids, edge_feats,
                                                partition_train_data))
 
             for future in futures:
                 future.wait()
-            futures=[]
+            futures = []
             t.update(len(batch))
 
         t.close()
@@ -160,9 +160,9 @@ class Dispatcher:
         # Broadcast the graph metadata to all the workers.
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._local_world_size):
-                worker_rank=partition_id * self._local_world_size + worker_id
+                worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args = (len(self._nodes), self._num_edges, self._max_node, self._num_partitions))
+                             args=(len(self._nodes), self._num_edges, self._max_node, self._num_partitions))
 
     def broadcast_partition_table(self):
         """
@@ -171,9 +171,9 @@ class Dispatcher:
         # Broadcast the partition table to all the workers.
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._local_world_size):
-                worker_rank=partition_id * self._local_world_size + worker_id
+                worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_partition_table,
-                             args = (self._partitioner.get_partition_table(), ))
+                             args=(self._partitioner.get_partition_table(), ))
 
     def broadcast_node_edge_dim(self, dim_node, dim_edge):
         """
@@ -182,16 +182,16 @@ class Dispatcher:
         # Broadcast the dim_node/dim_edge to all the workers.
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._local_world_size):
-                worker_rank=partition_id * self._local_world_size + worker_id
+                worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_dim_node_edge,
-                             args = (dim_node, dim_edge))
+                             args=(dim_node, dim_edge))
 
     def broadcast_rand_sampler(self, train_rand_sampler, val_rand_sampler, test_rand_sampler):
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._local_world_size):
-                worker_rank=partition_id * self._local_world_size + worker_id
+                worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_rand_sampler,
-                             args = (train_rand_sampler, val_rand_sampler, test_rand_sampler))
+                             args=(train_rand_sampler, val_rand_sampler, test_rand_sampler))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):
@@ -207,7 +207,7 @@ def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Opt
     """
     global dispatcher
     if dispatcher is None:
-        assert partition_strategy is not None and num_partitions is not None,
+        assert partition_strategy is not None and num_partitions is not None, \
             "The dispatcher is not initialized. Please specify the partitioning strategy and the number of partitions."
-        dispatcher=Dispatcher(partition_strategy, num_partitions)
+        dispatcher = Dispatcher(partition_strategy, num_partitions)
     return dispatcher
