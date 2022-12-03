@@ -24,7 +24,7 @@ from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
                            get_pinned_buffers, get_project_root_dir, load_dataset,
-                           load_feat, mfgs_to_cuda)
+                           load_feat, load_partitioned_dataset, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -51,8 +51,10 @@ parser.add_argument("--seed", type=int, default=42)
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
                     '|'.join(cache_names))
-parser.add_argument("--cache-ratio", type=float, default=0,
-                    help="cache ratio for feature cache")
+parser.add_argument("--edge-cache-ratio", type=float, default=0,
+                    help="edge cache ratio for feature cache")
+parser.add_argument("--node-cache-ratio", type=float, default=0,
+                    help="node cache ratio for feature cache")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
@@ -124,13 +126,30 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
-    train_data, val_data, test_data, full_data = load_dataset(args.data)
-    train_rand_sampler = RandEdgeSampler(
-        train_data['src'].values, train_data['dst'].values)
-    val_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
-    test_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
+        train_data, _, _, full_data = load_dataset(args.data)
+        train_rand_sampler = RandEdgeSampler(
+            train_data['src'].values, train_data['dst'].values)
+        val_rand_sampler = RandEdgeSampler(
+            full_data['src'].values, full_data['dst'].values)
+        test_rand_sampler = RandEdgeSampler(
+            full_data['src'].values, full_data['dst'].values)
+
+        logging.info("world_size: {}".format(args.world_size))
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank, dataset_df=full_data)
+        del train_data
+        del full_data
+
+        train_data, val_data, test_data = load_partitioned_dataset(
+            args.data, rank=args.rank, world_size=args.world_size)
+    else:
+        train_data, val_data, test_data, full_data = load_dataset(args.data)
+        train_rand_sampler = RandEdgeSampler(
+            train_data['src'].values, train_data['dst'].values)
+        val_rand_sampler = RandEdgeSampler(
+            full_data['src'].values, full_data['dst'].values)
+        test_rand_sampler = RandEdgeSampler(
+            full_data['src'].values, full_data['dst'].values)
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
@@ -141,7 +160,7 @@ def main():
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed:
+    if args.distributed and args.data not in ['REDDIT', 'GDELT', 'MAG']:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -170,10 +189,11 @@ def main():
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
-    dgraph = build_dynamic_graph(
-        **data_config, device=args.local_rank, dataset_df=full_data)
+    if not args.distributed:
+        dgraph = build_dynamic_graph(
+            **data_config, device=args.local_rank, dataset_df=full_data)
 
-    num_nodes = dgraph.num_vertices() + 1
+    num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
@@ -199,21 +219,21 @@ def main():
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank])
+            model, device_ids=[args.local_rank], find_unused_parameters=True)
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
         dim_node, dim_edge)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
+    cache = caches.__dict__[args.cache](args.edge_cache_ratio,
+                                        args.node_cache_ratio,
+                                        num_nodes,
                                         num_edges, device,
                                         node_feats, edge_feats,
                                         dim_node, dim_edge,
                                         pinned_nfeat_buffs,
-                                        pinned_efeat_buffs,
-                                        None,
-                                        False)
+                                        pinned_efeat_buffs)
 
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
@@ -295,7 +315,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+                        train_loader)/1), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
