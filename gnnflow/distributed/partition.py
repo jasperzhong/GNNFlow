@@ -199,6 +199,12 @@ class Partitioner:
                 sorted_partitions[i].timestamps[:avg_num_edges],
                 sorted_partitions[i].eids[:avg_num_edges])
 
+        sorted_partitions[0] = Partition(
+            sorted_partitions[0].src_nodes[:avg_num_edges],
+            sorted_partitions[0].dst_nodes[:avg_num_edges],
+            sorted_partitions[0].timestamps[:avg_num_edges],
+            sorted_partitions[0].eids[:avg_num_edges])
+
         # check the number of edges in each partition
         for i in range(self._num_partitions):
             print("len(sorted_partitions[{}].src_nodes): {}".format(
