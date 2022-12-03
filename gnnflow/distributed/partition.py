@@ -310,7 +310,7 @@ class LeastLoadedPartitioner(Partitioner):
     """
 
     def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, local_world_size: int, assign_with_dst_node)
+        super().__init__(num_partitions, local_world_size, assign_with_dst_node)
         self._metrics = torch.zeros(num_partitions, dtype=torch.float32)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
