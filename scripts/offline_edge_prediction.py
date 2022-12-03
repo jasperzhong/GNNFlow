@@ -22,9 +22,10 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
-                           get_pinned_buffers, get_project_root_dir, load_dataset,
-                           load_feat, mfgs_to_cuda)
+from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
+                           build_dynamic_graph, get_pinned_buffers,
+                           get_project_root_dir, load_dataset, load_feat,
+                           mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -87,11 +88,11 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
                 mfgs, eid)
             pred_pos, pred_neg = model(mfgs)
 
-            if model.has_memory():
+            if args.use_memory:
                 # NB: no need to do backward here
                 # use one function
-                model.memory.update_mem_mail(
-                    **model.last_updated, edge_feats=cache.target_edge_features,
+                model.module.memory.update_mem_mail(
+                    **model.module.last_updated, edge_feats=cache.target_edge_features,
                     neg_sample_ratio=1)
 
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
@@ -126,6 +127,7 @@ def main():
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
     model_config, data_config = get_default_config(args.model, args.data)
+    args.use_memory = model_config['use_memory']
 
     if args.distributed:
         # graph is stored in shared memory
@@ -279,12 +281,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             optimizer.zero_grad()
             pred_pos, pred_neg = model(mfgs)
 
-            if model.has_memory():
+            if args.use_memory:
                 # NB: no need to do backward here
                 with torch.no_grad():
                     # use one function
-                    model.memory.update_mem_mail(
-                        **model.last_updated, edge_feats=cache.target_edge_features,
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
                         neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
