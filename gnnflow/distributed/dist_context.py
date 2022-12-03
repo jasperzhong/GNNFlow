@@ -20,7 +20,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                initial_ingestion_batch_size: int,
                ingestion_batch_size: int, partition_strategy: str,
                num_partitions: int, undirected: bool, data_name: str,
-               dim_memory: int, chunk: int):
+               dim_memory: int, chunk: int, partition_train_data: bool):
     """
     Initialize the distributed environment.
 
@@ -35,6 +35,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         data_name (str): the dataset name of the dataset for loading features.
         dim_memory (int): the dimension of memory
         chunk (int): the number of chunks of the dataset
+        partition_train_data (bool): whether to partition the train data
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
@@ -68,7 +69,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                            ingestion_batch_size,
                                            undirected, node_feats, edge_feats,
-                                           dim_memory)
+                                           dim_memory, partition_train_data)
                 del dataset
         else:
             # for those datasets that don't need chunks
@@ -76,7 +77,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
-                                       dim_memory)
+                                       dim_memory, partition_train_data)
             del dataset
         # deal with unpartitioned nodes
         partition_table = dispatcher._partitioner._partition_table
