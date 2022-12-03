@@ -174,6 +174,7 @@ class Partitioner:
         # average number of edges in each partition
         avg_num_edges = sum([len(p.src_nodes) for p in partitions]
                             ) // self._num_partitions
+        print("avg_num_edges: ", avg_num_edges)
 
         # sort the partitions by the number of edges use argsort
         sorted_idx = torch.argsort(
@@ -194,6 +195,8 @@ class Partitioner:
 
         # check the number of edges in each partition
         for i in range(self._num_partitions):
+            print("len(sorted_partitions[{}]): {}".format(
+                i, len(sorted_partitions[i])))
             assert len(sorted_partitions[i]) == avg_num_edges
 
         # restore the order of partitions
