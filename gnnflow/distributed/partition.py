@@ -178,7 +178,7 @@ class Partitioner:
 
         # sort the partitions by the number of edges use argsort
         sorted_idx = torch.argsort(
-            torch.tensor([len(p) for p in partitions])).tolist()
+            torch.tensor([len(p.src_nodes) for p in partitions])).tolist()
         sorted_partitions = [deepcopy(partitions[i]) for i in sorted_idx]
 
         # move addtional edges from the last partition to the next partition
