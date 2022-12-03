@@ -93,6 +93,7 @@ class DGNN(torch.nn.Module):
             self.combiner = torch.nn.RNN(
                 dim_embed, dim_embed)
 
+        self.last_updated = None
         self.edge_predictor = EdgePredictor(dim_embed)
 
     def reset(self):
@@ -115,8 +116,7 @@ class DGNN(torch.nn.Module):
         if self.use_memory:
             self.memory.restore(backup)
 
-    def forward(self, mfgs: List[List[DGLBlock]],
-                neg_sample_ratio: int = 1, *args, **kwargs):
+    def forward(self, mfgs: List[List[DGLBlock]]):
         """
         Args:
             mfgs: list of list of DGLBlocks
@@ -125,7 +125,7 @@ class DGNN(torch.nn.Module):
         if self.use_memory:
             b = mfgs[0][0]  # type: DGLBlock
             self.memory.prepare_input(b)
-            last_updated = self.memory_updater(b)
+            self.last_updated = self.memory_updater(b)
 
         out = list()
         for l in range(self.num_layers):
@@ -142,17 +142,5 @@ class DGNN(torch.nn.Module):
         else:
             embed = torch.stack(out, dim=0)
             embed = self.combiner(embed)[0][-1, :, :]
-
-        if self.use_memory:
-            # NB: no need to do backward here
-            with torch.no_grad():
-                edge_feats = None
-                if 'edge_feats' in kwargs and kwargs['edge_feats'] is not None:
-                    edge_feats = kwargs['edge_feats']
-
-                # use one function
-                self.memory.update_mem_mail(
-                    **last_updated, edge_feats=edge_feats,
-                    neg_sample_ratio=neg_sample_ratio)
 
         return self.edge_predictor(embed)
