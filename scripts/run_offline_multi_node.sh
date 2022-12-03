@@ -35,7 +35,6 @@ cmd="torchrun \
     --initial-ingestion-batch-size 500000 \
     --partition-strategy $PARTITION_STRATEGY \
     --epoch 5 --lr 0.0001 --num-workers 0
-    --partition-train-data
     "
 
 echo $cmd

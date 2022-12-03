@@ -174,7 +174,6 @@ class Partitioner:
         # average number of edges in each partition
         avg_num_edges = sum([len(p.src_nodes) for p in partitions]
                             ) // self._num_partitions
-        print("avg_num_edges: ", avg_num_edges)
 
         # sort the partitions by the number of edges use argsort
         sorted_idx = torch.argsort(
@@ -207,9 +206,9 @@ class Partitioner:
 
         # check the number of edges in each partition
         for i in range(self._num_partitions):
-            print("len(sorted_partitions[{}].src_nodes): {}".format(
-                i, len(sorted_partitions[i].src_nodes)))
-            assert len(sorted_partitions[i].src_nodes) == avg_num_edges
+            assert len(sorted_partitions[i].src_nodes) == avg_num_edges, "The \
+                    number of edges in partition {} is {}, but the average \
+                    number of edges is {}".format(i, len(sorted_partitions[i].src_nodes), avg_num_edges)
 
         # restore the order of partitions
         restored_partitions = [None] * self._num_partitions
@@ -242,10 +241,12 @@ class Partitioner:
         # check the number of edges in each worker are the same
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
-                print("machine {} partition {} has {} edges".format(
-                    i, j, len(evenly_partitioned_dataset[i][j].src_nodes)))
                 assert len(evenly_partitioned_dataset[i][j].src_nodes) == len(
-                    evenly_partitioned_dataset[0][0].src_nodes)
+                    evenly_partitioned_dataset[0][0].src_nodes), "The number of \
+                            edges in partition {} worker {} is {}, but the number \
+                            of edges in partition 0 worker 0 is {}".format(
+                    i, j, len(evenly_partitioned_dataset[i][j].src_nodes),
+                    len(evenly_partitioned_dataset[0][0].src_nodes))
 
         return evenly_partitioned_dataset
 
