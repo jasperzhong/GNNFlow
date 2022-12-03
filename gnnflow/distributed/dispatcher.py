@@ -137,7 +137,7 @@ class Dispatcher:
                 timestamps = np.concatenate([timestamps, timestamps])
                 eids = np.concatenate([eids, eids])
 
-            src_nodes = torch.from_numpy(src_nodes))
+            src_nodes = torch.from_numpy(src_nodes)
             dst_nodes=torch.from_numpy(dst_nodes)
             timestamps=torch.from_numpy(timestamps)
             eids=torch.from_numpy(eids)
