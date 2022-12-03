@@ -222,6 +222,8 @@ class Partitioner:
         # check the number of edges in each worker are the same
         for i in range(self._num_partitions):
             for j in range(self._local_world_size):
+                print("machine {} partition {} has {} edges".format(
+                    i, j, len(evenly_partitioned_dataset[i][j])))
                 assert len(evenly_partitioned_dataset[i][j]) == len(
                     evenly_partitioned_dataset[0][0])
 
