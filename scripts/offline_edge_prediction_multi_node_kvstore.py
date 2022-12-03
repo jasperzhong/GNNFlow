@@ -112,8 +112,13 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+            if model.has_memory():
+                # NB: no need to do backward here
+                # use one function
+                model.memory.update_mem_mail(
+                    **model.last_updated, edge_feats=cache.target_edge_features,
+                    neg_sample_ratio=1)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -362,8 +367,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 mfgs, eid, target_edge_features=args.use_memory)
             # Train
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+
+            if model.has_memory():
+                # NB: no need to do backward here
+                with torch.no_grad():
+                    # use one function
+                    model.memory.update_mem_mail(
+                        **model.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
