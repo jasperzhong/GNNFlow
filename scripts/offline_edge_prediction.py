@@ -285,11 +285,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
         total_samples = 0
+        total_sample_time = 0
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
+            start = time.time()
             mfgs = sampler.sample(target_nodes, ts)
+            total_sample_time += time.time() - start
 
             # Feature
             mfgs_to_cuda(mfgs, device)
@@ -321,16 +324,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                            cache_node_ratio_sum, total_samples],
+                                            cache_node_ratio_sum, total_samples, total_sample_time],
                                            device=device)
                     torch.distributed.all_reduce(metrics)
                     metrics /= args.world_size
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                        total_samples = metrics.tolist()
+                        total_samples, total_sample_time = metrics.tolist()
 
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/1), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
+                        train_loader)/1), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -351,15 +354,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         if args.distributed:
             metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples], device=device)
+                                    cache_node_ratio_sum, total_samples, total_sample_time],
+                                   device=device)
             torch.distributed.all_reduce(metrics)
             metrics /= args.world_size
             val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples = metrics.tolist()
+                total_samples, total_sample_time = metrics.tolist()
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f}".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
