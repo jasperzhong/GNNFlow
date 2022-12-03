@@ -219,10 +219,15 @@ class Partitioner:
         # for each partition, divide the edges into evenly sized chunks to multiple workers (local_world_size) interleavely
         evenly_partitioned_dataset = []
         for i in range(self._num_partitions):
-            src_nodes = restored_partitions[i].src_nodes
-            dst_nodes = restored_partitions[i].dst_nodes
-            timestamps = restored_partitions[i].timestamps
-            eids = restored_partitions[i].eids
+            num_edges_per_partition = len(restored_partitions[i].src_nodes)
+            # discard the last few edges if the number of edges is not divisible by local_world_size
+            num_edges_per_partition = num_edges_per_partition - (
+                num_edges_per_partition % self._local_world_size)
+
+            src_nodes = restored_partitions[i].src_nodes[:num_edges_per_partition]
+            dst_nodes = restored_partitions[i].dst_nodes[:num_edges_per_partition]
+            timestamps = restored_partitions[i].timestamps[:num_edges_per_partition]
+            eids = restored_partitions[i].eids[:num_edges_per_partition]
 
             partitioned_dataset = []
             for j in range(self._local_world_size):
