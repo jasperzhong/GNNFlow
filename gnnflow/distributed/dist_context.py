@@ -50,6 +50,9 @@ def initialize(rank: int, world_size: int,
     if local_rank == 0:
         graph_services.set_kvstore_server(KVStoreServer())
 
+    train_dst_set = set()
+    full_dst_set = set()
+
     start = time.time()
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
@@ -62,6 +65,11 @@ def initialize(rank: int, world_size: int,
         df_iterator = load_dataset_in_chunks(data_name, chunksize=chunksize)
         for dataset in df_iterator:
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
+            train_end = dataset['ext_roll'].values.searchsorted(1)
+
+            train_dst_set.update(dataset['dst'].values[:train_end].tolist())
+            full_dst_set.update(dataset['dst'].values.tolilst())
+
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
@@ -141,18 +149,12 @@ def initialize(rank: int, world_size: int,
             logging.info("memory dispatch done memory usage: {}".format(mem))
 
         # deal with rand sampler
-        train_data, _, _, dataset = load_dataset(data_name)
-        train_rand_sampler = DstRandEdgeSampler(
-            train_data['dst'].to_numpy(dtype=np.int32))
-        val_rand_sampler = DstRandEdgeSampler(
-            dataset['dst'].to_numpy(dtype=np.int32))
-        test_rand_sampler = DstRandEdgeSampler(
-            dataset['dst'].to_numpy(dtype=np.int32))
-        logging.info("make sampler done")
+        train_rand_sampler = DstRandEdgeSampler(list(train_dst_set))
+        val_rand_sampler = DstRandEdgeSampler(list(full_dst_set))
+        test_rand_sampler = DstRandEdgeSampler(list(full_dst_set))
         dispatcher.broadcast_rand_sampler(
             train_rand_sampler, val_rand_sampler, test_rand_sampler)
-        del train_data
-        del dataset
+        logging.info("make sampler done")
 
     # check
     torch.distributed.barrier()
