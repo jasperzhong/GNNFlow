@@ -16,7 +16,7 @@ from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset_i
                            load_feat, local_world_size)
 
 
-def initialize(rank: int, world_size: int, 
+def initialize(rank: int, world_size: int,
                initial_ingestion_batch_size: int,
                ingestion_batch_size: int, partition_strategy: str,
                num_partitions: int, undirected: bool, data_name: str,
@@ -62,6 +62,7 @@ def initialize(rank: int, world_size: int,
         # read csv in chunks
         df_iterator = load_dataset_in_chunks(data_name, chunksize=chunksize)
         for dataset in df_iterator:
+            dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
