@@ -9,7 +9,7 @@ import torch.distributed
 from torch._six import string_classes
 from torch.utils.data import BatchSampler, Dataset, Sampler
 
-from gnnflow.utils import RandEdgeSampler, local_rank
+from gnnflow.utils import DstRandEdgeSampler, RandEdgeSampler, local_rank
 
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
@@ -27,7 +27,7 @@ class EdgePredictionDataset(Dataset):
     """
 
     def __init__(self, data: pd.DataFrame,
-                 neg_sampler: Optional[RandEdgeSampler] = None):
+                 neg_sampler: Optional[DstRandEdgeSampler] = None):
         super(EdgePredictionDataset, self).__init__()
         self.data = data
         self.length = np.max(np.array(data['dst'], dtype=int))
@@ -36,7 +36,7 @@ class EdgePredictionDataset(Dataset):
     def __getitem__(self, index):
         row = self.data.iloc[index]
         if self.neg_sampler is not None:
-            _, neg_batch = self.neg_sampler.sample(len(row.src.values))
+            neg_batch = self.neg_sampler.sample(len(row.src.values))
             target_nodes = np.concatenate(
                 [row.src.values, row.dst.values, neg_batch]).astype(
                 np.int64)
