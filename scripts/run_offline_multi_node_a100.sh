@@ -10,7 +10,7 @@ PARTITION_STRATEGY="${6:-hash}"
 
 HOST_NODE_ADDR=10.28.1.30
 HOST_NODE_PORT=29400
-NNODES=4
+NNODES=3
 NPROC_PER_NODE=4
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
