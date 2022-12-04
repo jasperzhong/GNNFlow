@@ -68,7 +68,7 @@ def initialize(rank: int, world_size: int,
             train_end = dataset['ext_roll'].values.searchsorted(1)
 
             train_dst_set.update(dataset['dst'].values[:train_end].tolist())
-            full_dst_set.update(dataset['dst'].values.tolilst())
+            full_dst_set.update(dataset['dst'].values.tolist())
 
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
