@@ -90,8 +90,8 @@ class Dispatcher:
             # node_feats and memory dispatch later using partition table.
             kvstore_rank = partition_id * self._local_world_size
             if edge_feats is not None:
-                keys = edges[3].numpy()
-                features = torch.from_numpy(edge_feats[keys])
+                keys = edges[3]
+                features = torch.from_numpy(edge_feats[keys.numpy()])
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, features, 'edge')))
 

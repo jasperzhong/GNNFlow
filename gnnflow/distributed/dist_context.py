@@ -110,10 +110,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 assert partition_mask.sum() > 0  # should not be 0
                 vertices = torch.arange(len(partition_table), dtype=torch.long)
                 partition_vertices = vertices[partition_mask]
-                keys = partition_vertices.numpy()
+                keys = partition_vertices
                 kvstore_rank = partition_id * local_world_size()
                 if node_feats is not None:
-                    features = torch.from_numpy(node_feats[keys])
+                    features = torch.from_numpy(node_feats[keys.numpy()])
                     futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                                  args=(keys, features, 'node')))
                 logging.info(
