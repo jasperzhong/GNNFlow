@@ -938,8 +938,9 @@ class DGLMetisPartitioner(Partitioner):
         dst_list = np.array(dst_list)
 
         g = dgl.graph((src_list, dst_list))
-        b_ntype = torch.zeros(g.num_nodes(), dtype=torch.int8)
-        pt = dgl.metis_partition_assignment(g, self._num_partitions, b_ntype, True, "k-way", "cut")
+        gt = dgl.to_simple(g)
+        b_ntype = torch.zeros(gt.num_nodes(), dtype=torch.int8)
+        pt = dgl.metis_partition_assignment(gt, self._num_partitions, b_ntype, True, "k-way", "cut")
 
         for i in range(len(unique_src_nodes)):
             partition_table[i] = pt[unique_src_nodes[i]]
