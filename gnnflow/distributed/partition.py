@@ -728,9 +728,16 @@ class FenneLitePartitioner(Partitioner):
         # edges partitioned
         self._edges_partitioned = 0
 
+
+    def do_metis_partition_for_unseen_nodes(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
+                                       timestamps: torch.Tensor, eids: torch.Tensor) -> torch.Tensor:
+        return torch.empty([])
+
+
     # LDG Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                  timestamps: torch.Tensor, eids: torch.Tensor, return_evenly_dataset: bool = False):
+                  timestamps: torch.Tensor, eids: torch.Tensor, return_evenly_dataset: bool = False,
+                  is_initial_ingestion: bool = False):
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
@@ -779,9 +786,13 @@ class FenneLitePartitioner(Partitioner):
                 # update unassigned mask
                 unassigned_mask = unassigned_mask & ~mask
 
-        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-            timestamps[unassigned_mask], eids[unassigned_mask])
+        if is_initial_ingestion:
+            partition_table_for_unseen_nodes = self.do_metis_partition_for_unseen_nodes(src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+                timestamps[unassigned_mask], eids[unassigned_mask])
+        else:
+            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+                timestamps[unassigned_mask], eids[unassigned_mask])
 
         assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
         )
@@ -947,6 +958,117 @@ class DGLMetisPartitioner(Partitioner):
 
         return partition_table
 
+# Metis Partitoner
+class DGLMetisPartitioner2(Partitioner):
+    """
+    DGL-Metis: https://docs.dgl.ai (dgl.metis_partition_assignment)
+    """
+
+    def __init__(self, num_partitions: int, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
+        super().__init__(num_partitions, assign_with_dst_node)
+
+    # Fennel Partition
+    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
+                  timestamps: torch.Tensor, eids: torch.Tensor, return_evenly_dataset: bool = False):
+        # resize the partition table if necessary
+        max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
+        if max_node > self._max_node:
+            self._partition_table.resize_(max_node + 1)
+            if self._max_node == 0:
+                self._partition_table[:] = self.UNASSIGNED
+            else:
+                self._partition_table[self._max_node + 1:] = self.UNASSIGNED
+            self._max_node = max_node
+
+        partitions = []
+
+        # new logic
+        gt = dgl.graph((src_nodes, dst_nodes))
+        g = dgl.to_simple(gt)
+        b_ntype = torch.zeros(g.num_nodes(), dtype=torch.int8)
+        print("start partition lensrc: {}, lendst: {}, lenbntype: {}; num_partitions: {}\n".format(len(src_nodes), len(dst_nodes), len(b_ntype), self._num_partitions))
+        pt = dgl.metis_partition_assignment(g, self._num_partitions, b_ntype, True, "k-way", "cut")
+        print("end partition \n")
+
+        # update the partition table
+        self._partition_table = pt
+
+        for i in range(self._num_partitions):
+            mask = pt[src_nodes] == i
+
+            partitions.append(Partition(
+                src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
+
+
+        # # partition the edges for the unseen source nodes
+        # unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
+        #
+        # # dispatch edges to already assigned source nodes
+        # for i in range(self._num_partitions):
+        #     mask = self._partition_table[src_nodes] == i
+        #     partitions.append(Partition(
+        #         src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
+        #
+        # partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+        #     src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+        #     timestamps[unassigned_mask], eids[unassigned_mask])
+        #
+        # assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+        # )
+        #
+        # # merge the partitions
+        # for i in range(self._num_partitions):
+        #     mask = partition_table_for_unseen_nodes == i
+        #
+        #     # update the partition table
+        #     self._partition_table[src_nodes[unassigned_mask][mask]] = i
+        #
+        #     # no need to sort edges here
+        #     partitions[i] = Partition(
+        #         torch.cat([partitions[i].src_nodes,
+        #                    src_nodes[unassigned_mask][mask]]),
+        #         torch.cat([partitions[i].dst_nodes,
+        #                    dst_nodes[unassigned_mask][mask]]),
+        #         torch.cat([partitions[i].timestamps,
+        #                    timestamps[unassigned_mask][mask]]),
+        #         torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+
+        evenly_partitioned_dataset = None
+        if return_evenly_dataset:
+            # make the partitions evenly
+            evenly_partitioned_dataset = self._make_partitions_evenly(
+                partitions)
+
+        return partitions, evenly_partitioned_dataset
+
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
+
+        src_list = []
+        dst_list = []
+
+        for i in range(len(unique_src_nodes)):
+            for j in range(len(dst_nodes_list[i])):
+                src_list.append(unique_src_nodes[i].item())
+                dst_list.append(dst_nodes_list[i][j].item())
+
+        src_list = torch.from_numpy(np.array(src_list))
+        dst_list = torch.from_numpy(np.array(dst_list))
+
+        gt = dgl.graph((src_list, dst_list))
+        g = dgl.to_simple(gt)
+        b_ntype = torch.zeros(g.num_nodes(), dtype=torch.int8)
+        print("start partition lensrc: {}, lendst: {}, lenbntype: {}; num_partitions: {}\n".format(len(src_list), len(dst_list), len(b_ntype), self._num_partitions))
+        pt = dgl.metis_partition_assignment(g, self._num_partitions, b_ntype, True, "k-way", "cut")
+        print("end partition \n")
+
+        for i in range(len(unique_src_nodes)):
+            partition_table[i] = pt[unique_src_nodes[i]]
+
+        return partition_table
 
 def get_partitioner(partition_strategy: str, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
     """
@@ -983,5 +1105,7 @@ def get_partitioner(partition_strategy: str, num_partitions: int, local_world_si
         return FenneLitePartitioner(num_partitions, local_world_size, assign_with_dst_node)
     elif partition_strategy == "dgl_metis":
         return DGLMetisPartitioner(num_partitions, local_world_size, assign_with_dst_node)
+    elif partition_strategy == "dgl_metis2":
+        return DGLMetisPartitioner2(num_partitions, local_world_size, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
