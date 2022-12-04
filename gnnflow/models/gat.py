@@ -1,8 +1,8 @@
 from typing import List
-import torch.nn as nn
-import torch.nn.functional as F
 
 import dgl.nn as dglnn
+import torch.nn as nn
+import torch.nn.functional as F
 from dgl.heterograph import DGLBlock
 
 

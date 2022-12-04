@@ -1,15 +1,16 @@
 from typing import List, Optional
+
+import dgl
+import dgl.nn as dglnn
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import dgl
-import dgl.nn as dglnn
 from dgl.heterograph import DGLBlock
 
 
 class SAGE(nn.Module):
     def __init__(self, dim_node: int, dim_out: int,
-                 num_layers: int = 3,
+                 num_layers: int = 2,
                  aggregator: Optional[str] = 'mean'):
 
         if aggregator not in ['mean', 'gcn', 'pool', 'lstm']:

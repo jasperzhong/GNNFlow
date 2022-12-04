@@ -269,9 +269,9 @@ def main():
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
     if args.model == "GRAPHSAGE":
-        model = SAGE(dim_node, model_config['dim_embed'])
+        model = SAGE(dim_node, model_config['dim_embed'], num_layers=model_config['num_layers'])
     elif args.model == 'GAT':
-        model = GAT(dim_node, model_config['dim_embed'])
+        model = GAT(dim_node, model_config['dim_embed'], num_layers=model_config['num_layers'])
     else:
         model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                      memory_device=device, memory_shared=args.distributed,
