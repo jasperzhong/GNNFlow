@@ -228,7 +228,7 @@ def get_batch(df: pd.DataFrame, batch_size: int):
 
         target_nodes = np.concatenate(
             [rows.src.values, rows.dst.values]).astype(
-            np.int32)
+            np.int64)
         ts = np.concatenate(
             [rows.time.values, rows.time.values]).astype(
             np.float32)
@@ -270,10 +270,10 @@ def build_dynamic_graph(
     if dataset_df is None:
         src = dst = ts = eids = None
     else:
-        src = dataset_df['src'].values.astype(np.int32)
-        dst = dataset_df['dst'].values.astype(np.int32)
+        src = dataset_df['src'].values.astype(np.int64)
+        dst = dataset_df['dst'].values.astype(np.int64)
         ts = dataset_df['time'].values.astype(np.float32)
-        eids = dataset_df['eid'].values.astype(np.int32)
+        eids = dataset_df['eid'].values.astype(np.int64)
 
     dgraph = DynamicGraph(
         initial_pool_size,

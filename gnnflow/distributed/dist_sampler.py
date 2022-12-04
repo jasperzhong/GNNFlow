@@ -256,14 +256,14 @@ class DistributedTemporalSampler:
         all_num_src_nodes = all_num_nodes - all_num_dst_nodes
 
         all_col = np.arange(start=all_num_dst_nodes,
-                            stop=all_num_nodes, dtype=np.int32)
-        all_row = np.zeros(all_num_src_nodes, dtype=np.int32)
-        all_src_nodes = np.zeros(all_num_src_nodes, dtype=np.int32)
-        all_dst_nodes = np.zeros(all_num_dst_nodes, dtype=np.int32)
+                            stop=all_num_nodes, dtype=np.int64)
+        all_row = np.zeros(all_num_src_nodes, dtype=np.int64)
+        all_src_nodes = np.zeros(all_num_src_nodes, dtype=np.int64)
+        all_dst_nodes = np.zeros(all_num_dst_nodes, dtype=np.int64)
         all_src_timestamps = np.zeros(all_num_src_nodes, dtype=np.float32)
         all_dst_timestamps = np.zeros(all_num_dst_nodes, dtype=np.float32)
         all_delta_timestamps = np.zeros(all_num_src_nodes, dtype=np.float32)
-        all_eids = np.zeros(all_num_src_nodes, dtype=np.int32)
+        all_eids = np.zeros(all_num_src_nodes, dtype=np.int64)
 
         offset = 0
         # use mask to restore dst node order
