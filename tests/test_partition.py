@@ -17,10 +17,10 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel", "fennel_edge"], [10000], [10000], [False]))
+        itertools.product(["fennel_lite"], [672447], [10000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
-        dataset_name = 'GDELT'
+        dataset_name = 'REDDIT'
         p_stgy = partition_strategy
         num_p = 4
         undirected = True
@@ -71,7 +71,7 @@ class TestPartition(unittest.TestCase):
             eids = torch.from_numpy(eids)
 
             partition_start = time.time()
-            partitions = test_partitioner.partition(
+            partitions, _ = test_partitioner.partition(
                 src_nodes, dst_nodes, timestamps, eids)
             partition_end = time.time()
 
