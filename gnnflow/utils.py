@@ -86,7 +86,8 @@ def load_dataset_in_chunks(dataset: str, data_dir: Optional[str] = None, chunksi
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
-    return pd.read_csv(path, chunksize=chunksize, engine='pyarrow')
+    # NB: pyarrow is not support with chunksize
+    return pd.read_csv(path, chunksize=chunksize)
 
 
 def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank: int = 0, world_size: int = 1, partition_train_data: bool = False):
