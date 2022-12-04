@@ -81,6 +81,7 @@ _graphsage_default_config = {
     "num_snapshots": 1,
     "snapshot_time_window": 0,
     "prop_time": False,
+    "use_memory": False,
     "is_static": True
 }
 
@@ -95,6 +96,7 @@ _gat_default_config = {
     "sample_strategy": "uniform",
     "num_snapshots": 1,
     "snapshot_time_window": 0,
+    "use_memory": False,
     "prop_time": False,
     "is_static": True
 }
