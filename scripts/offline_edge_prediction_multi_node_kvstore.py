@@ -78,8 +78,8 @@ parser.add_argument("--not-partition-train-data", action="store_true",
 
 
 # dataset
-parser.add_argument("--chunks", help="num of dataset chunks",
-                    type=int, default=1)
+parser.add_argument("--chunksize", help="chunksize for loading dataset",
+                    type=int, default=int(1e8))
 
 args = parser.parse_args()
 
@@ -178,11 +178,11 @@ def main():
         dgraph = graph_services.get_dgraph()
         mem = psutil.virtual_memory().percent
         logging.info("memory usage: {}".format(mem))
-        gnnflow.distributed.initialize(args.rank, args.world_size, full_data,
+        gnnflow.distributed.initialize(args.rank, args.world_size, 
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory, args.chunks, not args.not_partition_train_data)
+                                       args.dim_memory, args.chunksize, not args.not_partition_train_data)
         # every worker will have a kvstore_client
         dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(

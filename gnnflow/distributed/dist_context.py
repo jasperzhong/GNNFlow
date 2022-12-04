@@ -12,29 +12,28 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset,
+from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset_in_chunks,
                            load_feat, local_world_size)
 
 
-def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
+def initialize(rank: int, world_size: int, 
                initial_ingestion_batch_size: int,
                ingestion_batch_size: int, partition_strategy: str,
                num_partitions: int, undirected: bool, data_name: str,
-               dim_memory: int, chunk: int, partition_train_data: bool):
+               dim_memory: int, chunksize: int, partition_train_data: bool):
     """
     Initialize the distributed environment.
 
     Args:
         rank (int): The rank of the current process.
         world_size (int): The number of processes participating in the job.
-        dataset (df.DataFrame): The dataset to ingest.
         initial_ingestion_batch_size (int): The number of edges to ingest in
         ingestion_batch_size (int): The number of samples to ingest in each iteration.
         num_partitions (int): The number of partitions to split the dataset into.
         undirected (bool): Whether the graph is undirected.
         data_name (str): the dataset name of the dataset for loading features.
         dim_memory (int): the dimension of memory
-        chunk (int): the number of chunks of the dataset
+        chunksize (int): the chunksize of the dataset
         partition_train_data (bool): whether to partition the train data
     """
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
@@ -59,26 +58,16 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
         node_feats, edge_feats = load_feat(data_name, memmap=True)
         logging.info("Rank %d: Loaded features in %f seconds.", rank,
                      time.time() - start)
-        if chunk > 1:
-            for i in range(chunk):  # 10 chunks of data
-                # train_data, val_data, test_data, full_data = load_dataset(args.data)
-                logging.info("{}th chunk add edges".format(i))
-                data_dir = os.path.join(get_project_root_dir(), "data")
-                path = os.path.join(data_dir, 'MAG', 'edges_{}.csv'.format(i))
-                dataset = pd.read_csv(path, engine='pyarrow')
-                dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
-                                           ingestion_batch_size,
-                                           undirected, node_feats, edge_feats,
-                                           dim_memory, partition_train_data)
-                del dataset
-        else:
-            # for those datasets that don't need chunks
-            train_data, _, _, dataset = load_dataset(data_name)
+
+        # read csv in chunks
+        df_iterator = load_dataset_in_chunks(data_name, chunksize=chunksize)
+        for dataset in df_iterator:
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
                                        undirected, node_feats, edge_feats,
                                        dim_memory, partition_train_data)
             del dataset
+
         # deal with unpartitioned nodes
         partition_table = dispatcher._partitioner._partition_table
         unassigned_nodes_index = (
