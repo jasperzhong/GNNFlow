@@ -159,7 +159,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         raise ValueError("Both {} and {} do not exist".format(
             node_feat_path, edge_feat_path))
 
-    mmap_mode = "r+" if shared_memory else None
+    mmap_mode = "r+" if memmap else None
 
     node_feats = None
     edge_feats = None
