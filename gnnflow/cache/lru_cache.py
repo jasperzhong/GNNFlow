@@ -81,7 +81,7 @@ class LRUCache(Cache):
                 keys, feats = self.kvstore_client.init_cache(
                     self.edge_capacity)
                 cache_edge_id = torch.arange(
-                    len(keys), dtype=torch.int64, device=self.device)
+                    len(keys), dtype=torch.int32, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
                     self.device).float()
                 self.cache_edge_flag[cache_edge_id] = True
@@ -93,7 +93,7 @@ class LRUCache(Cache):
         else:
             if self.edge_feats is not None:
                 cache_edge_id = torch.arange(
-                    self.edge_capacity, dtype=torch.int64, device=self.device)
+                    self.edge_capacity, dtype=torch.int32, device=self.device)
 
                 # Init parameters related to feature fetching
                 self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(

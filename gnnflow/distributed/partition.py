@@ -395,7 +395,7 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
 
     def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
         super().__init__(num_partitions, local_world_size, assign_with_dst_node)
-        self._num_edges = torch.zeros(num_partitions, dtype=torch.int64)
+        self._num_edges = torch.zeros(num_partitions, dtype=torch.int32)
 
     def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
                         timestamps: torch.Tensor, eids: torch.Tensor) -> float:

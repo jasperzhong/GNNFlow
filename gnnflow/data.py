@@ -39,13 +39,13 @@ class EdgePredictionDataset(Dataset):
             _, neg_batch = self.neg_sampler.sample(len(row.src.values))
             target_nodes = np.concatenate(
                 [row.src.values, row.dst.values, neg_batch]).astype(
-                np.int64)
+                np.int32)
             ts = np.concatenate(
                 [row.time.values, row.time.values, row.time.values]).astype(
                 np.float32)
         else:
             target_nodes = np.concatenate(
-                [row.src.values, row.dst.values]).astype(np.int64)
+                [row.src.values, row.dst.values]).astype(np.int32)
             ts = np.concatenate(
                 [row.time.values, row.time.values]).astype(np.float32)
         eid = row['eid'].values
@@ -175,7 +175,7 @@ class DistributedBatchSampler(BatchSampler):
                 randint = torch.randint(
                     0, self.num_chunks, size=(1,), device=self.device)
             else:
-                randint = torch.zeros(1, dtype=torch.int64, device=self.device)
+                randint = torch.zeros(1, dtype=torch.int32, device=self.device)
 
             torch.distributed.broadcast(randint, src=0)
             self.random_size = int(randint.item() * self.chunk_size)
