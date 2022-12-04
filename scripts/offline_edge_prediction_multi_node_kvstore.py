@@ -277,8 +277,6 @@ def main():
                      memory_device=device, memory_shared=args.distributed,
                      kvstore_client=kvstore_client)
     model.to(device)
-    args.use_memory = model.has_memory()
-    logging.info("use memory: {}".format(args.use_memory))
 
     if args.distributed:
         assert isinstance(dgraph, DistributedDynamicGraph)
