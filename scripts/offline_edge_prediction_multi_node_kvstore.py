@@ -47,7 +47,7 @@ parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=100)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.00001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
-                    type=int, default=8)
+                    type=int, default=0)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
                     type=int, default=8)
 parser.add_argument("--print-freq", help="print frequency",
@@ -73,6 +73,9 @@ parser.add_argument("--partition-strategy", type=str, default="roundrobin",
                     help="partition strategy for distributed training")
 parser.add_argument("--dynamic-scheduling", action="store_true",
                     help="whether to use dynamic scheduling")
+parser.add_argument("--not-partition-train-data", action="store_true",
+                    help="whether not to partition the training data")
+
 
 # dataset
 parser.add_argument("--chunks", help="num of dataset chunks",
@@ -109,8 +112,13 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+            if args.use_memory:
+                # NB: no need to do backward here
+                # use one function
+                model.module.memory.update_mem_mail(
+                    **model.module.last_updated, edge_feats=cache.target_edge_features,
+                    neg_sample_ratio=1)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
@@ -134,7 +142,7 @@ def main():
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(
-            'gloo', timeout=datetime.timedelta(seconds=18000))
+            'gloo', timeout=datetime.timedelta(seconds=36000))
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
@@ -150,6 +158,7 @@ def main():
     set_seed(args.seed + args.rank)
 
     model_config, data_config = get_default_config(args.model, args.data)
+    args.use_memory = model_config['use_memory']
 
     if args.distributed:
         # graph is stored in shared memory
@@ -173,7 +182,7 @@ def main():
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory, args.chunks)
+                                       args.dim_memory, args.chunks, not args.not_partition_train_data)
         # every worker will have a kvstore_client
         dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(
@@ -191,27 +200,37 @@ def main():
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
-    num_nodes = dgraph.num_vertices() + 1
+    num_nodes = dgraph.max_vertex_id() + 1
+    logging.info("max_vertex id {}".format(dgraph.max_vertex_id()))
+    logging.info("num vertices: {}".format(dgraph.num_vertices()))
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    # get rand sampler
     train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
+
     train_data, val_data, test_data = load_partitioned_dataset(
-        args.data, rank=args.rank, world_size=args.world_size)
+        args.data, rank=args.rank, world_size=args.world_size,
+        partition_train_data=not args.not_partition_train_data)
+    if not args.not_partition_train_data:
+        train_data = graph_services.get_train_data()
+
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(
         val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(
         test_data, test_rand_sampler)
     logging.info("make dataset done")
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     batch_size = data_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
 
-    if args.distributed and args.data not in ['GDELT', 'MAG', 'REDDIT']:
+    if args.distributed and args.data not in ['REDDIT', 'GDELT', 'MAG']:
         train_sampler = DistributedBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size,
             drop_last=False, rank=args.rank, world_size=args.world_size,
@@ -245,7 +264,8 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
     logging.info("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
-
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                  memory_device=device, memory_shared=args.distributed,
                  kvstore_client=kvstore_client)
@@ -264,7 +284,7 @@ def main():
     build_graph_end = time.time()
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], find_unused_parameters=True)
+            model, device_ids=[args.local_rank], find_unused_parameters=False)
 
     # pinned_nfeat_buffs, pinned_efeat_buffs = None, None
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
@@ -301,6 +321,8 @@ def main():
     logging.info("other time: {}".format(before_train_end - build_graph_end))
     logging.info("init time: {}".format(build_graph_end - start))
     logging.info("before train time: {}".format(before_train_end - start))
+    mem = psutil.virtual_memory().percent
+    logging.info("memory usage: {}".format(mem))
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device)
 
@@ -349,8 +371,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 mfgs, eid, target_edge_features=args.use_memory)
             # Train
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(
-                mfgs, edge_feats=cache.target_edge_features)
+            pred_pos, pred_neg = model(mfgs)
+
+            if args.use_memory:
+                # NB: no need to do backward here
+                with torch.no_grad():
+                    # use one function
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -415,11 +444,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             mean = all_sampling_time.mean(dim=1).mean()
             cv_sampling_time += std / mean
 
+        all_total_samples += total_samples
+
         if args.rank == 0:
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
 
-        if args.rank == 0 and e > 1 and val_ap > best_ap:
+        if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap
             torch.save(model.state_dict(), checkpoint_path)
@@ -431,8 +462,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             break
 
     if args.rank == 0:
-        logging.info('Avg epoch time: {:.4f} | Avg throughput: {:.4f}'.format(epoch_time_sum / e,
-                                                                              all_total_samples * args.world_size / epoch_time_sum))
+        logging.info('Avg epoch time: {}, Avg train throughput: {}'.format(
+            epoch_time_sum / (e + 1), all_total_samples * args.world_size / epoch_time_sum))
 
     if args.distributed:
         torch.distributed.barrier()

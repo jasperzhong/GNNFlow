@@ -6,6 +6,7 @@ set(TARGET_LIB "libgnnflow")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 
 # set cuda arch
 set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
@@ -21,6 +22,7 @@ message(STATUS "CUDA_ARCH_LIST: ${CUDA_ARCH_LIST}")
 find_package(PythonLibs REQUIRED)
 add_subdirectory(third_party/pybind11)
 
+
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/gnnflow/csrc)
 include_directories(/usr/local/cuda/include)
@@ -35,11 +37,14 @@ file(GLOB_RECURSE GNNFLOW_SRC_CUDA_FILES ${PROJECT_SOURCE_DIR}/gnnflow/csrc/*.cu
 set_source_files_properties(${GNNFLOW_SRC_CUDA_FILES} PROPERTIES LANGUAGE CUDA)
 list(APPEND GNNFLOW_SRC_FILES ${GNNFLOW_SRC_CUDA_FILES})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -fPIC -Wall -ftree-vectorize")
-set(ARCH_FLAGS "-march=native -mtune=native")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")
-
 pybind11_add_module(${TARGET_LIB} ${GNNFLOW_SRC_FILES})
+
+add_subdirectory(third_party/abseil-cpp)
+target_link_libraries(${TARGET_LIB} PRIVATE absl::flat_hash_map)
+
+find_package(Torch REQUIRED)
+find_library(TORCH_PYTHON_LIBRARY torch_python PATHS "${TORCH_INSTALL_PREFIX}/lib")
+target_link_libraries(${TARGET_LIB} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 
 target_compile_options(${TARGET_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
     --generate-line-info
@@ -50,3 +55,6 @@ target_compile_options(${TARGET_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
 
 set_property(TARGET ${TARGET_LIB} PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -fPIC -Wall -ftree-vectorize")
+set(ARCH_FLAGS "-march=native -mtune=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARCH_FLAGS}")

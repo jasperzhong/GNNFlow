@@ -2,6 +2,8 @@ import logging
 import time
 from typing import Tuple
 
+import numpy as np
+import pandas as pd
 import torch
 import torch.distributed
 
@@ -19,6 +21,9 @@ global DIM_EDGE
 global TRAIN_RAND_SAMPLER
 global TEST_RAND_SAMPLER
 global VAL_RAND_SAMPLER
+
+global TRAIN_DATA
+TRAIN_DATA = None
 
 
 def get_dgraph() -> DistributedDynamicGraph:
@@ -113,6 +118,51 @@ def add_edges(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
     dgraph.enqueue_add_edges_task(source_vertices.numpy(),
                                   target_vertices.numpy(), timestamps.numpy(), eids.numpy())
     # NB: no need to wait for the task to finish
+
+
+def add_train_data(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
+                   timestamps: torch.Tensor, eids: torch.Tensor):
+    """
+    Add training samples to the memory.
+
+    Args:
+        source_vertices (torch.Tensor): The source vertices of the edges.
+        target_vertices (torch.Tensor): The target vertices of the edges.
+        timestamps (torch.Tensor): The timestamps of the edges.
+        eids (torch.Tensor): The edge IDs of the edges.
+    """
+    global TRAIN_DATA
+
+    if TRAIN_DATA is None:
+        TRAIN_DATA = [
+            source_vertices.numpy(),
+            target_vertices.numpy(),
+            timestamps.numpy(),
+            eids.numpy()
+        ]
+    else:
+        TRAIN_DATA[0] = np.concatenate((TRAIN_DATA[0], source_vertices.numpy()))
+        TRAIN_DATA[1] = np.concatenate((TRAIN_DATA[1], target_vertices.numpy()))
+        TRAIN_DATA[2] = np.concatenate((TRAIN_DATA[2], timestamps.numpy()))
+        TRAIN_DATA[3] = np.concatenate((TRAIN_DATA[3], eids.numpy()))
+
+
+def get_train_data() -> pd.DataFrame:
+    """
+    Get the training data.
+
+    Returns:
+        pd.DataFrame: The training data.
+    """
+    global TRAIN_DATA
+    if TRAIN_DATA is None:
+        raise RuntimeError("The training data has not been initialized.")
+    return pd.DataFrame({
+        "src": TRAIN_DATA[0],
+        "dst": TRAIN_DATA[1],
+        "time": TRAIN_DATA[2],
+        "eid": TRAIN_DATA[3]
+    })
 
 
 def set_graph_metadata(num_vertices: int, num_edges: int, max_vertex_id: int, num_partitions: int):
@@ -264,6 +314,33 @@ def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
     """
     kvstore_server = get_kvstore_server()
     kvstore_server.push(keys, tensors, mode)
+
+
+def init_memory(keys: torch.Tensor, dim_memory: int, dim_edge: int):
+    """
+    Init memory
+
+    Args:
+        keys (torch.Tensor): The key of the memory
+        dim_memory (int): The dimension of memory
+        dim_edge (int): The dimension of edge features
+    """
+    kvstore_server = get_kvstore_server()
+    memory = torch.zeros(
+        (len(keys), dim_memory), dtype=torch.float32)
+    memory_ts = torch.zeros(len(keys), dtype=torch.float32)
+    dim_raw_message = 2 * dim_memory + dim_edge
+    mailbox = torch.zeros(
+        (len(keys), dim_raw_message), dtype=torch.float32)
+    mailbox_ts = torch.zeros(
+        (len(keys), ), dtype=torch.float32)
+    all_mem = torch.cat((memory,
+                        memory_ts.unsqueeze(dim=1),
+                        mailbox,
+                        mailbox_ts.unsqueeze(dim=1),
+                         ), dim=1)
+    kvstore_server.push(keys, all_mem, mode='memory')
+    del all_mem, mailbox_ts, mailbox, memory, memory_ts
 
 
 def pull_tensors(keys: torch.Tensor, mode: str) -> torch.Tensor:
