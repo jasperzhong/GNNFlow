@@ -105,7 +105,8 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
-              shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1):
+        shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1,
+        memmap: bool = False):
     """
     Loads the node and edge features for the given dataset.
 
@@ -117,6 +118,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         shared_memory: whether to use shared memory.
         local_rank: the local rank of the process.
         local_world_size: the local world size of the process.
+        memmap (bool): whether to use memmap.
 
     Returns:
         node_feats: the node features. (None if not available)
@@ -129,21 +131,26 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     node_feat_path = os.path.join(dataset_path, 'node_features.npy')
     edge_feat_path = os.path.join(dataset_path, 'edge_features.npy')
 
+
     if not os.path.exists(node_feat_path) and \
             not os.path.exists(edge_feat_path):
         raise ValueError("Both {} and {} do not exist".format(
             node_feat_path, edge_feat_path))
 
+    mmap_mode = "r+" if shared_memory else None
+
     node_feats = None
     edge_feats = None
     if not shared_memory or (shared_memory and local_rank == 0):
         if os.path.exists(node_feat_path):
-            node_feats = np.load(node_feat_path, allow_pickle=False)
-            node_feats = torch.from_numpy(node_feats)
+            node_feats = np.load(node_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
+            if not memmap:
+                node_feats = torch.from_numpy(node_feats)
 
         if os.path.exists(edge_feat_path):
-            edge_feats = np.load(edge_feat_path, allow_pickle=False)
-            edge_feats = torch.from_numpy(edge_feats)
+            edge_feats = np.load(edge_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
+            if not memmap:
+                edge_feats = torch.from_numpy(edge_feats)
 
     if shared_memory:
         node_feats_shm, edge_feats_shm = None, None

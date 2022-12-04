@@ -2,7 +2,6 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import psutil
 import torch
 import torch.distributed
 import torch.distributed.rpc as rpc
@@ -35,7 +34,7 @@ class Dispatcher:
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor,
-                       edge_feats: Optional[torch.Tensor] = None,
+                       edge_feats: Optional[np.memmap] = None,
                        partition_train_data: bool = False):
         """
         Dispatch the edges to the workers.
@@ -91,8 +90,8 @@ class Dispatcher:
             # node_feats and memory dispatch later using partition table.
             kvstore_rank = partition_id * self._local_world_size
             if edge_feats is not None:
-                keys = edges[3]
-                features = edge_feats[keys]
+                keys = edges[3].numpy()
+                features = torch.from_numpy(edge_feats[keys])
                 futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                              args=(keys, features, 'edge')))
 
@@ -100,8 +99,8 @@ class Dispatcher:
 
     def partition_graph(self, dataset: pd.DataFrame, initial_ingestion_batch_size: int,
                         ingestion_batch_size: int, undirected: bool,
-                        node_feats: Optional[torch.Tensor] = None,
-                        edge_feats: Optional[torch.Tensor] = None,
+                        node_feats: Optional[np.memmap] = None,
+                        edge_feats: Optional[np.memmap] = None,
                         dim_memory: int = 0, partition_train_data: bool = False):
         """
         partition the dataset to the workers.

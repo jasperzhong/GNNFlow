@@ -56,7 +56,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
-        node_feats, edge_feats = load_feat(data_name)
+        node_feats, edge_feats = load_feat(data_name, memmap=True)
         logging.info("Rank %d: Loaded features in %f seconds.", rank,
                      time.time() - start)
         if chunk > 1:
@@ -110,10 +110,10 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
                 assert partition_mask.sum() > 0  # should not be 0
                 vertices = torch.arange(len(partition_table), dtype=torch.long)
                 partition_vertices = vertices[partition_mask]
-                keys = partition_vertices.contiguous()
+                keys = partition_vertices.numpy()
                 kvstore_rank = partition_id * local_world_size()
                 if node_feats is not None:
-                    features = node_feats[keys]
+                    features = torch.from_numpy(node_feats[keys])
                     futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
                                                  args=(keys, features, 'node')))
                 logging.info(
