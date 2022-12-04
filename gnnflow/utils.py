@@ -326,6 +326,30 @@ class RandEdgeSampler:
         self.random_state = np.random.RandomState(self.seed)
 
 
+class DstRandEdgeSampler:
+    """
+    Samples random edges from the graph.
+    """
+
+    def __init__(self, dst_list, seed=None):
+        self.seed = None
+        self.dst_list = np.unique(dst_list)
+
+        if seed is not None:
+            self.seed = seed
+            self.random_state = np.random.RandomState(self.seed)
+
+    def sample(self, size):
+        if self.seed is None:
+            dst_index = np.random.randint(0, len(self.dst_list), size)
+        else:
+            dst_index = self.random_state.randint(0, len(self.dst_list), size)
+        return self.dst_list[dst_index]
+
+    def reset_random_state(self):
+        self.random_state = np.random.RandomState(self.seed)
+
+
 class EarlyStopMonitor:
     """
     Monitor the early stopping criteria.

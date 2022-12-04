@@ -22,7 +22,7 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
+from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor, RandEdgeSampler,
                            build_dynamic_graph, get_pinned_buffers,
                            get_project_root_dir, load_dataset, load_feat,
                            mfgs_to_cuda)
@@ -134,12 +134,12 @@ def main():
         data_config["mem_resource_type"] = "shared"
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
-    train_rand_sampler = RandEdgeSampler(
-        train_data['src'].values, train_data['dst'].values)
-    val_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
-    test_rand_sampler = RandEdgeSampler(
-        full_data['src'].values, full_data['dst'].values)
+    train_rand_sampler = DstRandEdgeSampler(
+        train_data['dst'].to_numpy(dtype=np.int32))
+    val_rand_sampler = DstRandEdgeSampler(
+        full_data['dst'].to_numpy(dtype=np.int32))
+    test_rand_sampler = DstRandEdgeSampler(
+        full_data['dst'].to_numpy(dtype=np.int32))
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
