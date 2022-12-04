@@ -12,7 +12,7 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import (DstRandEdgeSampler, RandEdgeSampler, get_project_root_dir, load_dataset,
+from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset,
                            load_feat, local_world_size)
 
 
@@ -153,12 +153,12 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
         # deal with rand sampler
         train_data, _, _, dataset = load_dataset(data_name)
-        train_rand_sampler = DstRandEdgeSampler(
-            train_data['dst'].to_numpy(dtype=np.int32))
-        val_rand_sampler = DstRandEdgeSampler(
-            dataset['dst'].to_numpy(dtype=np.int32))
-        test_rand_sampler = DstRandEdgeSampler(
-            dataset['dst'].to_numpy(dtype=np.int32))
+        train_rand_sampler = RandEdgeSampler(
+            train_data['src'].values, train_data['dst'].values)
+        val_rand_sampler = RandEdgeSampler(
+            dataset['src'].values, dataset['dst'].values)
+        test_rand_sampler = RandEdgeSampler(
+            dataset['src'].values, dataset['dst'].values)
         logging.info("make sampler done")
         dispatcher.broadcast_rand_sampler(
             train_rand_sampler, val_rand_sampler, test_rand_sampler)

@@ -124,10 +124,10 @@ class Dispatcher:
         t = tqdm(total=len(dataset))
         for i in range(len(range_list)-1):
             batch = dataset[range_list[i]:range_list[i+1]]
-            src_nodes = batch["src"].values.astype(np.int32)
-            dst_nodes = batch["dst"].values.astype(np.int32)
+            src_nodes = batch["src"].values.astype(np.int64)
+            dst_nodes = batch["dst"].values.astype(np.int64)
             timestamps = batch["time"].values.astype(np.float32)
-            eids = batch["eid"].values.astype(np.int32)
+            eids = batch["eid"].values.astype(np.int64)
 
             if undirected:
                 src_nodes_ext = np.concatenate([src_nodes, dst_nodes])

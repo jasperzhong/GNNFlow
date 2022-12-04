@@ -10,9 +10,9 @@ namespace gnnflow {
 // TimestampType is the type of timestamp.
 // EIDType is the type of edge ID.
 // NB: PyTorch does not support converting uint64_t's numpy ndarray to int64_t.
-using NIDType = int32_t;
+using NIDType = int64_t;
 using TimestampType = float;
-using EIDType = int32_t;
+using EIDType = int64_t;
 
 constexpr int kMaxFanout = 32;
 
