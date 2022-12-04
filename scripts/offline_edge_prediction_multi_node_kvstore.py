@@ -6,8 +6,8 @@ import os
 import random
 import time
 
-import psutil
 import numpy as np
+import psutil
 import torch
 import torch.distributed
 import torch.nn
@@ -26,14 +26,16 @@ from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.models.dgnn import DGNN
+from gnnflow.models.gat import GAT
+from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler,
                            build_dynamic_graph, get_pinned_buffers,
-                           get_project_root_dir, load_dataset, load_feat, load_partitioned_dataset,
-                           mfgs_to_cuda)
+                           get_project_root_dir, load_dataset, load_feat,
+                           load_partitioned_dataset, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
-model_names = ['TGN', 'TGAT', 'DySAT']
+model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
                      and callable(caches.__dict__[name]))
@@ -266,9 +268,14 @@ def main():
     logging.info("dim_node: {}, dim_edge: {}".format(dim_node, dim_edge))
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
-    model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
-                 memory_device=device, memory_shared=args.distributed,
-                 kvstore_client=kvstore_client)
+    if args.model == "GRAPHSAGE":
+        model = SAGE(dim_node, model_config['dim_embed'])
+    elif args.model == 'GAT':
+        model = GAT(dim_node, model_config['dim_embed'])
+    else:
+        model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
+                     memory_device=device, memory_shared=args.distributed,
+                     kvstore_client=kvstore_client)
     model.to(device)
     args.use_memory = model.has_memory()
     logging.info("use memory: {}".format(args.use_memory))
