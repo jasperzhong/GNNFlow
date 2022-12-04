@@ -9,7 +9,7 @@ import torch.distributed
 from torch._six import string_classes
 from torch.utils.data import BatchSampler, Dataset, Sampler
 
-from gnnflow.utils import RandEdgeSampler, local_rank
+from gnnflow.utils import DstRandEdgeSampler, RandEdgeSampler, local_rank
 
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
@@ -27,7 +27,7 @@ class EdgePredictionDataset(Dataset):
     """
 
     def __init__(self, data: pd.DataFrame,
-                 neg_sampler: Optional[RandEdgeSampler] = None):
+                 neg_sampler: Optional[DstRandEdgeSampler] = None):
         super(EdgePredictionDataset, self).__init__()
         self.data = data
         self.length = np.max(np.array(data['dst'], dtype=int))
@@ -36,16 +36,16 @@ class EdgePredictionDataset(Dataset):
     def __getitem__(self, index):
         row = self.data.iloc[index]
         if self.neg_sampler is not None:
-            _, neg_batch = self.neg_sampler.sample(len(row.src.values))
+            neg_batch = self.neg_sampler.sample(len(row.src.values))
             target_nodes = np.concatenate(
                 [row.src.values, row.dst.values, neg_batch]).astype(
-                np.int64)
+                np.int32)
             ts = np.concatenate(
                 [row.time.values, row.time.values, row.time.values]).astype(
                 np.float32)
         else:
             target_nodes = np.concatenate(
-                [row.src.values, row.dst.values]).astype(np.int64)
+                [row.src.values, row.dst.values]).astype(np.int32)
             ts = np.concatenate(
                 [row.time.values, row.time.values]).astype(np.float32)
         eid = row['eid'].values
@@ -175,7 +175,7 @@ class DistributedBatchSampler(BatchSampler):
                 randint = torch.randint(
                     0, self.num_chunks, size=(1,), device=self.device)
             else:
-                randint = torch.zeros(1, dtype=torch.int64, device=self.device)
+                randint = torch.zeros(1, dtype=torch.int32, device=self.device)
 
             torch.distributed.broadcast(randint, src=0)
             self.random_size = int(randint.item() * self.chunk_size)
