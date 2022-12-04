@@ -3,7 +3,6 @@ import os
 import time
 
 import numpy as np
-import pandas as pd
 import psutil
 import torch
 import torch.distributed
@@ -12,8 +11,8 @@ import torch.distributed.rpc as rpc
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import (RandEdgeSampler, get_project_root_dir, load_dataset_in_chunks,
-                           load_feat, local_world_size)
+from gnnflow.utils import (RandEdgeSampler, load_dataset,
+                           load_dataset_in_chunks, load_feat, local_world_size)
 
 
 def initialize(rank: int, world_size: int,
