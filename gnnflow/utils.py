@@ -48,9 +48,9 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     """
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
-    # path = os.path.join(data_dir, dataset, 'edges.csv')   # AWS
-    data_dir2 = '/data/tgl'
-    path = os.path.join(data_dir2, dataset, 'edges.csv')   # AWS
+    path = os.path.join(data_dir, dataset, 'edges.csv')   # AWS
+    # data_dir2 = '/data/tgl'
+    # path = os.path.join(data_dir2, dataset, 'edges.csv')   # AWS
 
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
