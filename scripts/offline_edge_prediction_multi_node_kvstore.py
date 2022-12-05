@@ -63,6 +63,7 @@ parser.add_argument("--edge-cache-ratio", type=float, default=0,
                     help="edge cache ratio for feature cache")
 parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="node cache ratio for feature cache")
+parser.add_argument("--disable-adaptive-block-size", action="store_true")
 
 # distributed
 parser.add_argument("--partition", action="store_true",
@@ -90,6 +91,8 @@ logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
+
+MB = 1 << 20
 
 start = time.time()
 
@@ -175,7 +178,8 @@ def main():
     args.dim_memory = 0 if 'dim_memory' not in model_config else model_config['dim_memory']
     if args.partition:
         dgraph = build_dynamic_graph(
-            **data_config, device=args.local_rank)
+            **data_config, device=args.local_rank,
+            adaptive_block_size=not args.disable_adaptive_block_size)
         graph_services.set_dgraph(dgraph)
         dgraph = graph_services.get_dgraph()
         mem = psutil.virtual_memory().percent
@@ -191,6 +195,22 @@ def main():
             dgraph.get_partition_table(),
             dgraph.num_partitions(), args.local_world_size,
             args.local_rank, dim_node, dim_edge, args.dim_memory)
+
+        # print graph edge memory size and metadata
+        avg_linked_list_length = dgraph._dgraph.avg_linked_list_length()
+        graph_memory_usage = dgraph._dgraph.get_graph_memory_usage() / MB
+        metadata_memory_usage = dgraph._dgraph.get_metadata_memory_usage() / MB
+
+        # all reduce
+        data_list = torch.tensor(
+            [avg_linked_list_length, graph_memory_usage, metadata_memory_usage]).cuda()
+        torch.distributed.all_reduce(
+            data_list, op=torch.distributed.ReduceOp.SUM)
+        data_list /= args.world_size
+        avg_linked_list_length, graph_memory_usage, metadata_memory_usage = data_list.tolist()
+        logging.info('avg_linked_list_length: {:.2f}, graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size: {})'.format(
+            avg_linked_list_length, graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
+
     else:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)

@@ -247,7 +247,7 @@ def build_dynamic_graph(
         insertion_policy: str,
         undirected: bool,
         device: int = 0,
-        adaptive_block_size: bool = False,
+        adaptive_block_size: bool = True,
         dataset_df: Optional[pd.DataFrame] = None,
         *args, **kwargs) -> DynamicGraph:
     """
