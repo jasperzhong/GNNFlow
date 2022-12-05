@@ -1,5 +1,6 @@
 from copy import deepcopy
 from typing import List, NamedTuple
+from gnnflow.utils import load_partition_table
 
 import numpy as np
 import torch
@@ -25,16 +26,19 @@ class Partitioner:
     """
     UNASSIGNED = -1
 
-    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
+    def __init__(self, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False):
         """
         Initialize the partitioner.
 
         Args:
             num_partitions (int): The number of partitions.
             local_world_size (int): The number of processes in the local world.
+            dataset_name (str): the Name of the dataset
             assign_with_dst_node (bool): Whether to assign the edges to the partition of the
                 asigned destination node. Default: False.
         """
+        self._dataset_name = dataset_name
+
         self._num_partitions = num_partitions
         self._local_world_size = local_world_size
         self._assign_with_dst_node = assign_with_dst_node
@@ -130,9 +134,11 @@ class Partitioner:
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
+        pt = None
         if is_initial_ingestion:
-            # if it is the initial partition
-            pt = torch.load('')
+            pt = load_partition_table(self._dataset_name)
+
+        if pt is not None:
             self._partition_table = pt
 
             for pid in range(self._num_partitions):
@@ -351,8 +357,8 @@ class LeastLoadedPartitioner(Partitioner):
     Different least-loaded algorithms differ in how to compute the load of a partition.
     """
 
-    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, local_world_size, assign_with_dst_node)
+    def __init__(self, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
         self._metrics = torch.zeros(num_partitions, dtype=torch.float32)
 
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
@@ -406,8 +412,8 @@ class LeastLoadedPartitionerByTimestampAvg(LeastLoadedPartitioner):
     average += (a1 + a2 + ... + ak - average * k) / (count + k)
     """
 
-    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
-        super().__init__(num_partitions, local_world_size, assign_with_dst_node)
+    def __init__(self, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False):
+        super().__init__(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
         self._num_edges = torch.zeros(num_partitions, dtype=torch.int64)
 
     def _compute_metric(self, src_node: int, dst_nodes: torch.Tensor,
@@ -427,8 +433,8 @@ class FennelPartitioner(Partitioner):
     paper: http://www.vldb.org/pvldb/vol11/p1590-abbas.pdf
     """
 
-    def __init__(self, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
-        super().__init__(num_partitions, local_world_size, assign_with_dst_node)
+    def __init__(self, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
+        super().__init__(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
 
         # ideal partition capacity
         self._partition_capacity = 0
@@ -555,7 +561,7 @@ class FennelPartitioner(Partitioner):
         return partition_table
 
 
-def get_partitioner(partition_strategy: str, num_partitions: int, local_world_size: int, assign_with_dst_node: bool = False):
+def get_partitioner(partition_strategy: str, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False):
     """
     Get the partitioner.
 
@@ -569,20 +575,20 @@ def get_partitioner(partition_strategy: str, num_partitions: int, local_world_si
         Partitioner: The partitioner.
     """
     if partition_strategy == "hash":
-        return HashPartitioner(num_partitions, local_world_size, assign_with_dst_node)
+        return HashPartitioner(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     elif partition_strategy == "roundrobin":
         return RoundRobinPartitioner(
-            num_partitions, local_world_size, assign_with_dst_node)
+            num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     elif partition_strategy == "edgecount":
         return LeastLoadedPartitionerByEdgeCount(
-            num_partitions, local_world_size, assign_with_dst_node)
+            num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     elif partition_strategy == "timestampsum":
         return LeastLoadedPartitionerByTimestampSum(
-            num_partitions, local_world_size, assign_with_dst_node)
+            num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     elif partition_strategy == "timestampavg":
         return LeastLoadedPartitionerByTimestampAvg(
-            num_partitions, local_world_size, assign_with_dst_node)
+            num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     elif partition_strategy == "fennel":
-        return FennelPartitioner(num_partitions, local_world_size, assign_with_dst_node)
+        return FennelPartitioner(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)

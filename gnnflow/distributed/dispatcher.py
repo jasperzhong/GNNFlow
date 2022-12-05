@@ -21,13 +21,13 @@ class Dispatcher:
     Dispatch the graph data to the workers.
     """
 
-    def __init__(self, partition_strategy: str, num_partitions: int):
+    def __init__(self, partition_strategy: str, num_partitions: int, dataset_name: str):
         self._rank = torch.distributed.get_rank()
         assert self._rank == 0, "Only rank 0 can initialize the dispatcher."
         self._num_partitions = num_partitions
         self._local_world_size = local_world_size()
         self._partitioner = get_partitioner(
-            partition_strategy, num_partitions, self._local_world_size)
+            partition_strategy, num_partitions, self._local_world_size, dataset_name)
 
         self._num_edges = 0
         self._max_nodex = 0
@@ -201,13 +201,14 @@ class Dispatcher:
                              args=(train_rand_sampler, val_rand_sampler, test_rand_sampler))
 
 
-def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):
+def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None, dataset_name: str = None):
     """
     Get the dispatcher singleton.
 
     Args:
         partition_strategy (str): The partitioning strategy.
         num_partitions (int): The number of partitions to split the dataset into.
+        dataset_name (str): the name of the dataset (for loading initial partition)
 
     Returns:
         The dispatcher singleton.
@@ -216,5 +217,5 @@ def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Opt
     if dispatcher is None:
         assert partition_strategy is not None and num_partitions is not None, \
             "The dispatcher is not initialized. Please specify the partitioning strategy and the number of partitions."
-        dispatcher = Dispatcher(partition_strategy, num_partitions)
+        dispatcher = Dispatcher(partition_strategy, num_partitions, dataset_name)
     return dispatcher
