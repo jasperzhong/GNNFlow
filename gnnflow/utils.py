@@ -91,6 +91,29 @@ def load_partition_table(dataset: str):
     pt = torch.load(path)
     return pt
 
+def load_dataset_in_chunks(dataset: str, data_dir: Optional[str] = None, chunksize: int = 100000000):
+    """
+    Loads the dataset and returns an iterator of the whole dataset
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+        chunksize: the size of the chunk to be loaded at a time
+
+    Returns:
+        iterator: the iterator of the whole dataset
+    """
+    if data_dir is None:
+        data_dir = os.path.join(get_project_root_dir(), "data")
+
+    path = os.path.join(data_dir, dataset, 'edges.csv')
+    if not os.path.exists(path):
+        raise ValueError('{} does not exist'.format(path))
+
+    # NB: pyarrow is not support with chunksize
+    return pd.read_csv(path, chunksize=chunksize, usecols=['src', 'dst', 'time', 'Unnamed: 0', 'ext_roll'])
+
+
 def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank: int = 0, world_size: int = 1, partition_train_data: bool = False):
     """
     Loads the partitioned dataset and returns the dataframes for the train, validation, test.
@@ -129,7 +152,8 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
-              shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1):
+              shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1,
+              memmap: bool = False):
     """
     Loads the node and edge features for the given dataset.
 
@@ -141,6 +165,7 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         shared_memory: whether to use shared memory.
         local_rank: the local rank of the process.
         local_world_size: the local world size of the process.
+        memmap (bool): whether to use memmap.
 
     Returns:
         node_feats: the node features. (None if not available)
@@ -158,16 +183,22 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         raise ValueError("Both {} and {} do not exist".format(
             node_feat_path, edge_feat_path))
 
+    mmap_mode = "r+" if memmap else None
+
     node_feats = None
     edge_feats = None
     if not shared_memory or (shared_memory and local_rank == 0):
         if os.path.exists(node_feat_path):
-            node_feats = np.load(node_feat_path, allow_pickle=False)
-            node_feats = torch.from_numpy(node_feats)
+            node_feats = np.load(
+                node_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
+            if not memmap:
+                node_feats = torch.from_numpy(node_feats)
 
         if os.path.exists(edge_feat_path):
-            edge_feats = np.load(edge_feat_path, allow_pickle=False)
-            edge_feats = torch.from_numpy(edge_feats)
+            edge_feats = np.load(
+                edge_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
+            if not memmap:
+                edge_feats = torch.from_numpy(edge_feats)
 
     if shared_memory:
         node_feats_shm, edge_feats_shm = None, None

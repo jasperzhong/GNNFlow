@@ -74,13 +74,14 @@ _dysat_default_config = {
 
 _graphsage_default_config = {
     "dim_embed": 100,
-    "num_layers": 3,
+    "num_layers": 2,
     "aggregator": 'mean',
-    "fanouts": [15, 10, 5],
+    "fanouts": [15, 10],
     "sample_strategy": "uniform",
     "num_snapshots": 1,
     "snapshot_time_window": 0,
     "prop_time": False,
+    "use_memory": False,
     "is_static": True
 }
 
@@ -95,6 +96,7 @@ _gat_default_config = {
     "sample_strategy": "uniform",
     "num_snapshots": 1,
     "snapshot_time_window": 0,
+    "use_memory": False,
     "prop_time": False,
     "is_static": True
 }

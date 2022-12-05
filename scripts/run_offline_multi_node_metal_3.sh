@@ -8,9 +8,8 @@ EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${6:-hash}"
 CHUNKSIZE="${7:-100000000}"
-DYNAMIC_SCHEDULING="${8:-false}"
 
-HOST_NODE_ADDR=172.31.44.144
+HOST_NODE_ADDR=172.31.34.83
 HOST_NODE_PORT=29400
 NNODES=4
 NPROC_PER_NODE=8
@@ -36,11 +35,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 1000000 \
     --initial-ingestion-batch-size 1000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 8 --chunksize $CHUNKSIZE"
-
-if [ $DYNAMIC_SCHEDULING = true ]; then
-    cmd="$cmd --dynamic-scheduling"
-fi
+    --num-workers 0 --chunksize $CHUNKSIZE"
 
 rm -rf /dev/shm/rmm_pool_*
 
