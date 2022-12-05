@@ -3,11 +3,12 @@ import dgl
 import pandas as pd
 import numpy as np
 
-dataset_name = 'REDDIT'
+dataset_name = 'GDELT'
 num_partitions = 4
 undirected = False
 
-df = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name))
+# df = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name)) # HKU Lab Machine
+df = pd.read_csv('/home/ubuntu/data/{}/edges.csv'.format(dataset_name)) # AWS
 
 print('df length before slicing is {}\n'.format(len(df)))
 
@@ -25,8 +26,11 @@ if undirected:
 	dst_nodes_ext = np.concatenate([dst_nodes, src_nodes])
 	src_nodes = torch.from_numpy(src_nodes_ext)
 	dst_nodes = torch.from_numpy(dst_nodes_ext)
+else:
+	src_nodes = torch.from_numpy(src_nodes)
+	dst_nodes = torch.from_numpy(dst_nodes)
 
-max_node_id = np.max(src_nodes)
+max_node_id = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
 
 visited = torch.zeros(max_node_id + 1, dtype=torch.int32)
 
@@ -51,8 +55,8 @@ for i in range(len(pt)):
 		cnt += 1
 
 print('Partition Finished and Find {} single nodes. Saving...\n'.format(cnt))
-torch.save(pt, '/home/tzqin/repo/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name))
-
+# torch.save(pt, '/home/tzqin/tzqin/proj/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name)) # HKU Lab Machine
+torch.save(pt, '/home/ubuntu/repos/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name)) # AWS
 
 
 
