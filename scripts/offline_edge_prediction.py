@@ -22,9 +22,11 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (EarlyStopMonitor, RandEdgeSampler, build_dynamic_graph,
+from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor, build_dynamic_graph,
                            get_pinned_buffers, get_project_root_dir, load_dataset,
                            load_feat, load_partitioned_dataset, mfgs_to_cuda)
+
+import psutil
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -38,8 +40,8 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=100)
-parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
+                    type=int, default=4)
+parser.add_argument("--lr", help='learning rate', type=float, default=0.0005)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
@@ -134,30 +136,39 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
+        build_graph_start = time.time()
         train_data, _, _, full_data = load_dataset(args.data)
-        train_rand_sampler = RandEdgeSampler(
-            train_data['src'].values, train_data['dst'].values)
-        val_rand_sampler = RandEdgeSampler(
-            full_data['src'].values, full_data['dst'].values)
-        test_rand_sampler = RandEdgeSampler(
-            full_data['src'].values, full_data['dst'].values)
 
+        train_dst = train_data['dst'].to_numpy(dtype=np.int64)
+        del train_data
+        full_dst = full_data['dst'].to_numpy(dtype=np.int64)
         logging.info("world_size: {}".format(args.world_size))
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
-        del train_data
+        build_graph_end = time.time()
+        logging.info("build graph time: {}".format(
+            build_graph_end - build_graph_start))
         del full_data
-
+        train_rand_sampler = DstRandEdgeSampler(train_dst)
+        val_rand_sampler = DstRandEdgeSampler(full_dst)
+        test_rand_sampler = DstRandEdgeSampler(full_dst)
+        del full_dst, train_dst
+        torch.distributed.barrier()
+        logging.info('build rand sampler done memory usage: {}'.format(
+            psutil.virtual_memory().percent))
+        # del full_data
+        torch.distributed.barrier()
+        logging.info('build graph done memory usage: {}'.format(
+            psutil.virtual_memory().percent))
         train_data, val_data, test_data = load_partitioned_dataset(
             args.data, rank=args.rank, world_size=args.world_size)
+        logging.info('load dataset done memory usage: {}'.format(
+            psutil.virtual_memory().percent))
     else:
         train_data, val_data, test_data, full_data = load_dataset(args.data)
-        train_rand_sampler = RandEdgeSampler(
-            train_data['src'].values, train_data['dst'].values)
-        val_rand_sampler = RandEdgeSampler(
-            full_data['src'].values, full_data['dst'].values)
-        test_rand_sampler = RandEdgeSampler(
-            full_data['src'].values, full_data['dst'].values)
+        train_rand_sampler = DstRandEdgeSampler(train_data['dst'].values)
+        val_rand_sampler = DstRandEdgeSampler(full_data['dst'].values)
+        test_rand_sampler = DstRandEdgeSampler(full_data['dst'].values)
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
@@ -196,18 +207,24 @@ def main():
     test_loader = torch.utils.data.DataLoader(
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
-
+    logging.info('build dataloader done memory usage: {}'.format(
+        psutil.virtual_memory().percent))
     if not args.distributed:
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data)
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
+    logging.info("graph memory usage: {}".format(
+        dgraph.get_graph_memory_usage()))
+    logging.info("graph meta data memory usage: {}".format(
+        dgraph.get_metadata_memory_usage()))
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
         args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
-
+    logging.info('load feat done memory usage: {}'.format(
+        psutil.virtual_memory().percent))
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
@@ -281,6 +298,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     for e in range(args.epoch):
         model.train()
         cache.reset()
+        if e > 0:
+            if args.distributed:
+                model.module.reset()
+            else:
+                model.reset()
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0

@@ -75,6 +75,7 @@ class LRUCache(Cache):
         """
         Reset the cache
         """
+        torch.cuda.empty_cache()
         # NB: only edge cache is reset
         if self.distributed:
             if self.dim_edge_feat != 0 and self.edge_capacity > 0:

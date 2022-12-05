@@ -3,6 +3,8 @@ import os
 import random
 from typing import List, Optional, Tuple, Union
 
+import psutil
+import sys
 import numpy as np
 import pandas as pd
 import torch
@@ -138,31 +140,47 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     edge_feats = None
     if not shared_memory or (shared_memory and local_rank == 0):
         if os.path.exists(node_feat_path):
+            logging.info("local rank: {} load feat".format(local_rank))
             node_feats = np.load(node_feat_path, allow_pickle=False)
             node_feats = torch.from_numpy(node_feats)
             if node_feats.dtype == torch.bool:
                 node_feats = node_feats.type(torch.float32)
+            logging.info("size of node: {}".format(
+                sys.getsizeof(node_feats.storage())))
 
         if os.path.exists(edge_feat_path):
+            logging.info("local rank: {} load feat".format(local_rank))
             edge_feats = np.load(edge_feat_path, allow_pickle=False)
             edge_feats = torch.from_numpy(edge_feats)
             if edge_feats.dtype == torch.bool:
                 edge_feats = edge_feats.type(torch.float32)
+            logging.info("size of edge: {}".format(
+                sys.getsizeof(edge_feats.storage())))
 
+        logging.info("after loading features: {}".format(
+            psutil.virtual_memory().percent))
     if shared_memory:
         node_feats_shm, edge_feats_shm = None, None
         if local_rank == 0:
+            node_feats_shape = node_feats.shape if node_feats is not None else None
+            edge_feats_shape = edge_feats.shape if edge_feats is not None else None
             if node_feats is not None:
                 node_feats_shm = create_shared_mem_array(
                     'node_feats', node_feats.shape, node_feats.dtype)
                 node_feats_shm[:] = node_feats[:]
+                del node_feats
+                logging.info("after make shm node features: {}".format(
+                    psutil.virtual_memory().percent))
             if edge_feats is not None:
                 edge_feats_shm = create_shared_mem_array(
                     'edge_feats', edge_feats.shape, edge_feats.dtype)
                 edge_feats_shm[:] = edge_feats[:]
+                logging.info("after make shm node features: {}".format(
+                    psutil.virtual_memory().percent))
+                del edge_feats
+                logging.info("after make shm node features: {}".format(
+                    psutil.virtual_memory().percent))
             # broadcast the shape and dtype of the features
-            node_feats_shape = node_feats.shape if node_feats is not None else None
-            edge_feats_shape = edge_feats.shape if edge_feats is not None else None
             torch.distributed.broadcast_object_list(
                 [node_feats_shape, edge_feats_shape], src=0)
 
@@ -325,6 +343,30 @@ class RandEdgeSampler:
             src_index = self.random_state.randint(0, len(self.src_list), size)
             dst_index = self.random_state.randint(0, len(self.dst_list), size)
         return self.src_list[src_index], self.dst_list[dst_index]
+
+    def reset_random_state(self):
+        self.random_state = np.random.RandomState(self.seed)
+
+
+class DstRandEdgeSampler:
+    """
+    Samples random edges from the graph.
+    """
+
+    def __init__(self, dst_list, seed=None):
+        self.seed = None
+        self.dst_list = np.unique(dst_list)
+
+        if seed is not None:
+            self.seed = seed
+            self.random_state = np.random.RandomState(self.seed)
+
+    def sample(self, size):
+        if self.seed is None:
+            dst_index = np.random.randint(0, len(self.dst_list), size)
+        else:
+            dst_index = self.random_state.randint(0, len(self.dst_list), size)
+        return self.dst_list[dst_index]
 
     def reset_random_state(self):
         self.random_state = np.random.RandomState(self.seed)

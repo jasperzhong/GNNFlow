@@ -36,7 +36,7 @@ class EdgePredictionDataset(Dataset):
     def __getitem__(self, index):
         row = self.data.iloc[index]
         if self.neg_sampler is not None:
-            _, neg_batch = self.neg_sampler.sample(len(row.src.values))
+            neg_batch = self.neg_sampler.sample(len(row.src.values))
             target_nodes = np.concatenate(
                 [row.src.values, row.dst.values, neg_batch]).astype(
                 np.int64)
