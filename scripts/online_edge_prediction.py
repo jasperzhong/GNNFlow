@@ -134,11 +134,13 @@ def main():
     model_config, data_config = get_default_config(args.model, args.data)
     args.use_memory = model_config['use_memory']
 
+    build_graph_time = 0
+    total_training_time = 0
     # Phase 1
     if args.distributed:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
-
+        phase1_build_graph_start = time.time()
         _, _, _, full_data = load_dataset(args.data)
         # deal with phase 1 dataset
         phase1_len = int(len(full_data) * 0.6)
@@ -153,10 +155,17 @@ def main():
         logging.info("world_size: {}".format(args.world_size))
         dgraph = build_dynamic_graph(
             **data_config, device=args.local_rank, dataset_df=full_data[:phase1_len])
-
+        phase1_build_graph_end = time.time()
+        phase1_build_graph_time = phase1_build_graph_end - phase1_build_graph_start
+        logging.info("phase1 build graph time: {}".format(
+            phase1_build_graph_time))
+        build_graph_time += phase1_build_graph_time
         # Fetch their own dataset, no redudancy
-        index = list(range(0, phase1_train, args.world_size))
-        phase1_train_df = phase1_train_df.loc[index]
+        train_index = list(range(args.rank, phase1_train, args.world_size))
+        phase1_train_df = phase1_train_df.iloc[train_index]
+        val_index = list(
+            range(args.rank, len(full_data) - phase1_train, args.world_size))
+        phase1_val_df = phase1_val_df.iloc(val_index)
     else:
         # TODO: single GPU not implemented
         train_data, val_data, test_data, full_data = load_dataset(args.data)
@@ -234,9 +243,17 @@ def main():
     criterion = torch.nn.BCEWithLogitsLoss()
 
     # phase1 training
+    with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+        f_phase2.write("Phase1\n")
+    with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+        f_phase2.write("Phase1\n")
+    phase1_train_start = time.time()
     best_e = train(phase1_train_df, phase1_val_df, sampler,
                    model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
-
+    phase1_train_end = time.time()
+    phase1_train_time = phase1_train_end - phase1_train_start
+    logging.info("phase1 train time: {}".format(phase1_train_time))
+    total_training_time += phase1_train_time
     # phase1 training done
     if args.distributed:
         torch.distributed.barrier()
@@ -244,13 +261,18 @@ def main():
     # phase2
     # update rand_sampler
     logging.info("Phase2 start")
+    with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+        f_phase2.write("Phase1\n")
+    with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+        f_phase2.write("Phase1\n")
     # retrain 100 times
     retrain_num = 100
     phase2_df = full_data[phase1_len:]
     phase2_len = len(phase2_df)
     incremental_step = int(phase2_len / retrain_num)
-    replay_ratio = 1.0
+    replay_ratio = 0
     for i in range(retrain_num):
+        phase2_build_graph_start = time.time()
         increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
         src = increment_df['src'].to_numpy()
         dst = increment_df['dst'].to_numpy()
@@ -258,7 +280,18 @@ def main():
         eid = increment_df['eid'].to_numpy()
         # update graph
         dgraph.add_edges(src, dst, ts, eid, add_reverse=False)
+        # Rand Sampler
+        val_rand_sampler.add_dst_list(dst)
+        #TODO: bug
+        train_rand_sampler = DstRandEdgeSampler(
+            phase1_train_df['dst'].to_numpy())
+        phase2_build_graph_end = time.time()
+        phase2_build_graph_time = phase2_build_graph_end - phase2_build_graph_start
+        logging.info("phase2 {}th training build graph time: {}".format(
+            i+1, phase2_build_graph_time))
+        build_graph_time += phase2_build_graph_time
 
+        phase2_train_start = time.time()
         # random sample phase2 train dataset -> get phase2_train_df & phase2_val_df
         phase2_new_data_start = phase1_len + incremental_step * i
         phase2_new_data_end = phase1_len + incremental_step * (i + 1)
@@ -274,14 +307,22 @@ def main():
         phase2_train_df = full_data.iloc[train_index.numpy()]
         phase2_val_df = full_data.iloc[val_index.numpy()]
 
-        # Rand Sampler
-        val_rand_sampler.add_dst_list(dst)
-        train_rand_sampler = DstRandEdgeSampler(
-            phase1_train_df['dst'].to_numpy())
-
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         train(phase2_train_df, phase2_val_df, sampler,
               model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
+        phase2_train_end = time.time()
+        phase2_train_time = phase2_train_end - phase2_train_start
+        logging.info("phase2 {}th train time: {}".format(
+            i+1, phase2_train_time))
+        total_training_time += phase2_train_time
+        if args.distributed:
+            torch.distributed.barrier()
+
+    # all end
+    logging.info("total build graph time: {}".format(build_graph_time))
+    logging.info("total train time {}".format(total_training_time))
+    logging.info("total time: {}".format(
+        build_graph_time + total_training_time))
 
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
@@ -386,6 +427,10 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         if args.rank == 0:
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
+            with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+                f_phase2.write("{:.4f}\n".format(val_ap))
+            with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+                f_phase2.write("{:.4f}\n".format(val_auc))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
