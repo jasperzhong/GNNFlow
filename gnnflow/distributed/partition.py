@@ -131,6 +131,7 @@ class Partitioner:
         # dispatch edges to already assigned source nodes
         for i in range(self._num_partitions):
             mask = self._partition_table[src_nodes] == i
+
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
@@ -142,12 +143,13 @@ class Partitioner:
             self._partition_table = pt
 
             for pid in range(self._num_partitions):
-                mask = self._partition_table == pid
-
-                print('len of partition i:{} is {}'.format(pid, len(src_nodes[mask])))
+                mask = self._partition_table[src_nodes] == pid
 
                 partitions.append(Partition(
                     src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
+
+                print('len of partition i:{} is {}'.format(pid, len(partitions[pid].src_nodes)))
+
 
         else:
             partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
