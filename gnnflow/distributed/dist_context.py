@@ -54,7 +54,7 @@ def initialize(rank: int, world_size: int, dataset: pd.DataFrame,
 
     start = time.time()
     if rank == 0:
-        dispatcher = get_dispatcher(partition_strategy, num_partitions)
+        dispatcher = get_dispatcher(partition_strategy, num_partitions, data_name)
         # load the feature only at rank 0
         node_feats, edge_feats = load_feat(data_name)
         logging.info("Rank %d: Loaded features in %f seconds.", rank,
