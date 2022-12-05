@@ -109,10 +109,12 @@ def initialize(rank: int, world_size: int,
                 partition_vertices = vertices[partition_mask]
                 keys = partition_vertices
                 kvstore_rank = partition_id * local_world_size()
-                if node_feats is not None:
-                    features = torch.from_numpy(node_feats[keys.numpy()])
+                features = torch.from_numpy(node_feats[keys.numpy()])
+                if partition_id == 0:
+                    graph_services.push_tensors(keys, features, 'node')
+                else:
                     futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                                 args=(keys, features, 'node')))
+                                                     args=(keys, features, 'node')))
                 logging.info(
                     "partition: {} dispatch done".format(partition_id))
                 mem = psutil.virtual_memory().percent
@@ -134,9 +136,11 @@ def initialize(rank: int, world_size: int,
                 partition_vertices = vertices[partition_mask]
                 keys = partition_vertices.contiguous()
                 kvstore_rank = partition_id * local_world_size()
-
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.init_memory,
-                                             args=(keys, dim_memory, dim_edge)))
+                if partition_id == 0:
+                    graph_services.init_memory(keys, dim_memory, dim_edge)
+                else:
+                    futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.init_memory,
+                                                 args=(keys, dim_memory, dim_edge)))
                 logging.info(
                     "partition: {} memory dispatch done".format(partition_id))
                 mem = psutil.virtual_memory().percent
