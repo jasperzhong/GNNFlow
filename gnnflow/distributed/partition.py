@@ -142,7 +142,7 @@ class Partitioner:
             self._partition_table = pt
 
             for pid in range(self._num_partitions):
-                mask = pt[src_nodes] == pid
+                mask = self._partition_table == pid
 
                 print('len of partition i:{} is {}'.format(pid, len(src_nodes[mask])))
 
