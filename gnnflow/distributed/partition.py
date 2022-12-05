@@ -145,13 +145,11 @@ class Partitioner:
             for pid in range(self._num_partitions):
                 mask = self._partition_table[src_nodes] == pid
 
-                print('len of partition i:{} is {}'.format(pid, len(src_nodes[mask])))
-
-                partitions.append(Partition(
-                    src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
-
-                print('len of partition i:{} is {}'.format(pid, len(partitions[pid].src_nodes)))
-
+                partitions[pid] = Partition(
+                    torch.cat([partitions[pid].src_nodes, src_nodes[mask]]),
+                    torch.cat([partitions[pid].dst_nodes, dst_nodes[mask]]),
+                    torch.cat([partitions[pid].timestamps, timestamps[mask]]),
+                    torch.cat([partitions[pid].eids, eids[mask]]))
 
         else:
             partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
