@@ -180,7 +180,7 @@ def main():
         dgraph = graph_services.get_dgraph()
         mem = psutil.virtual_memory().percent
         logging.info("memory usage: {}".format(mem))
-        gnnflow.distributed.initialize(args.rank, args.world_size, 
+        gnnflow.distributed.initialize(args.rank, args.world_size,
                                        args.initial_ingestion_batch_size,
                                        args.ingestion_batch_size, args.partition_strategy,
                                        args.num_nodes, data_config["undirected"], args.data,
@@ -269,9 +269,11 @@ def main():
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
     if args.model == "GRAPHSAGE":
-        model = SAGE(dim_node, model_config['dim_embed'], num_layers=model_config['num_layers'])
+        model = SAGE(
+            dim_node, model_config['dim_embed'], num_layers=model_config['num_layers'])
     elif args.model == 'GAT':
-        model = GAT(dim_node, model_config['dim_embed'], num_layers=model_config['num_layers'])
+        model = GAT(dim_node, model_config['dim_embed'],
+                    num_layers=model_config['num_layers'])
     else:
         model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                      memory_device=device, memory_shared=args.distributed,
@@ -415,12 +417,28 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
+        if args.distributed:
+            metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
+                                    cache_node_ratio_sum, total_samples],
+                                   device=device)
+            torch.distributed.all_reduce(metrics)
+            metrics /= args.world_size
+            total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
+                total_samples = metrics.tolist()
+
+            all_sampling_time = sampler.get_sampling_time()
+            std = all_sampling_time.std(dim=1).mean()
+            mean = all_sampling_time.mean(dim=1).mean()
+            cv_sampling_time += std / mean
+
+        if args.rank == 0:
+            logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
+                train_loader)), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
+
         # Validation
         val_start = time.time()
-        # val_ap, val_auc = evaluate(
-        #     val_loader, sampler, model, criterion, cache, device)
-        # for test 
-        val_ap, val_auc = 0, 0
+        val_ap, val_auc = evaluate(
+            val_loader, sampler, model, criterion, cache, device)
 
         if args.distributed:
             val_res = torch.tensor([val_ap, val_auc]).to(device)
