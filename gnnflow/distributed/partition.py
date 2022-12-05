@@ -54,7 +54,8 @@ class Partitioner:
 
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor,
-                  return_evenly_dataset: bool = False):
+                  return_evenly_dataset: bool = False,
+                  is_initial_ingestion: bool = False):
         """
         Partition the dataset into multiple partitions.
 
@@ -64,7 +65,7 @@ class Partitioner:
             timestamps (torch.Tensor): The timestamps of the edges.
             eids (torch.Tensor): The edge IDs of the edges.
             return_evenly_dataset (bool): Whether to return the evenly partitioned dataset.
-
+            is_initial_ingestion (bool): Whether it is the initial ingestion batch.
         Returns:
             A list of partitions
             A evenly partitioned dataset if return_evenly_dataset is True
@@ -129,29 +130,41 @@ class Partitioner:
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-            timestamps[unassigned_mask], eids[unassigned_mask])
+        if is_initial_ingestion:
+            # if it is the initial partition
+            pt = torch.load('')
+            self._partition_table = pt
 
-        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-        )
+            for pid in range(self._num_partitions):
+                mask = pt[src_nodes] == pid
 
-        # merge the partitions
-        for i in range(self._num_partitions):
-            mask = partition_table_for_unseen_nodes == i
+                partitions.append(Partition(
+                    src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-            # update the partition table
-            self._partition_table[src_nodes[unassigned_mask][mask]] = i
+        else:
+            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+                timestamps[unassigned_mask], eids[unassigned_mask])
 
-            # no need to sort edges here
-            partitions[i] = Partition(
-                torch.cat([partitions[i].src_nodes,
-                           src_nodes[unassigned_mask][mask]]),
-                torch.cat([partitions[i].dst_nodes,
-                           dst_nodes[unassigned_mask][mask]]),
-                torch.cat([partitions[i].timestamps,
-                           timestamps[unassigned_mask][mask]]),
-                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+            assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+            )
+
+            # merge the partitions
+            for i in range(self._num_partitions):
+                mask = partition_table_for_unseen_nodes == i
+
+                # update the partition table
+                self._partition_table[src_nodes[unassigned_mask][mask]] = i
+
+                # no need to sort edges here
+                partitions[i] = Partition(
+                    torch.cat([partitions[i].src_nodes,
+                               src_nodes[unassigned_mask][mask]]),
+                    torch.cat([partitions[i].dst_nodes,
+                               dst_nodes[unassigned_mask][mask]]),
+                    torch.cat([partitions[i].timestamps,
+                               timestamps[unassigned_mask][mask]]),
+                    torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
         evenly_partitioned_dataset = None
         if return_evenly_dataset:
@@ -427,7 +440,10 @@ class FennelPartitioner(Partitioner):
 
     # Fennel Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                  timestamps: torch.Tensor, eids: torch.Tensor) -> List[Partition]:
+                  timestamps: torch.Tensor, eids: torch.Tensor,
+                  return_evenly_dataset: bool = False,
+                  is_initial_ingestion: bool = False):
+
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
         if max_node > self._max_node:
@@ -455,31 +471,49 @@ class FennelPartitioner(Partitioner):
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-            timestamps[unassigned_mask], eids[unassigned_mask])
+        if is_initial_ingestion:
+            # if it is the initial partition
+            pt = torch.load('')
+            self._partition_table = pt
 
-        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-        )
+            for pid in range(self._num_partitions):
+                mask = pt[src_nodes] == pid
 
-        # merge the partitions
-        for i in range(self._num_partitions):
-            mask = partition_table_for_unseen_nodes == i
+                partitions.append(Partition(
+                    src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-            # update the partition table
-            self._partition_table[src_nodes[unassigned_mask][mask]] = i
+        else:
+            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+                timestamps[unassigned_mask], eids[unassigned_mask])
 
-            # no need to sort edges here
-            partitions[i] = Partition(
-                torch.cat([partitions[i].src_nodes,
-                           src_nodes[unassigned_mask][mask]]),
-                torch.cat([partitions[i].dst_nodes,
-                           dst_nodes[unassigned_mask][mask]]),
-                torch.cat([partitions[i].timestamps,
-                           timestamps[unassigned_mask][mask]]),
-                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+            assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+            )
 
-        return partitions
+            # merge the partitions
+            for i in range(self._num_partitions):
+                mask = partition_table_for_unseen_nodes == i
+
+                # update the partition table
+                self._partition_table[src_nodes[unassigned_mask][mask]] = i
+
+                # no need to sort edges here
+                partitions[i] = Partition(
+                    torch.cat([partitions[i].src_nodes,
+                               src_nodes[unassigned_mask][mask]]),
+                    torch.cat([partitions[i].dst_nodes,
+                               dst_nodes[unassigned_mask][mask]]),
+                    torch.cat([partitions[i].timestamps,
+                               timestamps[unassigned_mask][mask]]),
+                    torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+
+        evenly_partitioned_dataset = None
+        if return_evenly_dataset:
+            # make the partitions evenly
+            evenly_partitioned_dataset = self._make_partitions_evenly(
+                partitions)
+
+        return partitions, evenly_partitioned_dataset
 
     def Fennel(self, vid: int, dst_nodes: torch.Tensor):
         partition_score = []

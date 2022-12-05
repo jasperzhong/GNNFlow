@@ -36,7 +36,8 @@ class Dispatcher:
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor,
                        edge_feats: Optional[torch.Tensor] = None,
-                       partition_train_data: bool = False):
+                       partition_train_data: bool = False,
+                       is_initial_ingestion_batch: bool = False):
         """
         Dispatch the edges to the workers.
 
@@ -53,7 +54,7 @@ class Dispatcher:
         self._num_edges += torch.unique(eids).size(0)
 
         partitions, evenly_partitioned_dataset = self._partitioner.partition(
-            src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=partition_train_data)
+            src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=partition_train_data, is_initial_ingestion=is_initial_ingestion_batch)
 
         self._max_node = self._partitioner._max_node
 
@@ -141,9 +142,15 @@ class Dispatcher:
             dst_nodes = torch.from_numpy(dst_nodes)
             timestamps = torch.from_numpy(timestamps)
             eids = torch.from_numpy(eids)
+
+            is_initial_ingestion = False
+            if i == 0:
+                is_initial_ingestion = True
+
             futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
                                                timestamps, eids, edge_feats,
-                                               partition_train_data))
+                                               partition_train_data,
+                                               is_initial_ingestion))
 
             for future in futures:
                 future.wait()
