@@ -145,6 +145,8 @@ class Partitioner:
             for pid in range(self._num_partitions):
                 mask = self._partition_table[src_nodes] == pid
 
+                print('len of partition i:{} is {}'.format(pid, len(src_nodes[mask])))
+
                 partitions.append(Partition(
                     src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
