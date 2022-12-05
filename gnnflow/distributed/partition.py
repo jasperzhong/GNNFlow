@@ -140,10 +140,10 @@ class Partitioner:
             pt = load_partition_table(self._dataset_name)
 
         if pt is not None:
-            self._partition_table = pt.clone()
-
             for pid in range(self._num_partitions):
-                mask = self._partition_table[src_nodes] == pid
+                mask = pt[src_nodes] == pid
+
+                self._partition_table[src_nodes[mask]] = pid
 
                 partitions[pid] = Partition(
                     torch.cat([partitions[pid].src_nodes, src_nodes[mask]]),
