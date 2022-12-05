@@ -417,8 +417,10 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         # Validation
         val_start = time.time()
-        val_ap, val_auc = evaluate(
-            val_loader, sampler, model, criterion, cache, device)
+        # val_ap, val_auc = evaluate(
+        #     val_loader, sampler, model, criterion, cache, device)
+        # for test 
+        val_ap, val_auc = 0, 0
 
         if args.distributed:
             val_res = torch.tensor([val_ap, val_auc]).to(device)
