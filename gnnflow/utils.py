@@ -210,23 +210,77 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, batch_size: int):
-    group_indexes = list()
+def weighted_sample(replay_ratio, df, weights, phase1,
+                    i, incremental_step, retrain_interval, retrain_count):
 
-    group_indexes.append(np.array(df.index // batch_size))
-    for _, rows in df.groupby(
-            group_indexes[random.randint(0, len(group_indexes) - 1)]):
+    weights = torch.cat(
+        (weights, torch.tensor([retrain_count] * (retrain_interval * incremental_step))))
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
+    phase2_new_data_end = phase1 + incremental_step * i
+    new_data_index = torch.arange(
+        phase2_new_data_start, phase2_new_data_end)
+    # first fetch replay samples in old data
+    # new data will all be selected to the replay samples
+    if replay_ratio != 0:
+        num_replay = int(replay_ratio * phase2_new_data_start)
+        index_select = torch.multinomial(weights[:phase2_new_data_start],
+                                         num_replay).sort().values
+        all_index = torch.cat((index_select, new_data_index))
+    else:
+        all_index = new_data_index
+    train_length = int(len(all_index) * 0.9) + 1
+    train_index = all_index[:train_length]
+    val_index = all_index[train_length:]
+    phase2_train_df = df.iloc[train_index.numpy()]
+    phase2_val_df = df.iloc[val_index.numpy()]
 
+    return phase2_train_df, phase2_val_df, phase2_new_data_end, weights
+
+
+def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
+              rand_edge_sampler: DstRandEdgeSampler, world_size: int = 1):
+    if num_chunks == 0:
+        random_size = 0
+    else:
+        randint = torch.randint(
+            0, num_chunks, size=(1,), device="cuda:{}".format(local_rank()))
+        if world_size > 1:
+            torch.distributed.broadcast(randint, src=0)
+        random_size = int(randint) * batch_size // num_chunks
+
+    indices = np.array(df.index // batch_size)[random_size:]
+    df = df.iloc[random_size:]
+    for _, rows in df.groupby(indices):
+        neg_batch = rand_edge_sampler.sample(len(rows.src.values))
         target_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values]).astype(
+            [rows.src.values, rows.dst.values, neg_batch]).astype(
             np.int64)
         ts = np.concatenate(
-            [rows.time.values, rows.time.values]).astype(
+            [rows.time.values, rows.time.values, rows.time.values]).astype(
             np.float32)
 
         eid = rows['eid'].values
 
         yield target_nodes, ts, eid
+
+
+# def get_batch(df: pd.DataFrame, batch_size: int):
+#     group_indexes = list()
+
+#     group_indexes.append(np.array(df.index // batch_size))
+#     for _, rows in df.groupby(
+#             group_indexes[random.randint(0, len(group_indexes) - 1)]):
+
+#         target_nodes = np.concatenate(
+#             [rows.src.values, rows.dst.values]).astype(
+#             np.int64)
+#         ts = np.concatenate(
+#             [rows.time.values, rows.time.values]).astype(
+#             np.float32)
+
+#         eid = rows['eid'].values
+
+#         yield target_nodes, ts, eid
 
 
 def build_dynamic_graph(
@@ -370,6 +424,9 @@ class DstRandEdgeSampler:
 
     def reset_random_state(self):
         self.random_state = np.random.RandomState(self.seed)
+
+    def add_dst_list(self, dst):
+        self.dst_list = np.unique(np.concatenate((self.dst_list, dst)))
 
 
 class EarlyStopMonitor:
