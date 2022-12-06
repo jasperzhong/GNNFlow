@@ -741,7 +741,32 @@ class FennelEdgePartitioner(Partitioner):
 
         # return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
         return int(np.argmax(partition_score)), debug_map
+    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
+                                            dst_nodes_list: List[torch.Tensor],
+                                            timestamps_list: List[torch.Tensor],
+                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
+        partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
 
+        # sort reversely by N(v)
+        neighbour_size_list = []
+        for i in range(len(dst_nodes_list)):
+            neighbour_size_list.append(len(dst_nodes_list[i]))
+
+        argsort_list = np.argsort(neighbour_size_list)
+        # argsort_list = argsort_list[::-1]
+
+        for i in range(len(unique_src_nodes)):
+            sorted_idx = argsort_list[i]
+
+            pid, debug_map = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
+            partition_table[sorted_idx] = pid
+            self._partition_table[int(unique_src_nodes[sorted_idx])] = pid
+            self._out_degree[unique_src_nodes[sorted_idx]] += len(dst_nodes_list[sorted_idx])
+
+            # update the edge partition num_list
+            self._edges_partitioned_num_list[pid] += len(dst_nodes_list[sorted_idx])
+
+        return partition_table
 
 def get_partitioner(partition_strategy: str, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False):
     """
