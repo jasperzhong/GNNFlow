@@ -158,7 +158,7 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
     NODE_FEATS = torch.from_numpy(node_feats)
 
     logging.info("Loaded node feature in %f seconds. node feat shape: ",
-                 time.time() - start, NODE_FEATS.shape)
+                 time.time() - start)
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
