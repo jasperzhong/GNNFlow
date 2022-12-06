@@ -13,7 +13,8 @@ from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
 from .dynamic_graph import DynamicGraph
 
-global NODE_FEATS
+NODE_FEATS = None
+
 
 def get_node_feats():
     global NODE_FEATS
@@ -156,7 +157,8 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
 
     NODE_FEATS = torch.from_numpy(node_feats)
 
-    logging.info("Loaded features in %f seconds.", time.time() - start)
+    logging.info("Loaded node feature in %f seconds. node feat shape: ",
+                 time.time() - start, NODE_FEATS.shape)
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
