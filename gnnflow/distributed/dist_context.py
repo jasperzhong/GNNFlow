@@ -124,7 +124,7 @@ def initialize(rank: int, world_size: int,
                 partition_vertices = vertices[partition_mask]
                 keys = partition_vertices
                 kvstore_rank = partition_id * local_world_size()
-                features = torch.from_numpy(node_feats[keys.numpy()])
+                features = node_feats[keys]
                 if partition_id == 0:
                     graph_services.push_tensors(keys, features, 'node')
                 else:
