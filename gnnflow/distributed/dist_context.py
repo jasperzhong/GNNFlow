@@ -10,9 +10,10 @@ import torch.distributed
 import torch.distributed.rpc as rpc
 
 import gnnflow.distributed.graph_services as graph_services
+import gnnflow.utils as utils
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import (NODE_FEATS, DstRandEdgeSampler, load_dataset,
+from gnnflow.utils import (DstRandEdgeSampler, load_dataset,
                            load_dataset_in_chunks, load_feat, load_node_feat,
                            local_world_size)
 
@@ -37,7 +38,6 @@ def initialize(rank: int, world_size: int,
         chunksize (int): the chunksize of the dataset
         partition_train_data (bool): whether to partition the train data
     """
-    global NODE_FEATS
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
@@ -109,7 +109,7 @@ def initialize(rank: int, world_size: int,
 
         # join the thread
         load_node_feat_thread.join()
-        node_feats = NODE_FEATS
+        node_feats = utils.NODE_FEATS
 
         # node feature/memory
         partition_table = graph_services.get_partition_table()
