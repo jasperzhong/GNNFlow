@@ -63,12 +63,15 @@ def initialize(rank: int, world_size: int,
 
         # read csv in chunks
         df_iterator = load_dataset_in_chunks(data_name, chunksize=chunksize)
-        for dataset in df_iterator:
+        for i, dataset in enumerate(df_iterator):
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
             train_end = dataset['ext_roll'].values.searchsorted(1)
 
             train_dst_set.update(dataset['dst'].values[:train_end].tolist())
             full_dst_set.update(dataset['dst'].values.tolist())
+
+            if i > 0: 
+                initial_ingestion_batch_size = ingestion_batch_size
 
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
                                        ingestion_batch_size,
