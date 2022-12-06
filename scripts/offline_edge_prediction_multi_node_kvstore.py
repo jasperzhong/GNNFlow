@@ -422,12 +422,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                            cache_node_ratio_sum, total_samples],
+                                            cache_node_ratio_sum, total_samples, total_sampling_time],
                                            device=device)
                     torch.distributed.all_reduce(metrics)
                     metrics /= args.world_size
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                        total_samples = metrics.tolist()
+                        total_samples, total_sampling_time = metrics.tolist()
 
                     all_sampling_time = sampler.get_sampling_time()
                     std = all_sampling_time.std(dim=1).mean()
@@ -443,12 +443,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         if args.distributed:
             metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples],
+                                    cache_node_ratio_sum, total_samples, total_sampling_time],
                                    device=device)
             torch.distributed.all_reduce(metrics)
             metrics /= args.world_size
             total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples = metrics.tolist()
+                total_samples, total_sampling_time = metrics.tolist()
 
             all_sampling_time = sampler.get_sampling_time()
             std = all_sampling_time.std(dim=1).mean()
