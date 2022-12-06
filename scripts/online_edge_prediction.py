@@ -259,9 +259,9 @@ def main():
 
     # phase1 training
     if args.rank == 0:
-        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
             f_phase2.write("Phase1\n")
-        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
             f_phase2.write("Phase1\n")
     phase1_train_start = time.time()
     best_e, best_ap, best_auc = train(phase1_train_df, phase1_val_df, sampler,
@@ -278,10 +278,10 @@ def main():
     # update rand_sampler
     if args.rank == 0:
         logging.info("Phase2 start")
-        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
-            f_phase2.write("Phase1\n")
-        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
-            f_phase2.write("Phase1\n")
+        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
+            f_phase2.write("Phase2\n")
+        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
+            f_phase2.write("Phase2\n")
     # retrain 100 times
     retrain_num = 100
     phase2_df = full_data[phase1_len:]
@@ -314,8 +314,11 @@ def main():
         new_data_index = torch.arange(
             phase2_new_data_start, phase2_new_data_end)
         if num_replay > 0:
-            old_data_index = torch.multinomial(torch.ones(
-                phase2_new_data_start), num_replay).sort().values
+            weights = np.ones(int(phase2_new_data_start)) / \
+                phase2_new_data_start
+            old_data_index = np.random.choice(
+                phase2_new_data_start, size=num_replay, p=weights, replace=False)
+            old_data_index = torch.tensor(old_data_index).sort().values
             all_index = torch.cat((old_data_index, new_data_index))
         else:
             all_index = new_data_index
@@ -461,9 +464,9 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         if args.rank == 0:
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
-            with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+            with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
                 f_phase2.write("{:.4f}\n".format(val_ap))
-            with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+            with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
                 f_phase2.write("{:.4f}\n".format(val_auc))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
