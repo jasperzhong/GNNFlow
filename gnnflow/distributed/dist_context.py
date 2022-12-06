@@ -10,10 +10,9 @@ import torch.distributed
 import torch.distributed.rpc as rpc
 
 import gnnflow.distributed.graph_services as graph_services
-import gnnflow.utils as utils
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import (DstRandEdgeSampler, load_dataset,
+from gnnflow.utils import (DstRandEdgeSampler, load_dataset, get_node_feats,
                            load_dataset_in_chunks, load_feat, load_node_feat,
                            local_world_size)
 
@@ -60,10 +59,11 @@ def initialize(rank: int, world_size: int,
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
-        node_feats = None 
+        node_feats = None
         _, edge_feats = load_feat(data_name, load_node=False)
 
-        load_node_feat_thread = threading.Thread(target=load_node_feat, args=(data_name, ))
+        load_node_feat_thread = threading.Thread(
+            target=load_node_feat, args=(data_name, ))
         load_node_feat_thread.start()
 
         logging.info("Rank %d: Loaded features in %f seconds.", rank,
@@ -78,7 +78,7 @@ def initialize(rank: int, world_size: int,
             train_dst_set.update(dataset['dst'].values[:train_end].tolist())
             full_dst_set.update(dataset['dst'].values.tolist())
 
-            if i > 0: 
+            if i > 0:
                 initial_ingestion_batch_size = ingestion_batch_size
 
             dispatcher.partition_graph(dataset, initial_ingestion_batch_size,
@@ -109,7 +109,7 @@ def initialize(rank: int, world_size: int,
 
         # join the thread
         load_node_feat_thread.join()
-        node_feats = utils.NODE_FEATS
+        node_feats = get_node_feats()
 
         # node feature/memory
         partition_table = graph_services.get_partition_table()
@@ -129,7 +129,7 @@ def initialize(rank: int, world_size: int,
                     graph_services.push_tensors(keys, features, 'node')
                 else:
                     futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                                     args=(keys, features, 'node')))
+                                                 args=(keys, features, 'node')))
                 logging.info(
                     "partition: {} dispatch done".format(partition_id))
                 mem = psutil.virtual_memory().percent

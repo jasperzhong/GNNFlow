@@ -15,6 +15,10 @@ from .dynamic_graph import DynamicGraph
 
 global NODE_FEATS
 
+def get_node_feats():
+    global NODE_FEATS
+    return NODE_FEATS
+
 
 def local_world_size():
     return int(os.environ["LOCAL_WORLD_SIZE"])
