@@ -208,6 +208,8 @@ def main():
             data_list, op=torch.distributed.ReduceOp.SUM)
         data_list /= args.world_size
         avg_linked_list_length, graph_memory_usage, metadata_memory_usage = data_list.tolist()
+        graph_memory_usage *= args.num_nodes
+        metadata_memory_usage *= args.world_size
         logging.info('avg_linked_list_length: {:.2f}, graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size: {})'.format(
             avg_linked_list_length, graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
 
