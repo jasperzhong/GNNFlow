@@ -248,7 +248,8 @@ def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
             torch.distributed.broadcast(randint, src=0)
         random_size = int(randint) * batch_size // num_chunks
 
-    indices = np.array(df.index // batch_size)[random_size:]
+    index = np.arange(len(df), dtype=np.int64)
+    indices = (index // batch_size)[random_size:]
     df = df.iloc[random_size:]
     for _, rows in df.groupby(indices):
         neg_batch = rand_edge_sampler.sample(len(rows.src.values))

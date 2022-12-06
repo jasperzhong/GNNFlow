@@ -160,9 +160,14 @@ def main():
         logging.info("phase1 build graph time: {}".format(
             phase1_build_graph_time))
         build_graph_time += phase1_build_graph_time
+        logging.info("full len: {}".format(len(full_data)))
+        logging.info("phase1 len: {}".format(phase1_len))
+        logging.info("phase1 train len all: {}".format(len(phase1_train_df)))
         # Fetch their own dataset, no redudancy
         train_index = list(range(args.rank, phase1_train, args.world_size))
         phase1_train_df = phase1_train_df.iloc[train_index]
+        logging.info("rank {} own train dataset len {}".format(
+            args.rank, len(phase1_train_df)))
         val_index = list(
             range(args.rank, len(phase1_val_df), args.world_size))
         phase1_val_df = phase1_val_df.iloc[val_index]
@@ -407,7 +412,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_df)/1), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
+                        train_df)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
