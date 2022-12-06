@@ -238,7 +238,7 @@ def weighted_sample(replay_ratio, df, weights, phase1,
 
 
 def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
-              rand_edge_sampler: DstRandEdgeSampler, world_size: int = 1):
+              rand_edge_sampler, world_size: int = 1):
     if num_chunks == 0:
         random_size = 0
     else:

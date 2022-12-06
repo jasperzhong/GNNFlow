@@ -174,6 +174,7 @@ def main():
         test_rand_sampler = DstRandEdgeSampler(full_data['dst'].values)
 
     batch_size = data_config['batch_size']
+    args.batch_size = batch_size
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
