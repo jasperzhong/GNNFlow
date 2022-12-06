@@ -164,7 +164,7 @@ def main():
         train_index = list(range(args.rank, phase1_train, args.world_size))
         phase1_train_df = phase1_train_df.iloc[train_index]
         val_index = list(
-            range(args.rank, len(full_data) - phase1_train, args.world_size))
+            range(args.rank, len(phase1_val_df), args.world_size))
         phase1_val_df = phase1_val_df.iloc[val_index]
     else:
         # TODO: single GPU not implemented
