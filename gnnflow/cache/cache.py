@@ -53,15 +53,16 @@ class Cache:
             raise ValueError(
                 'At least one of node_feats and edge_feats must be provided')
 
-        if node_feats is not None and node_feats.shape[0] != num_nodes:
-            raise ValueError(
-                'The number of nodes in node_feats {} does not match num_nodes {}'.format(
-                    node_feats.shape[0], num_nodes))
+        # TODO: cache may also need to support incremental
+        # if node_feats is not None and node_feats.shape[0] != num_nodes:
+        #     raise ValueError(
+        #         'The number of nodes in node_feats {} does not match num_nodes {}'.format(
+        #             node_feats.shape[0], num_nodes))
 
-        if edge_feats is not None and edge_feats.shape[0] != num_edges:
-            raise ValueError(
-                'The number of edges in edge_feats {} does not match num_edges {}'.format(
-                    edge_feats.shape[0], num_edges))
+        # if edge_feats is not None and edge_feats.shape[0] != num_edges:
+        #     raise ValueError(
+        #         'The number of edges in edge_feats {} does not match num_edges {}'.format(
+        #             edge_feats.shape[0], num_edges))
 
         if distributed:
             assert kvstore_client is not None, 'kvstore_client must be provided when using ' \
@@ -82,8 +83,11 @@ class Cache:
         self.node_capacity = int(node_cache_ratio * num_nodes)
         self.edge_capacity = int(edge_cache_ratio * num_edges)
 
-        self.num_nodes = num_nodes
-        self.num_edges = num_edges
+        self.num_nodes = num_nodes if num_nodes > len(
+            node_feats) else len(node_feats)
+        self.num_edges = num_edges if num_edges > len(
+            edge_feats) else len(edge_feats)
+
         self.node_feats = node_feats
         self.edge_feats = edge_feats
         self.dim_node_feat = dim_node_feat
@@ -111,10 +115,10 @@ class Cache:
 
             # flag for indicating those cached nodes
             self.cache_node_flag = torch.zeros(
-                num_nodes, dtype=torch.bool, device=self.device)
+                self.num_nodes, dtype=torch.bool, device=self.device)
             # maps node id -> index
             self.cache_node_map = torch.zeros(
-                num_nodes, dtype=torch.int64, device=self.device) - 1
+                self.num_nodes, dtype=torch.int64, device=self.device) - 1
             # maps index -> node id
             self.cache_index_to_node_id = torch.zeros(
                 self.node_capacity, dtype=torch.int64, device=self.device) - 1
@@ -125,10 +129,10 @@ class Cache:
 
             # flag for indicating those cached edges
             self.cache_edge_flag = torch.zeros(
-                num_edges, dtype=torch.bool, device=self.device)
+                self.num_edges, dtype=torch.bool, device=self.device)
             # maps edge id -> index
             self.cache_edge_map = torch.zeros(
-                num_edges, dtype=torch.int64, device=self.device) - 1
+                self.num_edges, dtype=torch.int64, device=self.device) - 1
             # maps index -> edge id
             self.cache_index_to_edge_id = torch.zeros(
                 self.edge_capacity, dtype=torch.int64, device=self.device) - 1

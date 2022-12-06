@@ -38,7 +38,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=4)
+                    type=int, default=1)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0005)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -55,6 +55,11 @@ parser.add_argument("--edge-cache-ratio", type=float, default=0,
                     help="edge cache ratio for feature cache")
 parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="node cache ratio for feature cache")
+
+# online learning
+parser.add_argument("--replay-ratio", type=float, default=0,
+                    help="edge cache ratio for feature cache")
+
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
@@ -200,6 +205,10 @@ def main():
         args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
 
+    # TODO: for online learning simplicity
+    num_nodes = num_nodes if num_nodes > len(node_feats) else len(node_feats)
+    num_edges = num_edges if num_edges > len(edge_feats) else len(edge_feats)
+
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 
@@ -249,13 +258,14 @@ def main():
     criterion = torch.nn.BCEWithLogitsLoss()
 
     # phase1 training
-    with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
-        f_phase2.write("Phase1\n")
-    with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
-        f_phase2.write("Phase1\n")
+    if args.rank == 0:
+        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+            f_phase2.write("Phase1\n")
+        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+            f_phase2.write("Phase1\n")
     phase1_train_start = time.time()
-    best_e = train(phase1_train_df, phase1_val_df, sampler,
-                   model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
+    best_e, best_ap, best_auc = train(phase1_train_df, phase1_val_df, sampler,
+                                      model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
     phase1_train_end = time.time()
     phase1_train_time = phase1_train_end - phase1_train_start
     logging.info("phase1 train time: {}".format(phase1_train_time))
@@ -266,24 +276,26 @@ def main():
 
     # phase2
     # update rand_sampler
-    logging.info("Phase2 start")
-    with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
-        f_phase2.write("Phase1\n")
-    with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
-        f_phase2.write("Phase1\n")
+    if args.rank == 0:
+        logging.info("Phase2 start")
+        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+            f_phase2.write("Phase1\n")
+        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, 0), "a") as f_phase2:
+            f_phase2.write("Phase1\n")
     # retrain 100 times
     retrain_num = 100
     phase2_df = full_data[phase1_len:]
     phase2_len = len(phase2_df)
     incremental_step = int(phase2_len / retrain_num)
-    replay_ratio = 0
+    replay_ratio = args.replay_ratio
+    logging.info("replay ratio: {}".format(replay_ratio))
     for i in range(retrain_num):
         phase2_build_graph_start = time.time()
         increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
-        src = increment_df['src'].to_numpy()
-        dst = increment_df['dst'].to_numpy()
-        ts = increment_df['time'].to_numpy()
-        eid = increment_df['eid'].to_numpy()
+        src = increment_df['src'].to_numpy(dtype=np.int64)
+        dst = increment_df['dst'].to_numpy(dtype=np.int64)
+        ts = increment_df['time'].to_numpy(dtype=np.float32)
+        eid = increment_df['eid'].to_numpy(dtype=np.int64)
         # update graph
         dgraph.add_edges(src, dst, ts, eid, add_reverse=False)
 
@@ -297,12 +309,16 @@ def main():
         # random sample phase2 train dataset -> get phase2_train_df & phase2_val_df
         phase2_new_data_start = phase1_len + incremental_step * i
         phase2_new_data_end = phase1_len + incremental_step * (i + 1)
+        logging.info("incremental step: {}".format(incremental_step))
         num_replay = int(replay_ratio * phase2_new_data_start)
         new_data_index = torch.arange(
             phase2_new_data_start, phase2_new_data_end)
-        old_data_index = torch.multinomial(torch.ones(
-            phase2_new_data_start), num_replay).sort().values
-        all_index = torch.cat((old_data_index, new_data_index))
+        if num_replay > 0:
+            old_data_index = torch.multinomial(torch.ones(
+                phase2_new_data_start), num_replay).sort().values
+            all_index = torch.cat((old_data_index, new_data_index))
+        else:
+            all_index = new_data_index
         phase2_train_len = int(len(all_index) * 0.9) + 1
         train_index = all_index[:phase2_train_len]
         val_index = all_index[phase2_train_len:]
@@ -313,7 +329,7 @@ def main():
         val_rand_sampler.add_dst_list(dst)
         # train rand sampler, all the data before the first validation data
         train_rand_sampler = DstRandEdgeSampler(
-            full_data[:val_index[0]]['dst'].to_numpy())
+            full_data[:int(val_index[0])]['dst'].to_numpy())
 
         # Fetch their own dataset, no redudancy
         train_index = list(
@@ -322,10 +338,11 @@ def main():
         val_index = list(
             range(args.rank, len(phase2_val_df), args.world_size))
         phase2_val_df = phase2_val_df.iloc[val_index]
-
+        # logging.info("phase2 train df: {}".format(phase2_train_df))
+        # logging.info("phase2 val df: {}".format(phase2_val_df))
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         train(phase2_train_df, phase2_val_df, sampler,
-              model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
+              model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler, retrain=True)
         phase2_train_end = time.time()
         phase2_train_time = phase2_train_end - phase2_train_start
         logging.info("phase2 {}th train time: {}".format(
@@ -342,8 +359,9 @@ def main():
 
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
-          cache, device, train_rand_sampler, test_rand_sampler):
+          cache, device, train_rand_sampler, test_rand_sampler, retrain=False):
     best_ap = 0
+    best_auc = 0
     best_e = 0
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
@@ -367,7 +385,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
                                                               batch_size=args.batch_size,
                                                               num_chunks=args.num_chunks,
                                                               rand_edge_sampler=train_rand_sampler,
-                                                              world_size=args.world_size)):
+                                                              world_size=args.world_size, retrain=retrain)):
             # Sample
             start = time.time()
             mfgs = sampler.sample(target_nodes, ts)
@@ -451,6 +469,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap
+            best_auc = val_auc
             torch.save(model.state_dict(), checkpoint_path)
             logging.info(
                 "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
@@ -465,7 +484,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
     if args.distributed:
         torch.distributed.barrier()
 
-    return best_e
+    return best_e, best_ap, best_auc
 
 
 if __name__ == '__main__':

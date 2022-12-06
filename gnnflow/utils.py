@@ -238,19 +238,24 @@ def weighted_sample(replay_ratio, df, weights, phase1,
 
 
 def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
-              rand_edge_sampler, world_size: int = 1):
-    if num_chunks == 0:
+              rand_edge_sampler, world_size: int = 1, retrain: bool = False):
+    if retrain:
+        # when retrain not use chunks
         random_size = 0
     else:
-        randint = torch.randint(
-            0, num_chunks, size=(1,), device="cuda:{}".format(local_rank()))
-        if world_size > 1:
-            torch.distributed.broadcast(randint, src=0)
-        random_size = int(randint) * batch_size // num_chunks
+        if num_chunks == 0:
+            random_size = 0
+        else:
+            randint = torch.randint(
+                0, num_chunks, size=(1,), device="cuda:{}".format(local_rank()))
+            if world_size > 1:
+                torch.distributed.broadcast(randint, src=0)
+            random_size = int(randint) * batch_size // num_chunks
 
     index = np.arange(len(df), dtype=np.int64)
     indices = (index // batch_size)[random_size:]
     df = df.iloc[random_size:]
+    # logging.info("indices: {}".format(indices))
     for _, rows in df.groupby(indices):
         neg_batch = rand_edge_sampler.sample(len(rows.src.values))
         target_nodes = np.concatenate(
@@ -261,7 +266,7 @@ def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
             np.float32)
 
         eid = rows['eid'].values
-
+        # logging.info("target_nodes: {}".format(target_nodes))
         yield target_nodes, ts, eid
 
 
