@@ -28,6 +28,7 @@ def main():
     dgraph = build_dynamic_graph(
         **dataset_config,
         adaptive_block_size=not args.disable_adaptive_block_size)
+    
     for i in range(0, len(df), args.ingestion_batch_size):
         batch = df[i:i + args.ingestion_batch_size]
         src_nodes = batch["src"].values.astype(np.int64)
