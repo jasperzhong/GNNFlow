@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import time
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -11,6 +12,8 @@ from dgl.heterograph import DGLBlock
 from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
 from .dynamic_graph import DynamicGraph
+
+global NODE_FEATS
 
 
 def local_world_size():
@@ -127,9 +130,35 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
     return train_data, val_data, test_data
 
 
+def load_node_feat(dataset: str, data_dir: Optional[str] = None):
+    """
+    Loads the node features for the dataset.
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+    """
+    global NODE_FEATS
+    if data_dir is None:
+        data_dir = os.path.join(get_project_root_dir(), "data")
+
+    dataset_path = os.path.join(data_dir, dataset)
+    path = os.path.join(dataset_path, 'node_features.npy')
+    if not os.path.exists(path):
+        raise ValueError('{} does not exist'.format(path))
+
+    start = time.time()
+    node_feats = np.load(path, allow_pickle=False)
+
+    NODE_FEATS = torch.from_numpy(node_feats)
+
+    logging.info("Rank %d: Loaded features in %f seconds.", rank,
+                 time.time() - start)
+
+
 def load_feat(dataset: str, data_dir: Optional[str] = None,
               shared_memory: bool = False, local_rank: int = 0, local_world_size: int = 1,
-              memmap: bool = False):
+              memmap: bool = False, load_node: bool = True, load_edge: bool = True):
     """
     Loads the node and edge features for the given dataset.
 
@@ -142,6 +171,8 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         local_rank: the local rank of the process.
         local_world_size: the local world size of the process.
         memmap (bool): whether to use memmap.
+        load_node (bool): whether to load node features.
+        load_edge (bool): whether to load edge features.
 
     Returns:
         node_feats: the node features. (None if not available)
@@ -164,13 +195,13 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     node_feats = None
     edge_feats = None
     if not shared_memory or (shared_memory and local_rank == 0):
-        if os.path.exists(node_feat_path):
+        if os.path.exists(node_feat_path) and load_node:
             node_feats = np.load(
                 node_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
             if not memmap:
                 node_feats = torch.from_numpy(node_feats)
 
-        if os.path.exists(edge_feat_path):
+        if os.path.exists(edge_feat_path) and load_edge:
             edge_feats = np.load(
                 edge_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
             if not memmap:
