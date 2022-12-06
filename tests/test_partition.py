@@ -35,7 +35,7 @@ class TestPartition(unittest.TestCase):
 
         edge_cut_list = []
 
-        test_partitioner = get_partitioner(p_stgy, num_p, assign_with_dst)
+        test_partitioner = get_partitioner(p_stgy, num_p, 0 , dataset_name, assign_with_dst)
 
         overall_start = time.time()
 
