@@ -157,8 +157,7 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
 
     NODE_FEATS = torch.from_numpy(node_feats)
 
-    logging.info("Loaded node feature in %f seconds. node feat shape: ",
-                 time.time() - start)
+    logging.info("Loaded node feature in %f seconds.", time.time() - start)
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
@@ -255,18 +254,50 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
     return node_feats, edge_feats
 
 
-def get_batch(df: pd.DataFrame, batch_size: int):
-    group_indexes = list()
+class DstRandEdgeSampler:
+    """
+    Samples random edges from the graph.
+    """
 
-    group_indexes.append(np.array(df.index // batch_size))
-    for _, rows in df.groupby(
-            group_indexes[random.randint(0, len(group_indexes) - 1)]):
+    def __init__(self, dst_list, seed=None):
+        self.seed = None
+        self.dst_list = np.unique(dst_list)
 
+        if seed is not None:
+            self.seed = seed
+            self.random_state = np.random.RandomState(self.seed)
+
+    def sample(self, size):
+        if self.seed is None:
+            dst_index = np.random.randint(0, len(self.dst_list), size)
+        else:
+            dst_index = self.random_state.randint(0, len(self.dst_list), size)
+        return self.dst_list[dst_index]
+
+    def reset_random_state(self):
+        self.random_state = np.random.RandomState(self.seed)
+
+
+def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
+              rand_edge_sampler: DstRandEdgeSampler, world_size: int = 1):
+    if num_chunks == 0:
+        random_size = 0
+    else:
+        randint = torch.randint(
+            0, num_chunks, size=(1,), device="cuda:{}".format(local_rank()))
+        if world_size > 1:
+            torch.distributed.broadcast(randint, src=0)
+        random_size = int(randint) * batch_size // num_chunks
+
+    indices = np.array(df.index // batch_size)[random_size:]
+    df = df.iloc[random_size:]
+    for _, rows in df.groupby(indices):
+        _, neg_batch = rand_edge_sampler.sample(len(rows.src.values))
         target_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values]).astype(
+            [rows.src.values, rows.dst.values, neg_batch]).astype(
             np.int64)
         ts = np.concatenate(
-            [rows.time.values, rows.time.values]).astype(
+            [rows.time.values, rows.time.values, rows.time.values]).astype(
             np.float32)
 
         eid = rows['eid'].values
@@ -388,30 +419,6 @@ class RandEdgeSampler:
             src_index = self.random_state.randint(0, len(self.src_list), size)
             dst_index = self.random_state.randint(0, len(self.dst_list), size)
         return self.src_list[src_index], self.dst_list[dst_index]
-
-    def reset_random_state(self):
-        self.random_state = np.random.RandomState(self.seed)
-
-
-class DstRandEdgeSampler:
-    """
-    Samples random edges from the graph.
-    """
-
-    def __init__(self, dst_list, seed=None):
-        self.seed = None
-        self.dst_list = np.unique(dst_list)
-
-        if seed is not None:
-            self.seed = seed
-            self.random_state = np.random.RandomState(self.seed)
-
-    def sample(self, size):
-        if self.seed is None:
-            dst_index = np.random.randint(0, len(self.dst_list), size)
-        else:
-            dst_index = self.random_state.randint(0, len(self.dst_list), size)
-        return self.dst_list[dst_index]
 
     def reset_random_state(self):
         self.random_state = np.random.RandomState(self.seed)
