@@ -165,7 +165,7 @@ def main():
         phase1_train_df = phase1_train_df.iloc[train_index]
         val_index = list(
             range(args.rank, len(full_data) - phase1_train, args.world_size))
-        phase1_val_df = phase1_val_df.iloc(val_index)
+        phase1_val_df = phase1_val_df.iloc[val_index]
     else:
         # TODO: single GPU not implemented
         train_data, val_data, test_data, full_data = load_dataset(args.data)
@@ -280,11 +280,7 @@ def main():
         eid = increment_df['eid'].to_numpy()
         # update graph
         dgraph.add_edges(src, dst, ts, eid, add_reverse=False)
-        # Rand Sampler
-        val_rand_sampler.add_dst_list(dst)
-        #TODO: bug
-        train_rand_sampler = DstRandEdgeSampler(
-            phase1_train_df['dst'].to_numpy())
+
         phase2_build_graph_end = time.time()
         phase2_build_graph_time = phase2_build_graph_end - phase2_build_graph_start
         logging.info("phase2 {}th training build graph time: {}".format(
@@ -306,6 +302,20 @@ def main():
         val_index = all_index[phase2_train_len:]
         phase2_train_df = full_data.iloc[train_index.numpy()]
         phase2_val_df = full_data.iloc[val_index.numpy()]
+
+        # Rand Sampler
+        val_rand_sampler.add_dst_list(dst)
+        # train rand sampler, all the data before the first validation data
+        train_rand_sampler = DstRandEdgeSampler(
+            full_data[:val_index[0]]['dst'].to_numpy())
+
+        # Fetch their own dataset, no redudancy
+        train_index = list(
+            range(args.rank, len(phase2_train_df), args.world_size))
+        phase2_train_df = phase2_train_df.iloc[train_index]
+        val_index = list(
+            range(args.rank, len(phase2_val_df), args.world_size))
+        phase2_val_df = phase2_val_df.iloc[val_index]
 
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         train(phase2_train_df, phase2_val_df, sampler,
