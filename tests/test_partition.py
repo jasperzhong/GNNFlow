@@ -11,6 +11,9 @@ from parameterized import parameterized
 from gnnflow.distributed.partition import get_partitioner
 from gnnflow.utils import load_dataset
 
+from tqdm import tqdm
+
+
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -106,7 +109,7 @@ class TestPartition(unittest.TestCase):
 
         print('Checking Edge Cut...\n')
         edge_cut = 0
-        for idx, row in dataset.iterrows():
+        for idx, row in tqdm(dataset.iterrows()):
             u = int(row['src'])
             v = int(row['dst'])
             if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
