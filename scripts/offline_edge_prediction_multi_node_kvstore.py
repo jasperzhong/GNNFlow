@@ -436,7 +436,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)), total_sampling_time)
+                        train_loader)), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -457,7 +457,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         if args.rank == 0:
             logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                train_loader)), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)), total_sampling_time)
+                train_loader)), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time))
 
         # Validation
         val_start = time.time()
