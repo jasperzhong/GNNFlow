@@ -389,9 +389,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
-            time = time.time()
+            sample_start_time = time.time()
             mfgs = sampler.sample(target_nodes, ts)
-            total_sampling_time += time.time() - time
+            total_sampling_time += time.time() - sample_start_time
 
             # Feature
             mfgs_to_cuda(mfgs, device)
