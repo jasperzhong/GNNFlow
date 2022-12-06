@@ -292,7 +292,7 @@ def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
     indices = np.array(df.index // batch_size)[random_size:]
     df = df.iloc[random_size:]
     for _, rows in df.groupby(indices):
-        _, neg_batch = rand_edge_sampler.sample(len(rows.src.values))
+        neg_batch = rand_edge_sampler.sample(len(rows.src.values))
         target_nodes = np.concatenate(
             [rows.src.values, rows.dst.values, neg_batch]).astype(
             np.int64)
