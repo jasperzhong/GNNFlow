@@ -35,7 +35,7 @@ class TestPartition(unittest.TestCase):
 
         edge_cut_list = []
 
-        test_partitioner = get_partitioner(p_stgy, num_p, 0 , dataset_name, assign_with_dst)
+        test_partitioner = get_partitioner(p_stgy, num_p, 0, dataset_name, assign_with_dst)
 
         overall_start = time.time()
 
@@ -98,11 +98,11 @@ class TestPartition(unittest.TestCase):
 
         print("========== All Batch Finished =========\n")
 
-        # Print Partition Table
-        for i in range(len(ptable)):
-            if ptable[i].item() >= num_p or ptable[i].item() == -1:
-                print("Incorrect Partition Table in vid {} is:{}\n".format(
-                    i, ptable[i].item()))
+        # # Print Partition Table
+        # for i in range(len(ptable)):
+        #     if ptable[i].item() >= num_p or ptable[i].item() == -1:
+        #         print("Incorrect Partition Table in vid {} is:{}\n".format(
+        #             i, ptable[i].item()))
 
         print('Checking Edge Cut...\n')
         edge_cut = 0
