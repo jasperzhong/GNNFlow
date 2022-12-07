@@ -68,7 +68,7 @@ logging.basicConfig(level=logging.DEBUG)
 logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
-                               '{}.pt'.format(args.model))
+                               '{}_{}.pt'.format(args.model, args.data))
 
 
 def set_seed(seed):
@@ -150,7 +150,7 @@ def main():
         phase1_build_graph_start = time.time()
         _, _, _, full_data = load_dataset(args.data)
         # deal with phase 1 dataset
-        phase1_len = int(len(full_data) * 0.6)
+        phase1_len = int(len(full_data) * 0.3)
         phase1_train = int(phase1_len * 0.9) + 1
         phase1_train_df = full_data[:phase1_train]
         phase1_val_df = full_data[phase1_train:phase1_len]
