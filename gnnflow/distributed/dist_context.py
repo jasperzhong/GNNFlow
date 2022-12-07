@@ -52,6 +52,9 @@ def initialize(rank: int, world_size: int,
     if local_rank == 0:
         graph_services.set_kvstore_server(KVStoreServer())
 
+        load_node_feat(data_name)
+        node_feats = get_node_feats()
+
     train_dst_set = set()
     full_dst_set = set()
 
@@ -59,14 +62,11 @@ def initialize(rank: int, world_size: int,
     if rank == 0:
         dispatcher = get_dispatcher(partition_strategy, num_partitions)
         # load the feature only at rank 0
-        node_feats = None
         _, edge_feats = load_feat(data_name, load_node=False)
 
         # load_node_feat_thread = threading.Thread(
         #     target=load_node_feat, args=(data_name, ))
         # load_node_feat_thread.start()
-        load_node_feat(data_name)
-        node_feats = get_node_feats()
 
         logging.info("Rank %d: Loaded features in %f seconds.", rank,
                      time.time() - start)
