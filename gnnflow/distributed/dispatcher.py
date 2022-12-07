@@ -129,8 +129,9 @@ class Dispatcher:
         self._train_dst_set.update(dst_nodes_train.tolist())
         self._full_dst_set.update(dst_nodes.tolist())
 
-        self.dispatch_edges(src_nodes_train, dst_nodes_train,
-                            timestamps_train, eids_train, partition_train_data=True)
+        if len(src_nodes_train) > 0:
+            self.dispatch_edges(src_nodes_train, dst_nodes_train,
+                                timestamps_train, eids_train, partition_train_data=True)
 
         src_nodes_nontrain = src_nodes[train_end:]
         dst_nodes_nontrain = dst_nodes[train_end:]
@@ -139,7 +140,7 @@ class Dispatcher:
 
         if len(src_nodes_nontrain) > 0:
             self.dispatch_edges(src_nodes_nontrain, dst_nodes_nontrain,
-                                    timestamps_nontrain, eids_nontrain, partition_train_data=False)
+                                timestamps_nontrain, eids_nontrain, partition_train_data=False)
 
         # deal with unpartitioned nodes
         partition_table = self._partitioner._partition_table
