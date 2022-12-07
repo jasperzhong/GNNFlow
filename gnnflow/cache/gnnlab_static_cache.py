@@ -108,7 +108,8 @@ class GNNLabStaticCache(Cache):
                         for b in mfg:
                             if b.num_src_nodes() > b.num_dst_nodes():
                                 edge_sampled_count[b.edata['ID']] += 1
-                                eid_to_nid[b.edata['ID']] = b.srcdata['ID'][b.num_dst_nodes():]
+                                eid_to_nid[b.edata['ID']
+                                           ] = b.srcdata['ID'][b.num_dst_nodes():]
 
         if self.distributed:
             if self.dim_node_feat != 0 and self.node_feats is not None:
@@ -165,7 +166,8 @@ class GNNLabStaticCache(Cache):
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_edge_map[cache_edge_id] = cache_edge_index
 
-    def fetch_feature(self, mfgs: List[List[DGLBlock]], update_cache: bool = True, 
+    def fetch_feature(self, mfgs: List[List[DGLBlock]],
+                      eid: Optional[np.ndarray] = None, update_cache: bool = True,
                       target_edge_features: bool = True):
         """Fetching the node features of input_node_ids
 
@@ -176,4 +178,4 @@ class GNNLabStaticCache(Cache):
         Returns:
             mfgs: message-passing flow graphs with node/edge features
         """
-        return super(GNNLabStaticCache, self).fetch_feature(mfgs, update_cache=False, target_edge_features=target_edge_features)
+        return super(GNNLabStaticCache, self).fetch_feature(mfgs, eid=eid, update_cache=False, target_edge_features=target_edge_features)
