@@ -2,8 +2,6 @@ import logging
 import os
 import time
 
-import numpy as np
-import pandas as pd
 import psutil
 import torch
 import torch.distributed
@@ -67,15 +65,20 @@ def dispatch_full_dataset(rank: int, data_name: str,
         df_iterator = load_dataset_in_chunks(
             data_name, chunksize=initial_ingestion_batch_size)
 
+        t = tqdm()
         # ingest the first chunk
-        for i, dataset in tqdm(enumerate(df_iterator)):
+        for i, dataset in enumerate(df_iterator):
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
             if i > 0: 
                 for i in range(0, initial_ingestion_batch_size, ingestion_batch_size):
                     dispatcher.partition_graph(dataset.iloc[i:i+ingestion_batch_size])
+                    t.update(ingestion_batch_size)
             else:
                 dispatcher.partition_graph(dataset)
+                t.update(initial_ingestion_batch_size)
             del dataset
+
+        t.close()
 
     # check
     torch.distributed.barrier()
