@@ -77,6 +77,7 @@ def dispatch_full_dataset(rank: int, data_name: str,
                 dispatcher.partition_graph(dataset)
                 t.update(initial_ingestion_batch_size)
             del dataset
+        
 
         t.close()
 
