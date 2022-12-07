@@ -113,7 +113,7 @@ class GNNLabStaticCache(Cache):
                                            ] = b.srcdata['ID'][b.num_dst_nodes():]
 
         if self.distributed:
-            if self.dim_node_feat != 0 and self.node_feats is not None:
+            if self.dim_node_feat != 0 and self.node_capacity > 0:
                 # Get the top-k nodes with the highest sampling count
                 cache_node_id = torch.topk(
                     node_sampled_count, k=self.node_capacity, largest=True).indices.to(self.device)
