@@ -22,6 +22,6 @@ fi
 
 rm -rf /dev/shm/*
 echo $cmd
-OMP_NUM_THREADS=8 exec $cmd > online-$MODEL-$DATA-$CACHE-$EDGE_CACHE_RATIO-$NODE_CACHE_RATIO-$NPROC_PER_NODE-$REPLAY.log 2>&1
+OMP_NUM_THREADS=8 exec $cmd > no-retrain-30%online-$MODEL-$DATA-$CACHE-$EDGE_CACHE_RATIO-$NODE_CACHE_RATIO-$NPROC_PER_NODE-$REPLAY.log 2>&1
 
 

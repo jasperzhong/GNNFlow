@@ -80,6 +80,11 @@ def set_seed(seed):
 
 set_seed(args.seed)
 
+ap_file = "no_retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
+    args.model, args.data, args.replay_ratio, args.retrain_ratio)
+auc_file = "no_retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
+    args.model, args.data, args.replay_ratio, args.retrain_ratio)
+
 
 def evaluate(df, sampler, model, criterion, cache, device, rand_edge_sampler):
     model.eval()
@@ -261,9 +266,9 @@ def main():
 
     # phase1 training
     if args.rank == 0:
-        with open("online_ap_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+        with open(ap_file, "a") as f_phase2:
             f_phase2.write("Phase1\n")
-        with open("online_auc_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+        with open(auc_file, "a") as f_phase2:
             f_phase2.write("Phase1\n")
     phase1_train_start = time.time()
     best_e, best_ap, best_auc = train(phase1_train_df, phase1_val_df, sampler,
@@ -275,9 +280,9 @@ def main():
     if args.rank == 0:
         torch.save(model.state_dict(),
                    'phase1_{}_{}.pt'.format(args.model, args.data))
-        with open("online_ap_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+        with open(ap_file, "a") as f_phase2:
             f_phase2.write("{:.4f}\n".format(best_ap))
-        with open("online_auc_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+        with open(auc_file, "a") as f_phase2:
             f_phase2.write("{:.4f}\n".format(best_auc))
     # phase1 training done
     if args.distributed:
@@ -287,9 +292,9 @@ def main():
     # update rand_sampler
     if args.rank == 0:
         logging.info("Phase2 start")
-        with open("online_ap_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+        with open(ap_file, "a") as f_phase2:
             f_phase2.write("Phase2\n")
-        with open("online_auc_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+        with open(auc_file, "a") as f_phase2:
             f_phase2.write("Phase2\n")
     # retrain 100 times
     retrain_num = 100
@@ -328,9 +333,9 @@ def main():
             logging.info("incremental step: {}".format(incremental_step))
             logging.info(
                 "{}th incremental evalutae ap: {} auc: {}".format(i+1, ap, auc))
-            with open("online_ap_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+            with open(ap_file, "a") as f_phase2:
                 f_phase2.write("{:.4f}\n".format(ap))
-            with open("online_auc_{}_{}_{}_retrain{}.txt".format(args.model, args.data, args.replay_ratio, args.retrain_ratio), "a") as f_phase2:
+            with open(auc_file, "a") as f_phase2:
                 f_phase2.write("{:.4f}\n".format(auc))
         if (i + 1) % args.retrain_ratio == 0:
             num_replay = int(replay_ratio * phase2_new_data_start)
