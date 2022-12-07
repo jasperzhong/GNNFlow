@@ -148,12 +148,26 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
         data_dir = os.path.join(get_project_root_dir(), "data")
 
     dataset_path = os.path.join(data_dir, dataset)
-    path = os.path.join(dataset_path, 'node_features.npy')
-    if not os.path.exists(path):
-        raise ValueError('{} does not exist'.format(path))
-
     start = time.time()
-    node_feats = np.load(path, allow_pickle=False)
+    if dataset == 'MAG':
+        # read in 4 files
+        node_feats = None
+        for i in range(4):
+            path = os.path.join(dataset_path, 'node_features_{}.npy'.format(i))
+            if not os.path.exists(path):
+                raise ValueError('{} does not exist'.format(path))
+
+            if i == 0:
+                node_feats = np.load(path, allow_pickle=False)
+            else:
+                node_feats = np.concatenate(
+                    (node_feats, np.load(path, allow_pickle=False)), axis=0)
+    else:
+        path = os.path.join(dataset_path, 'node_features.npy')
+        if not os.path.exists(path):
+            raise ValueError('{} does not exist'.format(path))
+
+        node_feats = np.load(path, allow_pickle=False)
 
     NODE_FEATS = torch.from_numpy(node_feats)
 
