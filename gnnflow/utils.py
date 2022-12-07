@@ -158,7 +158,7 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
         node_feat = np.load(path, allow_pickle=True)
         node_feat = torch.from_numpy(node_feat)
         logging.info("Rank: {}: Loaded node feature part {} in {:.2f} seconds.".format(
-            rank(), time.time() - start))
+            rank(), rank(), time.time() - start))
 
         # send to rank == 0's worker using send/recv
         if rank() == 0:
