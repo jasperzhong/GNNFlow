@@ -65,7 +65,7 @@ _dysat_default_config = {
     "fanouts": [10, 10],
     "sample_strategy": "uniform",
     "num_snapshots": 3,
-    "snapshot_time_window": 10000,
+    "snapshot_time_window": 25,
     "prop_time": True,
     "use_memory": False,
     "dim_time": 0,
@@ -161,7 +161,7 @@ _gdelt_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 4000
+    "batch_size": 600
 }
 
 _mag_default_config = {

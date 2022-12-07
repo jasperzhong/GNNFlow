@@ -270,6 +270,13 @@ def main():
     phase1_train_time = phase1_train_end - phase1_train_start
     logging.info("phase1 train time: {}".format(phase1_train_time))
     total_training_time += phase1_train_time
+    if args.rank == 0:
+        torch.save(model.state_dict(),
+                   'phase1_{}_{}'.format(args.model, args.data))
+        with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
+            f_phase2.write("{:.4f}\n".format(best_ap))
+        with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
+            f_phase2.write("{:.4f}\n".format(best_auc))
     # phase1 training done
     if args.distributed:
         torch.distributed.barrier()
@@ -289,6 +296,8 @@ def main():
     incremental_step = int(phase2_len / retrain_num)
     replay_ratio = args.replay_ratio
     logging.info("replay ratio: {}".format(replay_ratio))
+    args.retrain_ratio = 10000
+    logging.info("retrain ratio: {}".format(args.retrain_ratio))
     for i in range(retrain_num):
         phase2_build_graph_start = time.time()
         increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
@@ -309,48 +318,60 @@ def main():
         # random sample phase2 train dataset -> get phase2_train_df & phase2_val_df
         phase2_new_data_start = phase1_len + incremental_step * i
         phase2_new_data_end = phase1_len + incremental_step * (i + 1)
-        logging.info("incremental step: {}".format(incremental_step))
-        num_replay = int(replay_ratio * phase2_new_data_start)
-        new_data_index = torch.arange(
-            phase2_new_data_start, phase2_new_data_end)
-        if num_replay > 0:
-            weights = np.ones(int(phase2_new_data_start)) / \
-                phase2_new_data_start
-            old_data_index = np.random.choice(
-                phase2_new_data_start, size=num_replay, p=weights, replace=False)
-            old_data_index = torch.tensor(old_data_index).sort().values
-            all_index = torch.cat((old_data_index, new_data_index))
-        else:
-            all_index = new_data_index
-        phase2_train_len = int(len(all_index) * 0.9) + 1
-        train_index = all_index[:phase2_train_len]
-        val_index = all_index[phase2_train_len:]
-        phase2_train_df = full_data.iloc[train_index.numpy()]
-        phase2_val_df = full_data.iloc[val_index.numpy()]
-
-        # Rand Sampler
+        # do an evaluation first
+        val_df = full_data[phase2_new_data_start:phase2_new_data_end]
         val_rand_sampler.add_dst_list(dst)
-        # train rand sampler, all the data before the first validation data
-        train_rand_sampler = DstRandEdgeSampler(
-            full_data[:int(val_index[0])]['dst'].to_numpy())
+        ap, auc = evaluate(
+            val_df, sampler, model, criterion, cache, device, val_rand_sampler)
+        if args.rank == 0:
+            logging.info("incremental step: {}".format(incremental_step))
+            logging.info(
+                "{}th incremental evalutae ap: {} auc: {}".format(i+1, ap, auc))
+            with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
+                f_phase2.write("{:.4f}\n".format(ap))
+            with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
+                f_phase2.write("{:.4f}\n".format(auc))
+        if (i + 1) % args.retrain_ratio == 0:
+            num_replay = int(replay_ratio * phase2_new_data_start)
+            new_data_index = torch.arange(
+                phase2_new_data_start, phase2_new_data_end)
+            if num_replay > 0:
+                weights = np.ones(int(phase2_new_data_start)) / \
+                    phase2_new_data_start
+                old_data_index = np.random.choice(
+                    phase2_new_data_start, size=num_replay, p=weights, replace=False)
+                old_data_index = torch.tensor(old_data_index).sort().values
+                all_index = torch.cat((old_data_index, new_data_index))
+            else:
+                all_index = new_data_index
+            phase2_train_len = int(len(all_index) * 0.9) + 1
+            train_index = all_index[:phase2_train_len]
+            val_index = all_index[phase2_train_len:]
+            phase2_train_df = full_data.iloc[train_index.numpy()]
+            phase2_val_df = full_data.iloc[val_index.numpy()]
 
-        # Fetch their own dataset, no redudancy
-        train_index = list(
-            range(args.rank, len(phase2_train_df), args.world_size))
-        phase2_train_df = phase2_train_df.iloc[train_index]
-        val_index = list(
-            range(args.rank, len(phase2_val_df), args.world_size))
-        phase2_val_df = phase2_val_df.iloc[val_index]
-        # logging.info("phase2 train df: {}".format(phase2_train_df))
-        # logging.info("phase2 val df: {}".format(phase2_val_df))
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-        train(phase2_train_df, phase2_val_df, sampler,
-              model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler, retrain=True)
-        phase2_train_end = time.time()
-        phase2_train_time = phase2_train_end - phase2_train_start
-        logging.info("phase2 {}th train time: {}".format(
-            i+1, phase2_train_time))
-        total_training_time += phase2_train_time
+            # Rand Sampler
+            # train rand sampler, all the data before the first validation data
+            train_rand_sampler = DstRandEdgeSampler(
+                full_data[:int(val_index[0])]['dst'].to_numpy())
+
+            # Fetch their own dataset, no redudancy
+            train_index = list(
+                range(args.rank, len(phase2_train_df), args.world_size))
+            phase2_train_df = phase2_train_df.iloc[train_index]
+            val_index = list(
+                range(args.rank, len(phase2_val_df), args.world_size))
+            phase2_val_df = phase2_val_df.iloc[val_index]
+            # logging.info("phase2 train df: {}".format(phase2_train_df))
+            # logging.info("phase2 val df: {}".format(phase2_val_df))
+            optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+            train(phase2_train_df, phase2_val_df, sampler,
+                  model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler, retrain=True)
+            phase2_train_end = time.time()
+            phase2_train_time = phase2_train_end - phase2_train_start
+            logging.info("phase2 {}th train time: {}".format(
+                i+1, phase2_train_time))
+            total_training_time += phase2_train_time
         if args.distributed:
             torch.distributed.barrier()
 
@@ -464,12 +485,8 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         if args.rank == 0:
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s".format(
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
-            with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
-                f_phase2.write("{:.4f}\n".format(val_ap))
-            with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
-                f_phase2.write("{:.4f}\n".format(val_auc))
 
-        if args.rank == 0 and e > 1 and val_ap > best_ap:
+        if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap
             best_auc = val_auc
