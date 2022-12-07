@@ -59,6 +59,14 @@ class KVStoreServer:
 
             self._eids = None
 
+    def eid_keys(self) -> torch.Tensor:
+        if self._use_cpp_kvstore:
+            raise NotImplementedError
+        elif not self._not_use_map:
+            return torch.tensor(list(self._edge_feat_map.keys()))
+        else:
+            return self._eids
+
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
         Push tensors to the server.
