@@ -132,14 +132,14 @@ class Dispatcher:
         self.dispatch_edges(src_nodes_train, dst_nodes_train,
                             timestamps_train, eids_train, partition_train_data=True)
 
-        if train_end < len(src_nodes):
-            src_nodes_nontrain = src_nodes[train_end:]
-            dst_nodes_nontrain = dst_nodes[train_end:]
-            timestamps_nontrain = timestamps[train_end:]
-            eids_nontrain = eids[train_end:]
+        src_nodes_nontrain = src_nodes[train_end:]
+        dst_nodes_nontrain = dst_nodes[train_end:]
+        timestamps_nontrain = timestamps[train_end:]
+        eids_nontrain = eids[train_end:]
 
+        if len(src_nodes_nontrain) > 0:
             self.dispatch_edges(src_nodes_nontrain, dst_nodes_nontrain,
-                                timestamps_nontrain, eids_nontrain, partition_train_data=False)
+                                    timestamps_nontrain, eids_nontrain, partition_train_data=False)
 
         # deal with unpartitioned nodes
         partition_table = self._partitioner._partition_table
