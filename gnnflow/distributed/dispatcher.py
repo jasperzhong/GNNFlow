@@ -114,10 +114,10 @@ class Dispatcher:
         """
         # Partition the dataset.
 
-        src_nodes = dataset["src"].values.astype(np.int64)
-        dst_nodes = dataset["dst"].values.astype(np.int64)
-        timestamps = dataset["time"].values.astype(np.float32)
-        eids = dataset["eid"].values.astype(np.int64)
+        src_nodes = torch.from_numpy(dataset["src"].values.astype(np.int64))
+        dst_nodes = torch.from_numpy(dataset["dst"].values.astype(np.int64))
+        timestamps = torch.from_numpy(dataset["time"].values.astype(np.float32))
+        eids = torch.from_numpy(dataset["eid"].values.astype(np.int64))
         train_end = dataset['ext_roll'].values.searchsorted(1)
 
         # dispatch edges
