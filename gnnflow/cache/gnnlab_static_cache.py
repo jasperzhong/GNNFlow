@@ -120,7 +120,7 @@ class GNNLabStaticCache(Cache):
                 cache_node_index = torch.arange(
                     self.node_capacity, dtype=torch.int64).to(self.device)
                 self.cache_node_buffer[cache_node_index] = self.kvstore_client.pull(
-                    cache_node_id, mode='node').to(self.device)
+                    cache_node_id.cpu(), mode='node').to(self.device)
                 self.cache_node_flag[cache_node_id] = True
                 self.cache_node_map[cache_node_id] = cache_node_index
         else:
@@ -147,7 +147,7 @@ class GNNLabStaticCache(Cache):
                 cache_edge_index = torch.arange(
                     self.edge_capacity, dtype=torch.int64).to(self.device)
                 self.cache_edge_buffer[cache_edge_index] = self.kvstore_client.pull(
-                    cache_edge_id, mode='edge', nid=eid_to_nid[cache_edge_id]).to(self.device)
+                    cache_edge_id.cpu(), mode='edge', nid=eid_to_nid[cache_edge_id.cpu()]).to(self.device)
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_edge_map[cache_edge_id] = cache_edge_index
 
