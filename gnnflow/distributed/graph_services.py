@@ -12,6 +12,7 @@ from gnnflow.distributed.common import SamplingResultTorch
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.distributed.dist_sampler import DistributedTemporalSampler
 from gnnflow.distributed.kvstore import KVStoreServer
+from gnnflow.utils import DstRandEdgeSampler
 
 global DGRAPH
 global DSAMPLER
@@ -316,31 +317,15 @@ def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
     kvstore_server.push(keys, tensors, mode)
 
 
-def init_memory(keys: torch.Tensor, dim_memory: int, dim_edge: int):
+def load_tensors(keys: torch.Tensor, mode: str):
     """
     Init memory
 
     Args:
         keys (torch.Tensor): The key of the memory
-        dim_memory (int): The dimension of memory
-        dim_edge (int): The dimension of edge features
     """
     kvstore_server = get_kvstore_server()
-    memory = torch.zeros(
-        (len(keys), dim_memory), dtype=torch.float32)
-    memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-    dim_raw_message = 2 * dim_memory + dim_edge
-    mailbox = torch.zeros(
-        (len(keys), dim_raw_message), dtype=torch.float32)
-    mailbox_ts = torch.zeros(
-        (len(keys), ), dtype=torch.float32)
-    all_mem = torch.cat((memory,
-                        memory_ts.unsqueeze(dim=1),
-                        mailbox,
-                        mailbox_ts.unsqueeze(dim=1),
-                         ), dim=1)
-    kvstore_server.push(keys, all_mem, mode='memory')
-    del all_mem, mailbox_ts, mailbox, memory, memory_ts
+    kvstore_server.load(keys, mode)
 
 
 def pull_tensors(keys: torch.Tensor, mode: str) -> torch.Tensor:
@@ -457,16 +442,16 @@ def get_dim_node_edge() -> Tuple[int, int]:
     return DIM_NODE, DIM_EDGE
 
 
-def set_rand_sampler(train_rand_sampler, val_rand_sampler, test_rand_sampler):
+def set_rand_sampler(train_dst_set, full_dst_set):
     """
     Set rand edge sampler
     """
     global TRAIN_RAND_SAMPLER
     global TEST_RAND_SAMPLER
     global VAL_RAND_SAMPLER
-    TRAIN_RAND_SAMPLER = train_rand_sampler
-    TEST_RAND_SAMPLER = test_rand_sampler
-    VAL_RAND_SAMPLER = val_rand_sampler
+    TRAIN_RAND_SAMPLER = DstRandEdgeSampler(train_dst_set.tolist())
+    TEST_RAND_SAMPLER = DstRandEdgeSampler(full_dst_set.tolist())
+    VAL_RAND_SAMPLER = DstRandEdgeSampler(full_dst_set.tolist())
 
 
 def get_rand_sampler():

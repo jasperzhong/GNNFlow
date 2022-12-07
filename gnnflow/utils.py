@@ -171,11 +171,15 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
                 torch.distributed.recv(node_feat_part, i * local_world_size())
                 node_feat_list.append(node_feat_part)
             node_feat = torch.cat(node_feat_list, dim=0)
+            del node_feat_list
+            NODE_FEATS = node_feat
         else:
             shape = torch.tensor(node_feat.shape, dtype=torch.int64)
             torch.distributed.send(shape, 0)
             torch.distributed.send(node_feat, 0)
-        NODE_FEATS = node_feat
+            logging.info("Rank: {}: Sent node feature part {} in {:.2f} seconds.".format(
+                rank(), rank(), time.time() - start))
+            del node_feat
     else:
         if rank() == 0:
             path = os.path.join(dataset_path, 'node_features.npy')

@@ -3,6 +3,7 @@ import os
 import threading
 from typing import List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.distributed.rpc as rpc
 
@@ -23,10 +24,15 @@ class KVStoreServer:
     - memory 
     """
 
-    def __init__(self):
+    def __init__(self, node_feat_mmap: Optional[np.memmap] = None, edge_feat_mmap: Optional[np.memmap] = None, dim_memory: int = 0, dim_edge: int = 0):
         self._use_cpp_kvstore = os.environ.get("USE_CPP_KVSTORE", "0") == "1"
         # NB: default is not to use map
         self._not_use_map = os.environ.get("NOT_USE_MAP", "1") == "1"
+
+        self._node_feat_mmap = node_feat_mmap
+        self._edge_feat_mmap = edge_feat_mmap
+        self._dim_memory = dim_memory
+        self._dim_edge = dim_edge
         # keys -> tensors
         if self._use_cpp_kvstore:
             self._node_feat_kvstore = KVStore()
@@ -45,22 +51,13 @@ class KVStoreServer:
         else:
             logging.info("No map.")
 
-            self._node_feat = None
+            self._node_feat_map = {}
             self._edge_feat = None
             # NB: memory would be updated
             self._memory_map = {}
             self._memory_lock = threading.Lock()
 
-            self._nids = None
             self._eids = None
-
-    def eid_keys(self) -> torch.Tensor:
-        if self._use_cpp_kvstore:
-            raise NotImplementedError
-        elif not self._not_use_map:
-            return torch.tensor(list(self._edge_feat_map.keys()))
-        else:
-            return self._eids
 
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str):
         """
@@ -100,20 +97,11 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
             if mode == 'node':
-                # sort keys and tensors
-                keys, indices = torch.sort(keys)
-                tensors = tensors[indices]
-
-                if self._node_feat is None:
-                    self._node_feat = tensors
-                else:
-                    self._node_feat = torch.cat(
-                        [self._node_feat, tensors], dim=0)
-                if self._nids is None:
-                    self._nids = keys
-                else:
-                    self._nids = torch.cat([self._nids, keys], dim=0)
+                keys = keys.tolist()
+                for key, tensor in zip(keys, tensors):
+                    self._node_feat_map[key] = tensor
             elif mode == 'edge':
+                # assume new keys are larger
                 # sort keys and tensors
                 keys, indices = torch.sort(keys)
                 tensors = tensors[indices]
@@ -134,6 +122,51 @@ class KVStoreServer:
                         self._memory_map[key] = tensor
             else:
                 raise ValueError(f"Unknown mode: {mode}")
+
+    def load(self, keys: torch.Tensor, mode: str):
+        """
+        Load tensors from the mmap file.
+
+        Args:
+            keys (torch.Tensor): The keys.
+        """
+        if mode == 'node' and self._node_feat_mmap is not None:
+            # remove seen keys
+            keys = keys.tolist()
+            keys = [key for key in keys if key not in self._node_feat_map]
+            if len(keys) == 0:
+                return
+            keys = np.array(keys)
+            node_feat = self._node_feat_mmap[keys]
+            node_feat = torch.from_numpy(node_feat)
+            self.push(keys, node_feat, mode)
+        elif mode == 'edge' and self._edge_feat_mmap is not None:
+            # assume that all keys are unseen
+            edge_feat = self._edge_feat_mmap[keys.numpy()]
+            edge_feat = torch.from_numpy(edge_feat)
+            self.push(keys, edge_feat, mode)
+        elif mode == 'memory' and self._dim_memory > 0:
+            # remove seen keys
+            keys = keys.tolist()
+            keys = [key for key in keys if key not in self._node_feat_map]
+            if len(keys) == 0:
+                return
+            keys = np.array(keys)
+            memory = torch.zeros(
+                (len(keys), self._dim_memory), dtype=torch.float32)
+            memory_ts = torch.zeros(len(keys), dtype=torch.float32)
+            dim_raw_message = 2 * self._dim_memory + self._dim_edge
+            mailbox = torch.zeros(
+                (len(keys), dim_raw_message), dtype=torch.float32)
+            mailbox_ts = torch.zeros(
+                (len(keys), ), dtype=torch.float32)
+            all_mem = torch.cat((memory,
+                                memory_ts.unsqueeze(dim=1),
+                                mailbox,
+                                mailbox_ts.unsqueeze(dim=1)), dim=1)
+            self.push(keys, all_mem, mode)
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
     def pull(self, keys: torch.Tensor, mode: str) -> torch.Tensor:
         """
@@ -165,8 +198,8 @@ class KVStoreServer:
                 raise ValueError(f"Unknown mode: {mode}")
         else:
             if mode == 'node':
-                indices = torch.searchsorted(self._nids, keys)
-                return self._node_feat.index_select(0, indices)
+                keys = keys.tolist()
+                return torch.stack(list(map(self._node_feat_map.get, keys)))
             elif mode == 'edge':
                 indices = torch.searchsorted(self._eids, keys)
                 return self._edge_feat.index_select(0, indices)

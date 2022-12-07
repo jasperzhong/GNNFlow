@@ -182,10 +182,12 @@ def main():
         mem = psutil.virtual_memory().percent
         logging.info("memory usage: {}".format(mem))
         gnnflow.distributed.initialize(args.rank, args.world_size,
-                                       args.initial_ingestion_batch_size,
-                                       args.ingestion_batch_size, args.partition_strategy,
-                                       args.num_nodes, data_config["undirected"], args.data,
-                                       args.dim_memory, args.chunksize, not args.not_partition_train_data)
+                                       args.partition_strategy,
+                                       args.num_nodes, args.data,
+                                       args.dim_memory)
+        gnnflow.distributed.dispatch_full_dataset(args.rank, args.data,
+                                                  args.initial_ingestion_batch_size, args.ingestion_batch_size)
+
         # every worker will have a kvstore_client
         dim_node, dim_edge = graph_services.get_dim_node_edge()
         kvstore_client = KVStoreClient(
