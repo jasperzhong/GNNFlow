@@ -29,7 +29,7 @@ def initialize(rank: int, world_size: int, partition_strategy: str,
     # NB: disable IB according to https://github.com/pytorch/pytorch/issues/86962
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
-                     rpc_timeout=1800,
+                     rpc_timeout=18000,
                      num_worker_threads=32,
                      _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
