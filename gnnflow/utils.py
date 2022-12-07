@@ -148,27 +148,45 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
     dataset_path = os.path.join(data_dir, dataset)
     start = time.time()
     if dataset == 'MAG':
-        # read in 4 files
-        node_feat_list = []
-        for i in range(4):
-            path = os.path.join(dataset_path, 'node_features_{}.npy'.format(i))
-            if not os.path.exists(path):
-                raise ValueError('{} does not exist'.format(path))
-
-            node_feat_list.append(np.load(path, allow_pickle=False))
-            logging.info("Loaded node feature part {} in {:.2f} seconds.".format(
-                i, time.time() - start))
-        node_feats = np.concatenate(node_feat_list, axis=0)
-    else:
-        path = os.path.join(dataset_path, 'node_features.npy')
+        # each local_rank == 0 worker read a part of the node features
+        machine_rank = rank() // local_world_size()
+        num_machines = torch.distributed.get_world_size() // local_world_size()
+        path = os.path.join(
+            dataset_path, 'node_features_{}.npy'.format(machine_rank))
         if not os.path.exists(path):
             raise ValueError('{} does not exist'.format(path))
+        node_feat = np.load(path, allow_pickle=True)
+        node_feat = torch.from_numpy(node_feat)
+        logging.info("Rank: {}: Loaded node feature part {} in {:.2f} seconds.".format(
+            rank(), time.time() - start))
 
-        node_feats = np.load(path, allow_pickle=False)
+        # send to rank == 0's worker using send/recv
+        if rank() == 0:
+            node_feat_list = [node_feat]
+            for i in range(1, num_machines):
+                shape = torch.empty(2, dtype=torch.int64)
+                torch.distributed.recv(shape, i * local_world_size())
+                node_feat_part = torch.empty(
+                    shape.tolist(), dtype=torch.float16)
+                torch.distributed.recv(node_feat_part, i * local_world_size())
+                node_feat_list.append(node_feat_part)
+            node_feat = torch.cat(node_feat_list, dim=0)
+        else:
+            shape = torch.tensor(node_feat.shape, dtype=torch.int64)
+            torch.distributed.send(shape, 0)
+            torch.distributed.send(node_feat, 0)
+        NODE_FEATS = node_feat
+    else:
+        if rank() == 0:
+            path = os.path.join(dataset_path, 'node_features.npy')
+            if not os.path.exists(path):
+                raise ValueError('{} does not exist'.format(path))
+    
+            node_feats = np.load(path, allow_pickle=False)
+            NODE_FEATS = torch.from_numpy(node_feats)
 
-    NODE_FEATS = torch.from_numpy(node_feats)
-
-    logging.info("Loaded node feature in %f seconds.", time.time() - start)
+    if rank() == 0:
+        logging.info("Loaded node feature in %f seconds.", time.time() - start)
 
 
 def load_feat(dataset: str, data_dir: Optional[str] = None,
