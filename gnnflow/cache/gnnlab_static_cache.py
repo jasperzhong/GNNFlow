@@ -1,5 +1,6 @@
 from typing import List, Optional, Union
 
+import numpy as np
 import torch
 from dgl.heterograph import DGLBlock
 
