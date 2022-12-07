@@ -93,7 +93,6 @@ class GNNLabStaticCache(Cache):
             self.num_edges, dtype=torch.int32, device=self.device)
 
         sampler = kwargs['sampler']
-        assert isinstance(sampler, TemporalSampler)
         train_df = kwargs['train_df']
         pre_sampling_rounds = kwargs.get('pre_sampling_rounds', 2)
         batch_size = kwargs.get('batch_size', 600)
