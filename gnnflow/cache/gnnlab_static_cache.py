@@ -165,7 +165,8 @@ class GNNLabStaticCache(Cache):
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_edge_map[cache_edge_id] = cache_edge_index
 
-    def fetch_feature(self, mfgs: List[List[DGLBlock]], update_cache: bool = True):
+    def fetch_feature(self, mfgs: List[List[DGLBlock]], update_cache: bool = True, 
+                      target_edge_features: bool = True):
         """Fetching the node features of input_node_ids
 
         Args:
@@ -175,4 +176,4 @@ class GNNLabStaticCache(Cache):
         Returns:
             mfgs: message-passing flow graphs with node/edge features
         """
-        return super(GNNLabStaticCache, self).fetch_feature(mfgs, update_cache=False)
+        return super(GNNLabStaticCache, self).fetch_feature(mfgs, update_cache=False, target_edge_features=target_edge_features)
