@@ -62,9 +62,11 @@ def initialize(rank: int, world_size: int,
         node_feats = None
         _, edge_feats = load_feat(data_name, load_node=False)
 
-        load_node_feat_thread = threading.Thread(
-            target=load_node_feat, args=(data_name, ))
-        load_node_feat_thread.start()
+        # load_node_feat_thread = threading.Thread(
+        #     target=load_node_feat, args=(data_name, ))
+        # load_node_feat_thread.start()
+        load_node_feat(data_name)
+        node_feats = get_node_feats()
 
         logging.info("Rank %d: Loaded features in %f seconds.", rank,
                      time.time() - start)
@@ -100,8 +102,7 @@ def initialize(rank: int, world_size: int,
             partition_table[unassigned_nodes_index] = partition_id
 
         # join the thread
-        load_node_feat_thread.join()
-        node_feats = get_node_feats()
+        # load_node_feat_thread.join()
 
         dim_node = 0 if node_feats is None else node_feats.shape[1]
         dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
