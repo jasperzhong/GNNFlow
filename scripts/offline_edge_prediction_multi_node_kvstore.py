@@ -303,9 +303,17 @@ def main():
                          pre_sampling_rounds=2)
     else:
         cache.init_cache()
+    init_time = time.time() - init_start
+
+    # all reduce the init time
+    if args.distributed:
+        init_time = torch.tensor(init_time, device=device)
+        torch.distributed.all_reduce(init_time, op=torch.distributed.ReduceOp.SUM)
+        init_time /= args.world_size
+        init_time = init_time.item()
 
     logging.info("cache mem size: {:.2f} MB, init cache time: {:.2f}s".format(
-        cache.get_mem_size() / 1000 / 1000, time.time() - init_start))
+        cache.get_mem_size() / 1000 / 1000, init_time))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
