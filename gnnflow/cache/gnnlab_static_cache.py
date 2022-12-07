@@ -87,10 +87,9 @@ class GNNLabStaticCache(Cache):
         """
         Init the caching with features
         """
-        node_sampled_count = torch.zeros(
-            self.num_nodes, dtype=torch.int32, device=self.device)
-        edge_sampled_count = torch.zeros(
-            self.num_edges, dtype=torch.int32, device=self.device)
+        node_sampled_count = torch.zeros(self.num_nodes, dtype=torch.int32)
+        edge_sampled_count = torch.zeros(self.num_edges, dtype=torch.int32)
+        eid_to_nid = torch.zeros(self.num_edges, dtype=torch.int64)
 
         sampler = kwargs['sampler']
         train_df = kwargs['train_df']
@@ -101,14 +100,15 @@ class GNNLabStaticCache(Cache):
         for _ in range(pre_sampling_rounds):
             for target_nodes, ts, _ in get_batch_no_neg(train_df, batch_size):
                 mfgs = sampler.sample(target_nodes, ts)
-                if self.node_feats is not None:
+                if self.node_feats is not None or self.dim_node_feat != 0:
                     for b in mfgs[0]:
                         node_sampled_count[b.srcdata['ID']] += 1
-                if self.edge_feats is not None:
+                if self.edge_feats is not None or self.dim_edge_feat != 0:
                     for mfg in mfgs:
                         for b in mfg:
                             if b.num_src_nodes() > b.num_dst_nodes():
                                 edge_sampled_count[b.edata['ID']] += 1
+                                eid_to_nid[b.edata['ID']] = b.srcdata['ID']
 
         if self.distributed:
             if self.dim_node_feat != 0 and self.node_feats is not None:
@@ -147,7 +147,7 @@ class GNNLabStaticCache(Cache):
                 cache_edge_index = torch.arange(
                     self.edge_capacity, dtype=torch.int64).to(self.device)
                 self.cache_edge_buffer[cache_edge_index] = self.kvstore_client.pull(
-                    cache_edge_id, mode='edge').to(self.device)
+                    cache_edge_id, mode='edge', nid=eid_to_nid[cache_edge_id]).to(self.device)
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_edge_map[cache_edge_id] = cache_edge_index
 
