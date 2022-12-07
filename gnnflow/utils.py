@@ -160,6 +160,8 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
             else:
                 node_feats = np.concatenate(
                     (node_feats, np.load(path, allow_pickle=False)), axis=0)
+            logging.info("Loaded node feature part {} in {:.2f} seconds.".format(
+                i, time.time() - start))
     else:
         path = os.path.join(dataset_path, 'node_features.npy')
         if not os.path.exists(path):
