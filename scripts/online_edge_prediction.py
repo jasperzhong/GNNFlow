@@ -272,7 +272,7 @@ def main():
     total_training_time += phase1_train_time
     if args.rank == 0:
         torch.save(model.state_dict(),
-                   'phase1_{}_{}'.format(args.model, args.data))
+                   'phase1_{}_{}.pt'.format(args.model, args.data))
         with open("online_ap_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
             f_phase2.write("{:.4f}\n".format(best_ap))
         with open("online_auc_{}_{}_{}.txt".format(args.model, args.data, args.replay_ratio), "a") as f_phase2:
