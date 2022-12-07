@@ -7,7 +7,6 @@ CACHE="${3:-LFUCache}"
 EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${6:-hash}"
-CHUNKSIZE="${7:-100000000}"
 
 HOST_NODE_ADDR=172.31.34.83
 HOST_NODE_PORT=29400
@@ -35,7 +34,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 100000000 \
     --initial-ingestion-batch-size 100000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 0 --chunksize $CHUNKSIZE"
+    --num-workers 0"
 
 rm -rf /dev/shm/rmm_pool_*
 

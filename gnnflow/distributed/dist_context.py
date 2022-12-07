@@ -65,28 +65,16 @@ def dispatch_full_dataset(rank: int, data_name: str,
 
         # read csv in chunks
         df_iterator = load_dataset_in_chunks(
-            data_name, chunksize=ingestion_batch_size)
+            data_name, chunksize=initial_ingestion_batch_size)
 
         # ingest the first chunk
-        first_df = None
-        first_batch_edges = 0
-        first_batch_done = False
-        for dataset in tqdm(df_iterator):
-            while first_batch_edges < initial_ingestion_batch_size:
-                first_batch_edges += len(dataset)
-                if first_df is None:
-                    first_df = dataset
-                else:
-                    # use concat
-                    first_df = pd.concat([first_df, dataset])
-
+        for i, dataset in tqdm(enumerate(df_iterator)):
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
-            if not first_batch_done:
-                dispatcher.partition_graph(first_df)
-                first_batch_done = True
+            if i > 0: 
+                for i in range(0, initial_ingestion_batch_size, ingestion_batch_size):
+                    dispatcher.partition_graph(dataset.iloc[i:i+ingestion_batch_size])
             else:
                 dispatcher.partition_graph(dataset)
-
             del dataset
 
     # check

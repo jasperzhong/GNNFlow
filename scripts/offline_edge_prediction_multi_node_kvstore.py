@@ -76,11 +76,6 @@ parser.add_argument("--dynamic-scheduling", action="store_true",
 parser.add_argument("--not-partition-train-data", action="store_true",
                     help="whether not to partition the training data")
 
-
-# dataset
-parser.add_argument("--chunksize", help="chunksize for loading dataset",
-                    type=int, default=int(1e8))
-
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
