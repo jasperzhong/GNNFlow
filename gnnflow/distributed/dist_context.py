@@ -67,32 +67,27 @@ def dispatch_full_dataset(rank: int, data_name: str,
         df_iterator = load_dataset_in_chunks(
             data_name, chunksize=ingestion_batch_size)
 
-        t = tqdm(total=len(df_iterator))
-
         # ingest the first chunk
         first_df = None
         first_batch_edges = 0
-        while first_batch_edges < initial_ingestion_batch_size:
-            df = next(df_iterator)
-            t.update(1)
-            first_batch_edges += len(df)
-            if first_df is None:
-                first_df = df
-            else:
-                # use concat
-                first_df = pd.concat([first_df, df])
+        first_batch_done = False
+        for dataset in tqdm(df_iterator):
+            while first_batch_edges < initial_ingestion_batch_size:
+                first_batch_edges += len(dataset)
+                if first_df is None:
+                    first_df = dataset
+                else:
+                    # use concat
+                    first_df = pd.concat([first_df, dataset])
 
-        dispatcher.partition_graph(first_df)
-
-        for dataset in df_iterator:
-            t.update(1)
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
-
-            dispatcher.partition_graph(dataset)
+            if not first_batch_done:
+                dispatcher.partition_graph(first_df)
+                first_batch_done = True
+            else:
+                dispatcher.partition_graph(dataset)
 
             del dataset
-
-        t.close()
 
     # check
     torch.distributed.barrier()
