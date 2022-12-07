@@ -108,7 +108,7 @@ class GNNLabStaticCache(Cache):
                         for b in mfg:
                             if b.num_src_nodes() > b.num_dst_nodes():
                                 edge_sampled_count[b.edata['ID']] += 1
-                                eid_to_nid[b.edata['ID']] = b.srcdata['ID']
+                                eid_to_nid[b.edata['ID']] = b.srcdata['ID'][b.num_dst_nodes():]
 
         if self.distributed:
             if self.dim_node_feat != 0 and self.node_feats is not None:
