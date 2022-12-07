@@ -59,7 +59,7 @@ parser.add_argument("--node-cache-ratio", type=float, default=0,
 # online learning
 parser.add_argument("--replay-ratio", type=float, default=0,
                     help="replay ratio")
-parser.add_argument("--retrain-ratio", type=int, default=1000,
+parser.add_argument("--retrain-ratio", type=int, default=1,
                     help="retrain ratio")
 
 args = parser.parse_args()
@@ -80,9 +80,9 @@ def set_seed(seed):
 
 set_seed(args.seed)
 
-ap_file = "no_retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
+ap_file = "retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
     args.model, args.data, args.replay_ratio, args.retrain_ratio)
-auc_file = "no_retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
+auc_file = "retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
     args.model, args.data, args.replay_ratio, args.retrain_ratio)
 
 
@@ -320,12 +320,11 @@ def main():
             i+1, phase2_build_graph_time))
         build_graph_time += phase2_build_graph_time
 
-        phase2_train_start = time.time()
         # random sample phase2 train dataset -> get phase2_train_df & phase2_val_df
         phase2_new_data_start = phase1_len + incremental_step * i
         phase2_new_data_end = phase1_len + incremental_step * (i + 1)
         # do an evaluation first
-        val_df = full_data[phase2_new_data_start:phase2_new_data_end]
+        val_df = full_data.iloc[phase2_new_data_start:phase2_new_data_end]
         val_rand_sampler.add_dst_list(dst)
         ap, auc = evaluate(
             val_df, sampler, model, criterion, cache, device, val_rand_sampler)
@@ -337,6 +336,7 @@ def main():
                 f_phase2.write("{:.4f}\n".format(ap))
             with open(auc_file, "a") as f_phase2:
                 f_phase2.write("{:.4f}\n".format(auc))
+        phase2_train_start = time.time()
         if (i + 1) % args.retrain_ratio == 0:
             num_replay = int(replay_ratio * phase2_new_data_start)
             new_data_index = torch.arange(
@@ -371,10 +371,14 @@ def main():
             # logging.info("phase2 train df: {}".format(phase2_train_df))
             # logging.info("phase2 val df: {}".format(phase2_val_df))
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+            phase2_training_func_start = time.time()
             train(phase2_train_df, phase2_val_df, sampler,
                   model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler, retrain=True)
             phase2_train_end = time.time()
+            phase2_train_func_time = phase2_train_end - phase2_training_func_start
             phase2_train_time = phase2_train_end - phase2_train_start
+            logging.info("phase2 {}th train func time: {}".format(
+                i+1, phase2_train_func_time))
             logging.info("phase2 {}th train time: {}".format(
                 i+1, phase2_train_time))
             total_training_time += phase2_train_time
