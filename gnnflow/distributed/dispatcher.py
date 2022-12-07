@@ -39,6 +39,8 @@ class Dispatcher:
         self._train_dst_set = set()
         self._full_dst_set = set()
 
+        self._dispatched_nids = set()
+
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor,
                        partition_train_data: bool = False):
@@ -102,7 +104,7 @@ class Dispatcher:
         for future in futures:
             future.wait()
 
-    def partition_graph(self, dataset: pd.DataFrame):
+    def partition_graph(self, dataset: pd.DataFrame, dispatch_node_memory: bool = False):
         """
         partition the dataset to the workers.
 
@@ -113,7 +115,6 @@ class Dispatcher:
             memory (bool): Whether to partition the memory.
         """
         # Partition the dataset.
-
         src_nodes = torch.from_numpy(dataset["src"].values.astype(np.int64))
         dst_nodes = torch.from_numpy(dataset["dst"].values.astype(np.int64))
         timestamps = torch.from_numpy(dataset["time"].values.astype(np.float32))
@@ -155,6 +156,11 @@ class Dispatcher:
         self.broadcast_graph_metadata()
         self.broadcast_partition_table()
 
+        if dispatch_node_memory:
+            self.dispatch_node_memory()
+
+    def dispatch_node_memory(self):
+        partition_table = self._partitioner._partition_table
         # dispatch node feature/memory
         futures = []
         if self._node_feat:

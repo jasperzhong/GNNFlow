@@ -69,22 +69,30 @@ def dispatch_full_dataset(rank: int, data_name: str,
         # ingest the first chunk
         for i, dataset in enumerate(df_iterator):
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
-            if i > 0: 
+            if i > 0:
                 for i in range(0, initial_ingestion_batch_size, ingestion_batch_size):
-                    dispatcher.partition_graph(dataset.iloc[i:i+ingestion_batch_size])
+                    dispatcher.partition_graph(
+                        dataset.iloc[i:i+ingestion_batch_size], False)
                     t.update(ingestion_batch_size)
             else:
-                dispatcher.partition_graph(dataset)
+                dispatcher.partition_graph(dataset, False)
                 t.update(initial_ingestion_batch_size)
             del dataset
-        
 
         t.close()
+        logging.info("Rank 0: Ingestion edges done in %.2fs.",
+                     time.time() - start)
+        dispatcher.dispatch_node_memory()
+        logging.info("Rank 0: Dispatch node memory done in %.2fs.",
+                     time.time() - start)
+        dispatcher.broadcast_rand_sampler()
+        logging.info("Rank 0: Broadcast rand sampler done in %.2fs.",
+                     time.time() - start)
 
     # check
     torch.distributed.barrier()
     if rank == 0:
-        logging.info("Rank %d: Ingested data in %f seconds.", rank,
+        logging.info("Rank %d: Ingested full dataset in %f seconds.", rank,
                      time.time() - start)
 
     logging.info("Rank %d: Number of vertices: %d, number of edges: %d",
