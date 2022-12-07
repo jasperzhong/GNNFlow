@@ -296,6 +296,7 @@ def main():
                                         kvstore_client,
                                         args.partition)
 
+    init_start = time.time()
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
         cache.init_cache(sampler=sampler, train_df=train_data,
@@ -303,8 +304,8 @@ def main():
     else:
         cache.init_cache()
 
-    logging.info("cache mem size: {:.2f} MB".format(
-        cache.get_mem_size() / 1000 / 1000))
+    logging.info("cache mem size: {:.2f} MB, init cache time: {:.2f}s".format(
+        cache.get_mem_size() / 1000 / 1000, time.time() - init_start))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()

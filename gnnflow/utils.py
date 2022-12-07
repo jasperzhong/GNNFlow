@@ -185,7 +185,7 @@ def load_node_feat(dataset: str, data_dir: Optional[str] = None):
             path = os.path.join(dataset_path, 'node_features.npy')
             if not os.path.exists(path):
                 raise ValueError('{} does not exist'.format(path))
-    
+
             node_feats = np.load(path, allow_pickle=False)
             NODE_FEATS = torch.from_numpy(node_feats)
 
@@ -331,6 +331,21 @@ def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
             np.int64)
         ts = np.concatenate(
             [rows.time.values, rows.time.values, rows.time.values]).astype(
+            np.float32)
+
+        eid = rows['eid'].values
+
+        yield target_nodes, ts, eid
+
+
+def get_batch_no_neg(df: pd.DataFrame, batch_size: int):
+    indices = np.array(df.index // batch_size)
+    for _, rows in df.groupby(indices):
+        target_nodes = np.concatenate(
+            [rows.src.values, rows.dst.values]).astype(
+            np.int64)
+        ts = np.concatenate(
+            [rows.time.values, rows.time.values]).astype(
             np.float32)
 
         eid = rows['eid'].values
