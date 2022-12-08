@@ -72,9 +72,9 @@ def dispatch_full_dataset(rank: int, data_name: str,
             dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
             if i > 0:
                 for i in range(0, initial_ingestion_batch_size, ingestion_batch_size):
-                    dispatcher.partition_graph(
-                        dataset.iloc[i:i+ingestion_batch_size], False)
-                    t.update(ingestion_batch_size)
+                    dataset_chunk = dataset.iloc[i:i + ingestion_batch_size]
+                    dispatcher.partition_graph(dataset_chunk, False)
+                    t.update(len(dataset_chunk))
             else:
                 dispatcher.partition_graph(dataset, False)
                 t.update(initial_ingestion_batch_size)
