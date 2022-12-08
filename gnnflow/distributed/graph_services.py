@@ -445,15 +445,15 @@ def get_dim_node_edge() -> Tuple[int, int]:
     return DIM_NODE, DIM_EDGE
 
 
-def set_rand_sampler(train_dst_set, nontrain_dst_set):
+def set_rand_sampler(train_dst_set: torch.Tensor, nontrain_dst_set: torch.Tensor):
     """
     Set rand edge sampler
     """
     global TRAIN_RAND_SAMPLER
     global EVAL_RAND_SAMPLER
-    full_dst_set = train_dst_set + nontrain_dst_set
-    TRAIN_RAND_SAMPLER = DstRandEdgeSampler(train_dst_set.tolist())
-    EVAL_RAND_SAMPLER = DstRandEdgeSampler(full_dst_set.tolist())
+    full_dst_set = torch.cat([train_dst_set, nontrain_dst_set])
+    TRAIN_RAND_SAMPLER = DstRandEdgeSampler(train_dst_set.numpy())
+    EVAL_RAND_SAMPLER = DstRandEdgeSampler(full_dst_set.numpy())
     logging.info("Rank %d: set rand sampler finished",
                  torch.distributed.get_rank())
 
