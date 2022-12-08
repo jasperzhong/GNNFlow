@@ -167,7 +167,7 @@ _gdelt_default_config = {
 }
 
 _mag_default_config = {
-    "initial_pool_size": 10*GB,
+    "initial_pool_size": 5*GB,
     "maximum_pool_size": 50*GB,
     "mem_resource_type": "unified",
     "minimum_block_size": 11,
