@@ -219,11 +219,10 @@ def main():
 
     num_nodes = dgraph.max_vertex_id() + 1
     logging.info("max_vertex id {}".format(dgraph.max_vertex_id()))
-    logging.info("num vertices: {}".format(dgraph.num_vertices()))
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    train_rand_sampler, val_rand_sampler, test_rand_sampler = graph_services.get_rand_sampler()
+    train_rand_sampler, val_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
@@ -308,7 +307,8 @@ def main():
     # all reduce the init time
     if args.distributed:
         init_time = torch.tensor(init_time, device=device)
-        torch.distributed.all_reduce(init_time, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(
+            init_time, op=torch.distributed.ReduceOp.SUM)
         init_time /= args.world_size
         init_time = init_time.item()
 
@@ -334,7 +334,7 @@ def main():
         model.load_state_dict(torch.load(checkpoint_path))
 
         ap, auc = evaluate(test_data, sampler, model,
-                           criterion, cache, device, test_rand_sampler)
+                           criterion, cache, device, val_rand_sampler)
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:

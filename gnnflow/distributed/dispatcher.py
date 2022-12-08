@@ -30,16 +30,13 @@ class Dispatcher:
 
         self._num_edges = 0
         self._max_nodex = 0
-        self._nodes = set()
 
         self._node_feat = node_feat
         self._edge_feat = edge_feat
         self._memory = memory
 
         self._train_dst_set = set()
-        self._full_dst_set = set()
-
-        self._dispatched_nids = set()
+        self._nontrain_dst_set = set()
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor,
@@ -54,8 +51,6 @@ class Dispatcher:
             eids (torch.Tensor): The edge IDs of the edges.
             partition_train_data (bool): Whether to partition the training data.
         """
-        self._nodes.update(src_nodes.tolist())
-        self._nodes.update(dst_nodes.tolist())
         self._num_edges += torch.unique(eids).size(0)
 
         partitions, evenly_partitioned_dataset = self._partitioner.partition(
@@ -127,10 +122,8 @@ class Dispatcher:
         timestamps_train = timestamps[:train_end]
         eids_train = eids[:train_end]
 
-        self._train_dst_set.update(dst_nodes_train.tolist())
-        self._full_dst_set.update(dst_nodes.tolist())
-
         if len(src_nodes_train) > 0:
+            self._train_dst_set.update(dst_nodes_train.tolist())
             self.dispatch_edges(src_nodes_train, dst_nodes_train,
                                 timestamps_train, eids_train, partition_train_data=True)
 
@@ -140,6 +133,7 @@ class Dispatcher:
         eids_nontrain = eids[train_end:]
 
         if len(src_nodes_nontrain) > 0:
+            self._nontrain_dst_set.update(dst_nodes_nontrain.tolist())
             self.dispatch_edges(src_nodes_nontrain, dst_nodes_nontrain,
                                 timestamps_nontrain, eids_nontrain, partition_train_data=False)
 
@@ -201,7 +195,7 @@ class Dispatcher:
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args=(len(self._nodes), self._num_edges, self._max_node, self._num_partitions))
+                             args=(self._max_node, self._num_edges, self._max_node, self._num_partitions))
 
     def broadcast_partition_table(self):
         """
@@ -230,7 +224,7 @@ class Dispatcher:
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_rand_sampler,
-                             args=(torch.LongTensor(list(self._train_dst_set)), torch.LongTensor(list(self._full_dst_set))))
+                             args=(torch.LongTensor(list(self._train_dst_set)), torch.LongTensor(list(self._nontrain_dst_set))))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None,

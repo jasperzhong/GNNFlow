@@ -1,3 +1,4 @@
+import gc
 import logging
 import os
 import time
@@ -82,9 +83,11 @@ def dispatch_full_dataset(rank: int, data_name: str,
         t.close()
         logging.info("Rank 0: Ingestion edges done in %.2fs.",
                      time.time() - start)
+        logging.info("gc.collect() = %d", gc.collect())
         dispatcher.dispatch_node_memory()
         logging.info("Rank 0: Dispatch node memory done in %.2fs.",
                      time.time() - start)
+        logging.info("gc.collect() = %d", gc.collect())
         dispatcher.broadcast_rand_sampler()
         logging.info("Rank 0: Broadcast rand sampler done in %.2fs.",
                      time.time() - start)
