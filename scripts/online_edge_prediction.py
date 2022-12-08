@@ -328,7 +328,7 @@ def main():
         val_rand_sampler.add_dst_list(dst)
         val_index = list(
             range(args.rank, len(val_df), args.world_size))
-        val_df = phase2_val_df.iloc[val_index]
+        val_df = val_df.iloc[val_index]
         ap, auc = evaluate(
             val_df, sampler, model, criterion, cache, device, val_rand_sampler)
         if args.distributed:
