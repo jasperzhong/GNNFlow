@@ -326,8 +326,16 @@ def main():
         # do an evaluation first
         val_df = full_data.iloc[phase2_new_data_start:phase2_new_data_end]
         val_rand_sampler.add_dst_list(dst)
+        val_index = list(
+            range(args.rank, len(val_df), args.world_size))
+        val_df = phase2_val_df.iloc[val_index]
         ap, auc = evaluate(
             val_df, sampler, model, criterion, cache, device, val_rand_sampler)
+        if args.distributed:
+            val_res = torch.tensor([ap, auc]).to(device)
+            torch.distributed.all_reduce(val_res)
+            val_res /= args.world_size
+            ap, auc = val_res[0].item(), val_res[1].item()
         if args.rank == 0:
             logging.info("incremental step: {}".format(incremental_step))
             logging.info(
