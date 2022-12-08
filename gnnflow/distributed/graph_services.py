@@ -159,12 +159,16 @@ def get_train_data() -> pd.DataFrame:
     if TRAIN_DATA is None:
         raise RuntimeError("The training data has not been initialized.")
     # concat until getting the data
-    return pd.DataFrame({
+    df = pd.DataFrame({
         "src": np.concatenate(TRAIN_DATA[0]),
         "dst": np.concatenate(TRAIN_DATA[1]),
         "time": np.concatenate(TRAIN_DATA[2]),
         "eid": np.concatenate(TRAIN_DATA[3])
     })
+
+    # NB: clear the training data
+    TRAIN_DATA = None
+    return df
 
 
 def set_graph_metadata(num_vertices: int, num_edges: int, max_vertex_id: int, num_partitions: int):

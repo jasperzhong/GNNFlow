@@ -91,6 +91,7 @@ def dispatch_full_dataset(rank: int, data_name: str,
         dispatcher.broadcast_rand_sampler()
         logging.info("Rank 0: Broadcast rand sampler done in %.2fs.",
                      time.time() - start)
+        logging.info("gc.collect() = %d", gc.collect())
 
     # check
     torch.distributed.barrier()
