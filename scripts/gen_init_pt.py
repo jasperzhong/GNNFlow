@@ -14,7 +14,7 @@ print('df length before slicing is {}\n'.format(len(df)))
 
 
 # get first 3.3% data
-df = df[:int(0.033 * len(df))]
+# df = df[:int(0.033 * len(df))]
 
 print('df length after slicing is {}\n'.format(len(df)))
 
