@@ -227,7 +227,7 @@ def main():
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
 
-    train_data, val_data, test_data = load_partitioned_dataset(
+    train_data, val_data = load_partitioned_dataset(
         args.data, rank=args.rank, world_size=args.world_size,
         partition_train_data=not args.not_partition_train_data)
     if not args.not_partition_train_data:
@@ -329,13 +329,13 @@ def main():
                    model, optimizer, criterion, cache, device, train_rand_sampler,
                    val_rand_sampler)
 
-    if args.rank == 0:
-        logging.info('Loading model at epoch {}...'.format(best_e))
-        model.load_state_dict(torch.load(checkpoint_path))
+    # if args.rank == 0:
+    #     logging.info('Loading model at epoch {}...'.format(best_e))
+    #     model.load_state_dict(torch.load(checkpoint_path))
 
-        ap, auc = evaluate(test_data, sampler, model,
-                           criterion, cache, device, val_rand_sampler)
-        logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+    #     ap, auc = evaluate(test_data, sampler, model,
+    #                        criterion, cache, device, val_rand_sampler)
+    #     logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
         torch.distributed.barrier()

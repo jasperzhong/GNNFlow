@@ -172,7 +172,7 @@ def get_train_data() -> pd.DataFrame:
         "dst": dst,
         "time": ts,
         "eid": eid
-    })
+    }, copy=False)
     TRAIN_DATA = None
 
     return df
