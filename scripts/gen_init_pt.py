@@ -13,8 +13,8 @@ df = pd.read_csv('/home/ubuntu/data/{}/edges.csv'.format(dataset_name)) # AWS
 print('df length before slicing is {}\n'.format(len(df)))
 
 
-# get first 3.3% data
-# df = df[:int(0.033 * len(df))]
+# slice
+df = df[:2662375]
 
 print('df length after slicing is {}\n'.format(len(df)))
 

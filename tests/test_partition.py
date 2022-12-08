@@ -20,10 +20,10 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel_edge"], [6312600], [1000000], [False]))
+        itertools.product(["hash", "fennel_edge"], [672447], [1000000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
-        dataset_name = 'GDELT'
+        dataset_name = 'REDDIT'
         p_stgy = partition_strategy
         num_p = 4
         undirected = True
@@ -115,6 +115,18 @@ class TestPartition(unittest.TestCase):
             if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
                 edge_cut += 1
 
+        print('edge cut calculate by vaniila algo is {}\n'.format(edge_cut))
+
+        edge_cut = 0
+        src_nodes = dataset["src"].values.astype(np.int64)
+        dst_nodes = dataset["dst"].values.astype(np.int64)
+        src_nodes = torch.from_numpy(src_nodes)
+        dst_nodes = torch.from_numpy(dst_nodes)
+
+        cmp = torch.eq(src_nodes, dst_nodes)
+        edge_cut = len(cmp[cmp is False])
+
+        print("edge cut calculate by edge algo is {}\n".format(edge_cut))
 
         print("Ptable is {}".format(ptable))
         print("Total Time Usage: {} seconds\n".format(
