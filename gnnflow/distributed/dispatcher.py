@@ -220,11 +220,13 @@ class Dispatcher:
                              args=(dim_node, dim_edge))
 
     def broadcast_rand_sampler(self):
+        train_dst_set = torch.LongTensor(list(self._train_dst_set))
+        nontrain_dst_set = torch.LongTensor(list(self._nontrain_dst_set))
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_rand_sampler,
-                             args=(torch.LongTensor(list(self._train_dst_set)), torch.LongTensor(list(self._nontrain_dst_set))))
+                             args=(train_dst_set, nontrain_dst_set))
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None,
