@@ -82,7 +82,7 @@ set_seed(args.seed)
 
 ap_file = "retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
     args.model, args.data, args.replay_ratio, args.retrain_ratio)
-auc_file = "retrain_online_ap_{}_{}_{}_retrain{}.txt".format(
+auc_file = "retrain_online_auc_{}_{}_{}_retrain{}.txt".format(
     args.model, args.data, args.replay_ratio, args.retrain_ratio)
 
 
