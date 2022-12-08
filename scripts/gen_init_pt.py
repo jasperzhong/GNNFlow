@@ -34,8 +34,7 @@ max_node_id = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
 
 visited = torch.zeros(max_node_id + 1, dtype=torch.int32)
 
-for i in range(len(src_nodes)):
-	visited[src_nodes[i]] = 1	
+visited[src_nodes] = 1
 
 gte = dgl.graph((src_nodes, dst_nodes))
 g = dgl.to_simple(gte)
