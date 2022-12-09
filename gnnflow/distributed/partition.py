@@ -705,6 +705,22 @@ class FennelEdgePartitioner(Partitioner):
 
         local_partition_table = self._partition_table[dst_nodes]
 
+        # unique to get the neighbor quant
+        npt_list, npt_cnt = torch.unique(local_partition_table, return_counts=True)
+        npt_map = {}
+        for i in range(len(npt_list)):
+            npt_map[npt_list[i]] = npt_cnt[i]
+
+        # eliminate the influence of -1
+        neighbour_in_partition_size_list = []
+
+        for i in range(self._num_partitions):
+            if i not in npt_map.keys():
+                neighbour_in_partition_size_list.append(0)
+                continue
+
+            neighbour_in_partition_size_list.append(npt_map[i])
+
         load_balance_score = []
 
         for i in range(self._num_partitions):
@@ -714,8 +730,7 @@ class FennelEdgePartitioner(Partitioner):
                 continue
 
             # calculate the neighbor in partition i
-            neighbour_in_partition_size = (
-                local_partition_table == i).sum().item()
+            neighbour_in_partition_size = neighbour_in_partition_size_list[i]
 
             # calculate neighbor's out degree sum
             neighbour_in_partition_mask = local_partition_table == i
