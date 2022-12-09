@@ -708,8 +708,6 @@ class FennelEdgePartitioner(Partitioner):
         load_balance_score = []
 
         for i in range(self._num_partitions):
-            partition_size = (self._partition_table == i).sum().item()
-
             if self._edges_partitioned_num_list[i] > 1.05 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-10000)
                 load_balance_score.append(-10)
