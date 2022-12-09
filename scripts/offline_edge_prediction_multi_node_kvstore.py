@@ -257,8 +257,9 @@ def main():
         model = SAGE(
             dim_node, model_config['dim_embed'], num_layers=model_config['num_layers'])
     elif args.model == 'GAT':
-        model = GAT(dim_node, model_config['dim_embed'],
-                    num_layers=model_config['num_layers'])
+        model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
+                     memory_device=device, memory_shared=args.distributed,
+                     kvstore_client=kvstore_client)
     else:
         model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                      memory_device=device, memory_shared=args.distributed,
