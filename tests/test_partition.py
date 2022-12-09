@@ -104,6 +104,7 @@ class TestPartition(unittest.TestCase):
             print("Partition {} has {} edges. \n".format(i, edge_num_tot[i]))
 
         print("The Sum of # of edges is: {} \n".format(np.sum(edge_num_tot)))
+        print("rsd is: {}".format(np.std(edge_num_tot) / np.average(edge_num_tot)))
 
         overall_end = time.time()
 
