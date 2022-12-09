@@ -5,6 +5,7 @@ from gnnflow.utils import load_partition_table
 import numpy as np
 import torch
 
+from tqdm import tqdm
 
 class Partition(NamedTuple):
     """
@@ -768,7 +769,7 @@ class FennelEdgePartitioner(Partitioner):
         argsort_list = np.argsort(neighbour_size_list)
         # argsort_list = argsort_list[::-1]
 
-        for i in range(len(unique_src_nodes)):
+        for i in tqdm(range(len(unique_src_nodes))):
             sorted_idx = argsort_list[i]
 
             pid, debug_map = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
