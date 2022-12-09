@@ -3,20 +3,20 @@ import dgl
 import pandas as pd
 import numpy as np
 
-dataset_name = 'MAG'
-slice_end_idx = 100000000
+dataset_name = 'GDELT'
+# slice_end_idx = 100000000
 
 num_partitions = 4
 undirected = False
 
-df = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name)) # HKU Lab Machine
-# df = pd.read_csv('/home/ubuntu/data/{}/edges.csv'.format(dataset_name)) # AWS
+# df = pd.read_csv('/data/tgl/{}/edges.csv'.format(dataset_name)) # HKU Lab Machine
+df = pd.read_csv('/home/ubuntu/data/{}/edges.csv'.format(dataset_name)) # AWS
 
 print('df length before slicing is {}\n'.format(len(df)))
 
 
-# MAG slice
-df = df[:slice_end_idx]
+# GDELT NO SLICE!
+# df = df[:slice_end_idx]
 
 print('df length after slicing is {}\n'.format(len(df)))
 
@@ -56,8 +56,8 @@ for i in range(len(pt)):
 		cnt += 1
 
 print('Partition Finished and Find {} single nodes. Saving...\n'.format(cnt))
-torch.save(pt, '/home/yczhong/repos/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name)) # HKU Lab Machine
-# torch.save(pt, '/home/ubuntu/repos/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name)) # AWS
+# torch.save(pt, '/home/yczhong/repos/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name)) # HKU Lab Machine
+torch.save(pt, '/home/ubuntu/repos/GNNFlow/partition_data/{}_metis_partition.pt'.format(dataset_name)) # AWS
 
 
 
