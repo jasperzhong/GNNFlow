@@ -749,7 +749,7 @@ class FennelEdgePartitioner(Partitioner):
         load_balance_score = self.edge_set_normalize(load_balance_score, -10, 10)
 
         for i in range(self._num_partitions):
-            partition_score[i] += load_balance_score[i]
+            partition_score[i] -= load_balance_score[i]
 
         partition_score = np.array(partition_score)
 
