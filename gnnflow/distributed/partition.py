@@ -301,7 +301,7 @@ class Partitioner:
         # group by src_nodes
         sorted_idx = torch.argsort(src_nodes)
         unique_src_nodes, inverse_idx, counts = torch.unique(
-            src_nodes[sorted_idx], sorted=False, return_inverse=True, return_counts=True)
+            src_nodes[sorted_idx], sorted=True, return_inverse=True, return_counts=True)
         split_idx = torch.split(sorted_idx, tuple(counts.tolist()))
         dst_nodes_list = [dst_nodes[idx] for idx in split_idx]
         timestamps_list = [timestamps[idx] for idx in split_idx]
