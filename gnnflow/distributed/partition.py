@@ -744,7 +744,7 @@ class FennelEdgePartitioner(Partitioner):
             locality_score = neighbour_in_partition_size + out_degree_sum
 
             load_balance_score.append(self._edges_partitioned_num_list[i] / self._edges_partitioned)
-            partition_score.append(locality_score)
+            partition_score.append(5 * locality_score)
 
         load_balance_score = self.edge_set_normalize(load_balance_score, -50, 50)
 
