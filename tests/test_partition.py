@@ -20,10 +20,10 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel_edge"], [672447], [1000000], [False]))
+        itertools.product(["hash", "fennel_edge"], [100000000], [100000000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
-        dataset_name = 'REDDIT'
+        dataset_name = 'MAG'
         p_stgy = partition_strategy
         num_p = 4
         undirected = True
@@ -73,8 +73,9 @@ class TestPartition(unittest.TestCase):
             eids = torch.from_numpy(eids)
 
             if i == 0:
+                # Test MAG Disabled!
                 partitions, _ = test_partitioner.partition(
-                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=True)
+                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
             else:
                 partitions, _ = test_partitioner.partition(
                     src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
@@ -108,14 +109,14 @@ class TestPartition(unittest.TestCase):
         #             i, ptable[i].item()))
 
         print('Checking Edge Cut...\n')
-        edge_cut = 0
-        for idx, row in tqdm(dataset.iterrows()):
-            u = int(row['src'])
-            v = int(row['dst'])
-            if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
-                edge_cut += 1
-
-        print('edge cut calculate by vaniila algo is {}\n'.format(edge_cut))
+        # edge_cut = 0
+        # for idx, row in tqdm(dataset.iterrows()):
+        #     u = int(row['src'])
+        #     v = int(row['dst'])
+        #     if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
+        #         edge_cut += 1
+        #
+        # print('edge cut calculate by vaniila algo is {}\n'.format(edge_cut))
 
         edge_cut = 0
         src_nodes = dataset["src"].values.astype(np.int64)
@@ -123,8 +124,12 @@ class TestPartition(unittest.TestCase):
         src_nodes = torch.from_numpy(src_nodes)
         dst_nodes = torch.from_numpy(dst_nodes)
 
-        cmp = torch.eq(src_nodes, dst_nodes)
-        edge_cut = len(cmp[cmp is False])
+        spt = ptable[src_nodes]
+        dpt = ptable[dst_nodes]
+        cmp = torch.eq(spt, dpt)
+
+        mmaske = cmp == False
+        edge_cut = len(cmp[mmaske])
 
         print("edge cut calculate by edge algo is {}\n".format(edge_cut))
 
