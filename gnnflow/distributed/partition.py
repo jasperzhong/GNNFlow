@@ -725,8 +725,8 @@ class FennelEdgePartitioner(Partitioner):
         load_balance_score = []
 
         for i in range(self._num_partitions):
-            if self._edges_partitioned_num_list[i] > 1.05 * (self._edges_partitioned / self._num_partitions):
-                partition_score.append(-10000)
+            if self._edges_partitioned_num_list[i] > 1.3 * (self._edges_partitioned / self._num_partitions):
+                partition_score.append(-100000)
                 load_balance_score.append(-10)
                 continue
 
@@ -769,7 +769,7 @@ class FennelEdgePartitioner(Partitioner):
         argsort_list = np.argsort(neighbour_size_list)
         # argsort_list = argsort_list[::-1]
 
-        for i in tqdm(range(len(unique_src_nodes))):
+        for i in range(len(unique_src_nodes)):
             sorted_idx = argsort_list[i]
 
             pid, debug_map = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])

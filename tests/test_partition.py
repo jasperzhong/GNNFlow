@@ -20,10 +20,10 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["fennel_edge", "hash"], [100000000], [100000000], [False]))
+        itertools.product(["fennel_edge", "hash"], [1000000], [1000000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
-        dataset_name = 'MAG'
+        dataset_name = 'GDELT'
         p_stgy = partition_strategy
         num_p = 4
         undirected = True
@@ -77,9 +77,9 @@ class TestPartition(unittest.TestCase):
             eids = torch.from_numpy(eids)
 
             if i == 0:
-                # Test MAG Disabled! (updated, if there is not, there is not)
+                # Test GDELT Disabled! (updated, if there is not, there is not)
                 partitions, _ = test_partitioner.partition(
-                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=True)
+                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
             else:
                 partitions, _ = test_partitioner.partition(
                     src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
