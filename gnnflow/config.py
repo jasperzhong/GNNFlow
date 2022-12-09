@@ -90,7 +90,7 @@ _gat_default_config = {
     "att_head": 2,
     "att_dropout": 0.1,
     "num_layers": 2,
-    "fanouts": [15, 10],
+    "fanouts": [10, 10],
     "sample_strategy": "uniform",
     "num_snapshots": 1,
     "snapshot_time_window": 0,
