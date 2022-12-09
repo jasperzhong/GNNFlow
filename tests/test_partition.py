@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["hash", "fennel_edge"], [100000000], [100000000], [False]))
+        itertools.product(["fennel_edge", "hash"], [100000000], [100000000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
         dataset_name = 'MAG'
@@ -48,6 +48,10 @@ class TestPartition(unittest.TestCase):
             list(range(initial_ingestion_batch_size,
                  len(dataset), ingestion_batch_size)) + [len(dataset)]
         for i in range(len(range_list)-1):
+
+            range_list_start = time.time()
+            print("range {}th, {} to {} started...\n".format(i, range_list[i], range_list[i + 1]))
+
             batch = dataset[range_list[i]:range_list[i+1]]
             src_nodes = batch["src"].values.astype(np.int64)
             dst_nodes = batch["dst"].values.astype(np.int64)
@@ -73,15 +77,18 @@ class TestPartition(unittest.TestCase):
             eids = torch.from_numpy(eids)
 
             if i == 0:
-                # Test MAG Disabled!
+                # Test MAG Disabled! (updated, if there is not, there is not)
                 partitions, _ = test_partitioner.partition(
-                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
+                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=True)
             else:
                 partitions, _ = test_partitioner.partition(
                     src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
 
             for pt_idx in range(num_p):
                 edge_num_tot[pt_idx] += len(partitions[pt_idx].eids)
+
+            # record the end time
+            print("range {}th, {} to {} end..., time usage:{}\n".format(i, range_list[i], range_list[i + 1], time.time() - range_list_start))
 
         # load balance
         ptable = test_partitioner.get_partition_table()
