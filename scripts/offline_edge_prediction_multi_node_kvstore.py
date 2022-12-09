@@ -300,7 +300,7 @@ def main():
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
         cache.init_cache(sampler=sampler, train_df=train_data,
-                         pre_sampling_rounds=2)
+                         pre_sampling_rounds=1)
     else:
         cache.init_cache()
     init_time = time.time() - init_start
