@@ -94,7 +94,7 @@ class GNNLabStaticCache(Cache):
 
         sampler = kwargs['sampler']
         train_df = kwargs['train_df']
-        pre_sampling_rounds = kwargs.get('pre_sampling_rounds', 2)
+        pre_sampling_rounds = kwargs.get('pre_sampling_rounds', 1)
         batch_size = kwargs.get('batch_size', 600)
 
         # Do sampling for multiple rounds

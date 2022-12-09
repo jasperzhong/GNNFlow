@@ -10,8 +10,8 @@ class GAT(nn.Module):
     def __init__(self, dim_in: int, dim_out: int,
                  num_layers: int = 2,
                  attn_head: List[int] = [8, 1],
-                 feat_drop: float = 0.1,
-                 attn_drop: float = 0.1,
+                 feat_drop: float = 0,
+                 attn_drop: float = 0,
                  allow_zero_in_degree: bool = True):
         if num_layers != len(attn_head):
             raise ValueError(
