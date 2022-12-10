@@ -86,18 +86,18 @@ _graphsage_default_config = {
 }
 
 _gat_default_config = {
-    "dim_embed": 100,
+    "dropout": 0.1,
+    "att_head": 2,
+    "att_dropout": 0.1,
     "num_layers": 2,
-    "attn_head": [8, 1],
-    "feat_drop": 0.6,
-    "attn_drop": 0.6,
-    "allow_zero_in_degree": True,
-    "fanouts": [15, 10],
+    "fanouts": [10, 10],
     "sample_strategy": "uniform",
     "num_snapshots": 1,
     "snapshot_time_window": 0,
-    "use_memory": False,
     "prop_time": False,
+    "use_memory": False,
+    "dim_time": 0,
+    "dim_embed": 100,
     "is_static": True
 }
 
