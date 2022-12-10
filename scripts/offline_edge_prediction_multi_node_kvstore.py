@@ -360,6 +360,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         cache_node_ratio_sum = 0
         total_samples = 0
         total_sampling_time = 0
+        total_feature_fetch_time = 0
         cv_sampling_time = 0
 
         epoch_time_start = time.time()
@@ -372,8 +373,11 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
+            feature_start_time = time.time()
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
+            total_feature_fetch_time += time.time() - feature_start_time
+
             # Train
             optimizer.zero_grad()
             pred_pos, pred_neg = model(mfgs)
@@ -399,12 +403,12 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                            cache_node_ratio_sum, total_samples, total_sampling_time],
-                                           device=device)
+                                            cache_node_ratio_sum, total_samples, total_sampling_time,
+                                            total_feature_fetch_time], device=device)
                     torch.distributed.all_reduce(metrics)
                     metrics /= args.world_size
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                        total_samples, total_sampling_time = metrics.tolist()
+                        total_samples, total_sampling_time, total_feature_fetch_time = metrics.tolist()
 
                     all_sampling_time = sampler.get_sampling_time()
                     std = all_sampling_time.std(dim=1).mean()
@@ -412,8 +416,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                     cv_sampling_time += std / mean
 
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_data)//args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time))
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Total feature fetch time: {:.2f}s | Total time: {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
+                        train_data)//args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, time.time() - epoch_time_start))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
