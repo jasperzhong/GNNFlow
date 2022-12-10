@@ -580,11 +580,11 @@ class FennelEdgePartitioner(Partitioner):
         super().__init__(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
 
         # neighbor_memory (_num_partition * max_node)
-        self._out_degree = torch.zeros(self._max_node, dtype=torch.int8)
+        self._out_degree = torch.zeros(self._max_node, dtype=torch.long)
         # edges partitioned
         self._edges_partitioned = 0
         # edges partitioned w.r.t. partitions
-        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.int32)
+        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.long)
 
     # Fennel Edge Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
@@ -716,7 +716,7 @@ class FennelEdgePartitioner(Partitioner):
         neighbour_in_partition_size_list = []
 
         for i in range(self._num_partitions):
-            if i not in npt_map.keys():
+            if i not in npt_map:
                 neighbour_in_partition_size_list.append(0)
                 continue
 
@@ -725,8 +725,8 @@ class FennelEdgePartitioner(Partitioner):
         load_balance_score = []
 
         for i in range(self._num_partitions):
-            if self._edges_partitioned_num_list[i] > 1.5 * (self._edges_partitioned / self._num_partitions):
-                partition_score.append(-10000)
+            if self._edges_partitioned_num_list[i] + len(dst_nodes) > 1.5 * (self._edges_partitioned / self._num_partitions):
+                partition_score.append(-np.inf)
                 load_balance_score.append(-10)
                 continue
 
@@ -735,7 +735,7 @@ class FennelEdgePartitioner(Partitioner):
 
             # calculate neighbor's out degree sum
             neighbour_in_partition_mask = local_partition_table == i
-            neighbour_in_partition_id = dst_nodes[neighbour_in_partition_mask]
+            neighbour_in_partition_id = torch.unique(dst_nodes[neighbour_in_partition_mask])
 
             out_degree_sum = 0
             if len(neighbour_in_partition_id) != 0:
@@ -743,12 +743,14 @@ class FennelEdgePartitioner(Partitioner):
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
-            load_balance_score.append(self._edges_partitioned_num_list[i] / self._edges_partitioned)
+            # load_balance_score.append(self._edges_partitioned_num_list[i] / self._edges_partitioned)
+            load_balance_score.append(self._edges_partitioned_num_list[i])
             partition_score.append(locality_score)
 
-        load_balance_score = self.edge_set_normalize(load_balance_score, -50, 50)
+        # load_balance_score = self.edge_set_normalize(load_balance_score, -50, 50)
 
         for i in range(self._num_partitions):
+            print("locality_score[{}] = {}, load_balance_score[{}] = {}".format(i, partition_score[i], i, load_balance_score[i]))
             partition_score[i] -= load_balance_score[i]
 
         partition_score = np.array(partition_score)
@@ -767,6 +769,7 @@ class FennelEdgePartitioner(Partitioner):
             neighbour_size_list.append(len(dst_nodes_list[i]))
 
         argsort_list = np.argsort(neighbour_size_list)
+        # argsort_list = np.arange(0, len(neighbour_size_list))
         # argsort_list = argsort_list[::-1]
 
         for i in range(len(unique_src_nodes)):
