@@ -725,7 +725,7 @@ class FennelEdgePartitioner(Partitioner):
         load_balance_score = []
 
         for i in range(self._num_partitions):
-            if self._edges_partitioned_num_list[i] + len(dst_nodes) > 1.5 * (self._edges_partitioned / self._num_partitions):
+            if self._edges_partitioned_num_list[i] + len(dst_nodes) > 1.2 * (self._edges_partitioned / self._num_partitions):
                 partition_score.append(-np.inf)
                 load_balance_score.append(-10)
                 continue
