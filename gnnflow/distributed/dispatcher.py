@@ -20,13 +20,13 @@ class Dispatcher:
     """
 
     def __init__(self, partition_strategy: str, num_partitions: int, node_feat: bool, edge_feat: bool,
-                 memory: bool):
+                 memory: bool, dataset_name: str):
         self._rank = torch.distributed.get_rank()
         assert self._rank == 0, "Only rank 0 can initialize the dispatcher."
         self._num_partitions = num_partitions
         self._local_world_size = local_world_size()
         self._partitioner = get_partitioner(
-            partition_strategy, num_partitions, self._local_world_size)
+            partition_strategy, num_partitions, self._local_world_size, dataset_name)
 
         self._num_edges = 0
         self._max_nodex = 0
@@ -238,7 +238,7 @@ class Dispatcher:
 
 
 def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None,
-                   node_feat: bool = False, edge_feat: bool = False, memory: bool = False):
+                   node_feat: bool = False, edge_feat: bool = False, memory: bool = False, dataset_name: str = ""):
     """
     Get the dispatcher singleton.
 
@@ -255,5 +255,5 @@ def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Opt
     global dispatcher
     if dispatcher is None:
         dispatcher = Dispatcher(
-            partition_strategy, num_partitions, node_feat, edge_feat, memory)
+            partition_strategy, num_partitions, node_feat, edge_feat, memory, dataset_name)
     return dispatcher

@@ -47,7 +47,7 @@ def initialize(rank: int, world_size: int, partition_strategy: str,
 
         if rank == 0:
             dispatcher = get_dispatcher(
-                partition_strategy, num_partitions, dim_node > 0, dim_edge > 0, dim_memory > 0)
+                partition_strategy, num_partitions, dim_node > 0, dim_edge > 0, dim_memory > 0, data_name)
             dispatcher.broadcast_node_edge_dim(dim_node, dim_edge)
 
     torch.distributed.barrier()
