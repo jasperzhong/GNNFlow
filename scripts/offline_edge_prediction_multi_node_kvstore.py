@@ -350,6 +350,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
     all_total_samples = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training... distributed: {}'.format(args.distributed))
+    torch.distributed.barrier()
     for e in range(args.epoch):
         model.train()
         cache.reset()
