@@ -151,7 +151,7 @@ class KVStoreServer:
         elif mode == 'edge' and self._edge_feat_mmap is not None:
             # assume that all keys are unseen
             edge_feat = self._edge_feat_mmap[keys.numpy()]
-            edge_feat = torch.from_numpy(edge_feat)
+            edge_feat = torch.from_numpy(edge_feat).double()
             self.push(keys, edge_feat, mode)
         elif mode == 'memory' and self._dim_memory > 0:
             # remove seen keys
