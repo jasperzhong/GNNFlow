@@ -8,9 +8,9 @@ EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${6:-hash}"
 
-HOST_NODE_ADDR=172.31.34.83
+HOST_NODE_ADDR=172.31.17.20
 HOST_NODE_PORT=29400
-NNODES=4
+NNODES=8
 NPROC_PER_NODE=8
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)

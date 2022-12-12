@@ -30,7 +30,7 @@ def initialize(rank: int, world_size: int, partition_strategy: str,
     rpc.init_rpc("worker%d" % rank, rank=rank, world_size=world_size,
                  rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
                      rpc_timeout=180000,
-                     num_worker_threads=32,
+                     num_worker_threads=64,
                      _transports=["shm", "uv"],
                      _channels=["cma", "mpt_uv", "basic", "cuda_xth", "cuda_ipc", "cuda_basic"]))
     logging.info("Rank %d: Initialized RPC.", rank)
