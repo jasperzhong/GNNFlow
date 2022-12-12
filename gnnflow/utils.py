@@ -272,8 +272,9 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
 
     if not os.path.exists(node_feat_path) and \
             not os.path.exists(edge_feat_path):
-        raise ValueError("Both {} and {} do not exist".format(
-            node_feat_path, edge_feat_path))
+        return None, None
+        # raise ValueError("Both {} and {} do not exist".format(
+        #     node_feat_path, edge_feat_path))
 
     mmap_mode = "r+" if memmap else None
 
