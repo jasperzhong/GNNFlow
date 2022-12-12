@@ -118,7 +118,7 @@ def load_synthetic_dataset(dataset: str, data_dir: Optional[str] = None):
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
-    path = os.path.join(data_dir, dataset, 'edges_tiny.parquet')
+    path = os.path.join(data_dir, dataset, 'edges.parquet')
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 

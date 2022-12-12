@@ -189,5 +189,5 @@ _synthetic_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": False,
-    "batch_size": 1200
+    "batch_size": 4000
 }
