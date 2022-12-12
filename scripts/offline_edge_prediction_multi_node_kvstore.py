@@ -443,8 +443,11 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
         # Validation
         val_start = time.time()
-        val_ap, val_auc = evaluate(
-            val_data, sampler, model, criterion, cache, device, val_rand_sampler)
+        if val_data is not None:
+            val_ap, val_auc = evaluate(
+                val_data, sampler, model, criterion, cache, device, val_rand_sampler)
+        else:
+            val_ap, val_auc = 0.0, 0.0
 
         if args.distributed:
             val_res = torch.tensor([val_ap, val_auc]).to(device)

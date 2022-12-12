@@ -168,17 +168,17 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
 
     train_path = os.path.join(
         data_dir, dataset, 'edges_train_{}_{}.csv'.format(str(world_size), str(rank)))
-    val_path = os.path.join(
-        data_dir, dataset, 'edges_val_{}_{}.csv'.format(str(world_size), str(rank)))
+    # val_path = os.path.join(
+    #     data_dir, dataset, 'edges_val_{}_{}.csv'.format(str(world_size), str(rank)))
 
     train_data = None
     if not partition_train_data:
         train_data = pd.read_csv(train_path)
         assert isinstance(train_data, pd.DataFrame)
-    val_data = pd.read_csv(val_path)
-    assert isinstance(val_data, pd.DataFrame)
+    # val_data = pd.read_csv(val_path)
+    # assert isinstance(val_data, pd.DataFrame)
 
-    return train_data, val_data
+    return train_data, None
 
 
 def load_node_feat(dataset: str, data_dir: Optional[str] = None):
