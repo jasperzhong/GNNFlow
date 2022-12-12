@@ -70,7 +70,7 @@ def dispatch_full_dataset(rank: int, data_name: str,
         t = tqdm(total=len(df))
         for i in range(len(range_list)-1):
             batch = df.iloc[range_list[i]:range_list[i+1]]
-            dispatcher.partition_graph(batch, True)
+            dispatcher.partition_graph(batch, False)
             t.update(len(batch))
 
         t.close()
