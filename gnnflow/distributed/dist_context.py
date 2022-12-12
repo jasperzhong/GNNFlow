@@ -62,18 +62,20 @@ def dispatch_full_dataset(rank: int, data_name: str,
         dispatcher = get_dispatcher()
 
         # read csv in chunks
-        df = load_synthetic_dataset(data_name)
+        for i in range(10):
+            df = load_synthetic_dataset(data_name, chunk=i)
+    
+            range_list = [0] + \
+                list(range(initial_ingestion_batch_size,
+                           len(df), ingestion_batch_size)) + [len(df)]
+            t = tqdm(total=len(df))
+            for i in range(len(range_list)-1):
+                batch = df.iloc[range_list[i]:range_list[i+1]]
+                dispatcher.partition_graph(batch, False)
+                t.update(len(batch))
+            t.close()
+            logging.info("ingestion done for chunk %d", i)
 
-        range_list = [0] + \
-            list(range(initial_ingestion_batch_size,
-                       len(df), ingestion_batch_size)) + [len(df)]
-        t = tqdm(total=len(df))
-        for i in range(len(range_list)-1):
-            batch = df.iloc[range_list[i]:range_list[i+1]]
-            dispatcher.partition_graph(batch, False)
-            t.update(len(batch))
-
-        t.close()
         logging.info("Rank 0: Ingestion edges done in %.2fs.",
                      time.time() - start)
         dispatcher.dispatch_node_memory()

@@ -100,7 +100,7 @@ def load_partition_table(dataset: str):
     return pt
 
 
-def load_synthetic_dataset(dataset: str, data_dir: Optional[str] = None):
+def load_synthetic_dataset(dataset: str, data_dir: Optional[str] = None, chunk: int = 0):
     """
     Loads the synthetic dataset and returns the dataframes for the train, validation, test and
     whole dataset.
@@ -118,7 +118,7 @@ def load_synthetic_dataset(dataset: str, data_dir: Optional[str] = None):
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
-    path = os.path.join(data_dir, dataset, 'edges.parquet')
+    path = os.path.join(data_dir, dataset, 'edges_{}.parquet'.format(chunk))
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
