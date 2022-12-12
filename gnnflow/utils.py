@@ -100,6 +100,34 @@ def load_partition_table(dataset: str):
     return pt
 
 
+def load_synthetic_dataset(dataset: str, data_dir: Optional[str] = None):
+    """
+    Loads the synthetic dataset and returns the dataframes for the train, validation, test and
+    whole dataset.
+
+    Args:
+        dataset: the name of the dataset.
+        data_dir: the directory where the dataset is stored.
+
+    Returns:
+        train_data: the dataframe for the train dataset.
+        val_data: the dataframe for the validation dataset.
+        test_data: the dataframe for the test dataset.
+        full_data: the dataframe for the whole dataset.
+    """
+    if data_dir is None:
+        data_dir = os.path.join(get_project_root_dir(), "data")
+
+    path = os.path.join(data_dir, dataset, 'edges_tiny.parquet')
+    if not os.path.exists(path):
+        raise ValueError('{} does not exist'.format(path))
+
+    df = pd.read_parquet(path)
+    # add a column for the edge id
+    df['eid'] = df.index
+    return df
+
+
 def load_dataset_in_chunks(dataset: str, data_dir: Optional[str] = None, chunksize: int = 100000000):
     """
     Loads the dataset and returns an iterator of the whole dataset

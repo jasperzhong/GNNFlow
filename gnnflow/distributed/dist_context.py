@@ -11,7 +11,7 @@ from tqdm import tqdm
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.dispatcher import get_dispatcher
 from gnnflow.distributed.kvstore import KVStoreServer
-from gnnflow.utils import load_dataset_in_chunks, load_feat
+from gnnflow.utils import load_synthetic_dataset, load_feat
 
 
 def initialize(rank: int, world_size: int, partition_strategy: str,
@@ -62,22 +62,16 @@ def dispatch_full_dataset(rank: int, data_name: str,
         dispatcher = get_dispatcher()
 
         # read csv in chunks
-        df_iterator = load_dataset_in_chunks(
-            data_name, chunksize=initial_ingestion_batch_size)
+        df = load_synthetic_dataset(data_name)
 
-        t = tqdm()
-        # ingest the first chunk
-        for i, dataset in enumerate(df_iterator):
-            dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
-            if i > 0:
-                for i in range(0, initial_ingestion_batch_size, ingestion_batch_size):
-                    dataset_chunk = dataset.iloc[i:i + ingestion_batch_size]
-                    dispatcher.partition_graph(dataset_chunk, False)
-                    t.update(len(dataset_chunk))
-            else:
-                dispatcher.partition_graph(dataset, False)
-                t.update(initial_ingestion_batch_size)
-            del dataset
+        range_list = [0] + \
+            list(range(initial_ingestion_batch_size,
+                       len(df), ingestion_batch_size)) + [len(df)]
+        t = tqdm(total=len(df))
+        for i in range(len(range_list)-1):
+            batch = df.iloc[range_list[i]:range_list[i+1]]
+            dispatcher.partition_graph(batch, True)
+            t.update(len(batch))
 
         t.close()
         logging.info("Rank 0: Ingestion edges done in %.2fs.",
