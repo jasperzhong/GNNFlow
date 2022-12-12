@@ -17,7 +17,7 @@ def get_default_config(model: str, dataset: str):
     """
     model, dataset = model.lower(), dataset.lower()
     assert model in ["tgn", "tgat", "dysat", "graphsage", "gat"] and dataset in [
-        "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag"], "Invalid model or dataset."
+        "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag", "synthetic"], "Invalid model or dataset."
 
     mod = sys.modules[__name__]
     return getattr(
@@ -175,6 +175,19 @@ _mag_default_config = {
     "insertion_policy": "insert",
     "undirected": False,
     "node_feature": True,
+    "edge_feature": False,
+    "batch_size": 1200
+}
+
+_synthetic_default_config = {
+    "initial_pool_size": 10*GB,
+    "maximum_pool_size": 50*GB,
+    "mem_resource_type": "unified",
+    "minimum_block_size": 45,
+    "blocks_to_preallocate": 65536,
+    "insertion_policy": "insert",
+    "undirected": False,
+    "node_feature": False,
     "edge_feature": False,
     "batch_size": 1200
 }

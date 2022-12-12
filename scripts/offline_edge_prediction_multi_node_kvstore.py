@@ -191,20 +191,20 @@ def main():
             args.local_rank, dim_node, dim_edge, args.dim_memory)
 
         # print graph edge memory size and metadata
-        # avg_linked_list_length = dgraph._dgraph.avg_linked_list_length()
+        avg_linked_list_length = dgraph._dgraph.avg_linked_list_length()
         graph_memory_usage = dgraph._dgraph.get_graph_memory_usage() / MB
         metadata_memory_usage = dgraph._dgraph.get_metadata_memory_usage() / MB
 
         # all reduce
         data_list = torch.tensor(
-            [graph_memory_usage, metadata_memory_usage]).cuda()
+            [avg_linked_list_length, graph_memory_usage, metadata_memory_usage]).cuda()
         torch.distributed.all_reduce(
             data_list, op=torch.distributed.ReduceOp.SUM)
         data_list /= args.world_size
-        graph_memory_usage, metadata_memory_usage = data_list.tolist()
+        avg_linked_list_length, graph_memory_usage, metadata_memory_usage = data_list.tolist()
         graph_memory_usage *= args.num_nodes
-        logging.info('graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size: {})'.format(
-            graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
+        logging.info('avg linked_list length: {:.2f}, graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size: {})'.format(
+            avg_linked_list_length, graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
 
     else:
         dgraph = build_dynamic_graph(
