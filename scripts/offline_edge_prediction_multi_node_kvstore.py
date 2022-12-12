@@ -241,7 +241,7 @@ def main():
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(args.batch_size, args.lr))
 
-    if args.distributed and args.data not in ['REDDIT', 'GDELT', 'MAG']:
+    if args.distributed and args.data not in ['REDDIT', 'GDELT', 'MAG', "SYNTHETIC"]:
         raise NotImplementedError("distributed training is not supported for dataset {}".format(
             args.data))
 
