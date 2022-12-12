@@ -74,6 +74,7 @@ def dispatch_full_dataset(rank: int, data_name: str,
                 dispatcher.partition_graph(batch, False)
                 t.update(len(batch))
             t.close()
+            del df
             logging.info("ingestion done for chunk %d", i)
 
         logging.info("Rank 0: Ingestion edges done in %.2fs.",
