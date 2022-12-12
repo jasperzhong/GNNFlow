@@ -277,7 +277,7 @@ def main():
     build_graph_end = time.time()
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], find_unused_parameters=False)
+            model, device_ids=[args.local_rank], find_unused_parameters=True)
 
     # pinned_nfeat_buffs, pinned_efeat_buffs = None, None
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
