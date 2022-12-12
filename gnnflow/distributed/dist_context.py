@@ -62,8 +62,8 @@ def dispatch_full_dataset(rank: int, data_name: str,
         dispatcher = get_dispatcher()
 
         # read csv in chunks
-        for i in range(10):
-            df = load_synthetic_dataset(data_name, chunk=i)
+        for chunk in range(10):
+            df = load_synthetic_dataset(data_name, chunk=chunk)
     
             range_list = [0] + \
                 list(range(initial_ingestion_batch_size,
@@ -75,7 +75,7 @@ def dispatch_full_dataset(rank: int, data_name: str,
                 t.update(len(batch))
             t.close()
             del df
-            logging.info("ingestion done for chunk %d", i)
+            logging.info("ingestion done for chunk %d", chunk)
 
         logging.info("Rank 0: Ingestion edges done in %.2fs.",
                      time.time() - start)
