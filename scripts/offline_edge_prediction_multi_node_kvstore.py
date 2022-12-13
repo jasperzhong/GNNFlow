@@ -236,7 +236,7 @@ def main():
     logging.info("make dataset done")
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
-    args.batch_size = data_config['batch_size']
+    args.batch_size = model_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(args.batch_size, args.lr))

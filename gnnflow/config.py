@@ -38,7 +38,8 @@ _tgn_default_config = {
     "use_memory": True,
     "dim_time": 100,
     "dim_embed": 100,
-    "dim_memory": 100
+    "dim_memory": 100,
+    "batch_size": 4000
 }
 
 _tgat_default_config = {
@@ -53,7 +54,8 @@ _tgat_default_config = {
     "prop_time": False,
     "use_memory": False,
     "dim_time": 100,
-    "dim_embed": 100
+    "dim_embed": 100,
+    "batch_size": 600
 }
 
 _dysat_default_config = {
@@ -69,7 +71,8 @@ _dysat_default_config = {
     "prop_time": True,
     "use_memory": False,
     "dim_time": 0,
-    "dim_embed": 100
+    "dim_embed": 100,
+    "batch_size": 600
 }
 
 _graphsage_default_config = {
@@ -82,7 +85,8 @@ _graphsage_default_config = {
     "snapshot_time_window": 0,
     "prop_time": False,
     "use_memory": False,
-    "is_static": True
+    "is_static": True,
+    "batch_size": 1200
 }
 
 _gat_default_config = {
@@ -98,7 +102,8 @@ _gat_default_config = {
     "use_memory": False,
     "dim_time": 0,
     "dim_embed": 100,
-    "is_static": True
+    "is_static": True,
+    "batch_size": 600
 }
 
 _wiki_default_config = {
@@ -111,7 +116,6 @@ _wiki_default_config = {
     "undirected": True,
     "node_feature": False,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _reddit_default_config = {
@@ -124,7 +128,6 @@ _reddit_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _mooc_default_config = {
@@ -137,7 +140,6 @@ _mooc_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _lastfm_default_config = {
@@ -150,7 +152,6 @@ _lastfm_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _gdelt_default_config = {
@@ -163,7 +164,6 @@ _gdelt_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _mag_default_config = {
@@ -176,5 +176,4 @@ _mag_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": False,
-    "batch_size": 1200
 }
