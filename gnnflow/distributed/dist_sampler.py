@@ -349,8 +349,8 @@ class DistributedTemporalSampler:
                 self._partition_id*self._local_world_size
 
             # update load table
-            out_degree = self._dgraph.out_degree(target_vertices.numpy())
-            load = np.sum(out_degree)
+            # out_degree = self._dgraph.out_degree(target_vertices.numpy())
+            load = len(target_vertices)
             self._load_table[min_load_local_rank] += load
 
         if min_load_global_rank == self._rank:
