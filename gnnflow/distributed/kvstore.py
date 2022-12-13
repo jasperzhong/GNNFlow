@@ -210,7 +210,7 @@ class KVStoreServer:
                 return torch.stack(list(map(self._node_feat_map.get, keys)))
             elif mode == 'edge':
                 indices = torch.searchsorted(self._eids, keys)
-                return self._edge_feat.index_select(0, indices).double()
+                return self._edge_feat.index_select(0, indices)
             elif mode == 'memory':
                 keys = keys.tolist()
                 return torch.stack(list(map(self._memory_map.get, keys)))
