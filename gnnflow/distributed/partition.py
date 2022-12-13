@@ -917,8 +917,10 @@ class GingerPartitioner(Partitioner):
 
             node_number = len(self._partition_table[self._partition_table != -1])
 
+            bal_score = 0.5 * (partition_size + (node_number / self._edges_partitioned) * self._edges_partitioned_num_list[i])
+
             partition_score.append(
-                neighbour_in_partition_size - 0.5 * (partition_size + (node_number / self._edges_partitioned) * self._edges_partitioned_num_list[i]))
+                neighbour_in_partition_size - alpha * self._gamma * (bal_score ** (self._gamma - 1)))
 
         partition_score = np.array(partition_score)
 
