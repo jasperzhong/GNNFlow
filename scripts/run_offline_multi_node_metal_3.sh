@@ -39,5 +39,5 @@ cmd="torchrun \
 rm -rf /dev/shm/rmm_pool_*
 
 echo $cmd
-LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
+LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd >> log.txt 2>&1
 
