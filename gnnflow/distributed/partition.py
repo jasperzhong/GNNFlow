@@ -907,7 +907,7 @@ class GingerPartitioner(Partitioner):
         for i in range(self._num_partitions):
             partition_size = (self._partition_table == i).sum().item()
 
-            if partition_size >= self._partition_capacity:
+            if partition_size >= 1.5 * self._partition_capacity:
                 partition_score.append(-10000000000)
                 continue
 
