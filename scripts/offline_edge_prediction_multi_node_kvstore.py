@@ -4,6 +4,7 @@ import logging
 import math
 import os
 import random
+import sys
 import time
 
 import numpy as np
@@ -27,9 +28,8 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, build_dynamic_graph, get_batch,
-                           get_pinned_buffers, get_project_root_dir,
-                           load_feat, load_partitioned_dataset,
-                           mfgs_to_cuda)
+                           get_pinned_buffers, get_project_root_dir, load_feat,
+                           load_partitioned_dataset, mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -344,6 +344,7 @@ def main():
         torch.distributed.rpc.shutdown()
         torch.distributed.destroy_process_group()
         logging.info("Rank {} shutdown done".format(args.rank))
+        sys.exit(0)
 
 
 def train(train_data, val_data, sampler, model, optimizer, criterion,
