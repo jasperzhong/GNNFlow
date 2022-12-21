@@ -54,7 +54,7 @@ class Dispatcher:
         self._num_edges += torch.unique(eids).size(0)
 
         partitions, evenly_partitioned_dataset = self._partitioner.partition(
-            src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=partition_train_data, is_initial_ingestion=is_initial_ingestion_batch)
+            src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=partition_train_data)
 
         self._max_node = self._partitioner._max_node
 
