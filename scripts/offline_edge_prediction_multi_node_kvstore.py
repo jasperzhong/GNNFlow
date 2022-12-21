@@ -342,6 +342,8 @@ def main():
         torch.distributed.barrier()
         logging.info("Rank {} shutdown".format(args.rank))
         torch.distributed.rpc.shutdown()
+        torch.distributed.destroy_process_group()
+        logging.info("Rank {} shutdown done".format(args.rank))
 
 
 def train(train_data, val_data, sampler, model, optimizer, criterion,
