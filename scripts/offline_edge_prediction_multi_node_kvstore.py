@@ -10,6 +10,7 @@ import numpy as np
 import psutil
 import torch
 import torch.distributed
+import torch.distributed.rpc
 import torch.nn
 import torch.nn.parallel
 import torch.utils.data
@@ -338,8 +339,9 @@ def main():
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
-        logging.info("Rank {} is done".format(args.rank))
         torch.distributed.barrier()
+        logging.info("Rank {} shutdown".format(args.rank))
+        torch.distributed.rpc.shutdown()
 
 
 def train(train_data, val_data, sampler, model, optimizer, criterion,
