@@ -49,7 +49,7 @@ class Partitioner:
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
 
         pt = load_partition_table(self._dataset_name)
-        if pt:
+        if pt is not None:
             self._partition_table = pt
 
     def get_num_partitions(self) -> int:
