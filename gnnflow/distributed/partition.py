@@ -5,7 +5,6 @@ from gnnflow.utils import load_partition_table
 import numpy as np
 import torch
 
-from tqdm import tqdm
 
 class Partition(NamedTuple):
     """
@@ -505,7 +504,6 @@ class FennelPartitioner(Partitioner):
 
             assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
             )
-
             # merge the partitions
             for i in range(self._num_partitions):
                 mask = partition_table_for_unseen_nodes == i
@@ -584,7 +582,8 @@ class FennelEdgePartitioner(Partitioner):
         # edges partitioned
         self._edges_partitioned = 0
         # edges partitioned w.r.t. partitions
-        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.long)
+        self._edges_partitioned_num_list = torch.zeros(
+            num_partitions, dtype=torch.long)
 
     # Fennel Edge Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
@@ -619,10 +618,12 @@ class FennelEdgePartitioner(Partitioner):
 
             # update the out degree
             local_src_nodes_mask = src_nodes[mask].clone()
-            unique_src_node_mask_id_list, cnt_seq = torch.unique(local_src_nodes_mask, return_counts=True)
+            unique_src_node_mask_id_list, cnt_seq = torch.unique(
+                local_src_nodes_mask, return_counts=True)
 
             for src_id_idx in range(len(unique_src_node_mask_id_list)):
-                self._out_degree[unique_src_node_mask_id_list[src_id_idx]] += cnt_seq[src_id_idx]
+                self._out_degree[unique_src_node_mask_id_list[src_id_idx]
+                                 ] += cnt_seq[src_id_idx]
 
             # add to partition
             self._edges_partitioned_num_list[i] += len(src_nodes[mask])
@@ -642,10 +643,12 @@ class FennelEdgePartitioner(Partitioner):
 
                 # update the out degree
                 local_src_nodes_mask = src_nodes[mask].clone()
-                unique_src_node_mask_id_list, cnt_seq = torch.unique(local_src_nodes_mask, return_counts=True)
+                unique_src_node_mask_id_list, cnt_seq = torch.unique(
+                    local_src_nodes_mask, return_counts=True)
 
                 for src_id_idx in range(len(unique_src_node_mask_id_list)):
-                    self._out_degree[unique_src_node_mask_id_list[src_id_idx]] += cnt_seq[src_id_idx]
+                    self._out_degree[unique_src_node_mask_id_list[src_id_idx]
+                                     ] += cnt_seq[src_id_idx]
 
                 # add to partition
                 self._edges_partitioned_num_list[pid] += len(src_nodes[mask])
@@ -707,7 +710,8 @@ class FennelEdgePartitioner(Partitioner):
         local_partition_table = self._partition_table[dst_nodes]
 
         # unique to get the neighbor quant
-        npt_list, npt_cnt = torch.unique(local_partition_table, return_counts=True)
+        npt_list, npt_cnt = torch.unique(
+            local_partition_table, return_counts=True)
         npt_map = {}
         for i in range(len(npt_list)):
             npt_map[npt_list[i]] = npt_cnt[i]
@@ -735,11 +739,13 @@ class FennelEdgePartitioner(Partitioner):
 
             # calculate neighbor's out degree sum
             neighbour_in_partition_mask = local_partition_table == i
-            neighbour_in_partition_id = torch.unique(dst_nodes[neighbour_in_partition_mask])
+            neighbour_in_partition_id = torch.unique(
+                dst_nodes[neighbour_in_partition_mask])
 
             out_degree_sum = 0
             if len(neighbour_in_partition_id) != 0:
-                out_degree_sum = self._out_degree[neighbour_in_partition_id].sum().item()
+                out_degree_sum = self._out_degree[neighbour_in_partition_id].sum(
+                ).item()
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
@@ -757,6 +763,7 @@ class FennelEdgePartitioner(Partitioner):
 
         return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
         # return int(np.argmax(partition_score)), debug_map
+
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
                                             timestamps_list: List[torch.Tensor],
@@ -775,15 +782,19 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(len(unique_src_nodes)):
             sorted_idx = argsort_list[i]
 
-            pid, debug_map = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
+            pid, debug_map = self.fennelEdge(
+                int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
             partition_table[sorted_idx] = pid
             self._partition_table[int(unique_src_nodes[sorted_idx])] = pid
-            self._out_degree[unique_src_nodes[sorted_idx]] += len(dst_nodes_list[sorted_idx])
+            self._out_degree[unique_src_nodes[sorted_idx]
+                             ] += len(dst_nodes_list[sorted_idx])
 
             # update the edge partition num_list
-            self._edges_partitioned_num_list[pid] += len(dst_nodes_list[sorted_idx])
+            self._edges_partitioned_num_list[pid] += len(
+                dst_nodes_list[sorted_idx])
 
         return partition_table
+
 
 def get_partitioner(partition_strategy: str, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False):
     """
