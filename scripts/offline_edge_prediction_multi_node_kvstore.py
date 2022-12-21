@@ -23,13 +23,12 @@ from gnnflow.config import get_default_config
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.models.dgnn import DGNN
-from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (EarlyStopMonitor, get_batch,
-                           build_dynamic_graph, get_pinned_buffers,
-                           get_project_root_dir, load_dataset, load_feat,
-                           load_partitioned_dataset, mfgs_to_cuda)
+from gnnflow.utils import (EarlyStopMonitor, build_dynamic_graph, get_batch,
+                           get_pinned_buffers, get_project_root_dir,
+                           load_feat, load_partitioned_dataset,
+                           mfgs_to_cuda)
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -222,12 +221,12 @@ def main():
     num_edges = dgraph.num_edges()
 
     logging.info("use chunks build graph done")
-    train_rand_sampler, val_rand_sampler = graph_services.get_rand_sampler()
+    train_rand_sampler, eval_rand_sampler = graph_services.get_rand_sampler()
     logging.info("make sampler done")
     mem = psutil.virtual_memory().percent
     logging.info("memory usage: {}".format(mem))
 
-    train_data, val_data = load_partitioned_dataset(
+    train_data, val_data, test_data = load_partitioned_dataset(
         args.data, rank=args.rank, world_size=args.world_size,
         partition_train_data=not args.not_partition_train_data)
     if not args.not_partition_train_data:
@@ -328,15 +327,15 @@ def main():
     logging.info("memory usage: {}".format(mem))
     best_e = train(train_data, val_data, sampler,
                    model, optimizer, criterion, cache, device, train_rand_sampler,
-                   val_rand_sampler)
+                   eval_rand_sampler)
 
-    # if args.rank == 0:
-    #     logging.info('Loading model at epoch {}...'.format(best_e))
-    #     model.load_state_dict(torch.load(checkpoint_path))
+    if args.rank == 0:
+        logging.info('Loading model at epoch {}...'.format(best_e))
+        model.load_state_dict(torch.load(checkpoint_path))
 
-    #     ap, auc = evaluate(test_data, sampler, model,
-    #                        criterion, cache, device, val_rand_sampler)
-    #     logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+        ap, auc = evaluate(test_data, sampler, model,
+                           criterion, cache, device, eval_rand_sampler)
+        logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
         torch.distributed.barrier()
