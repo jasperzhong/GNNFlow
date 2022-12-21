@@ -60,7 +60,6 @@ def dispatch_full_dataset(rank: int, data_name: str,
     start = time.time()
     if rank == 0:
         dispatcher = get_dispatcher()
-
         # read csv in chunks
         df_iterator = load_dataset_in_chunks(
             data_name, chunksize=initial_ingestion_batch_size)

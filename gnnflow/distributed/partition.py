@@ -1,11 +1,11 @@
 from copy import deepcopy
 from typing import List, NamedTuple
-from gnnflow.utils import load_partition_table
 
 import numpy as np
 import torch
 
-from tqdm import tqdm
+from gnnflow.utils import load_partition_table
+
 
 class Partition(NamedTuple):
     """
@@ -48,6 +48,10 @@ class Partitioner:
         # NID -> partition ID, maximum 128 partitions
         self._partition_table = torch.empty(self._max_node, dtype=torch.int8)
 
+        pt = load_partition_table(self._dataset_name)
+        if pt is not None:
+            self._partition_table = pt
+
     def get_num_partitions(self) -> int:
         """
         Get the number of partitions.
@@ -59,8 +63,7 @@ class Partitioner:
 
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor,
-                  return_evenly_dataset: bool = False,
-                  is_initial_ingestion: bool = False):
+                  return_evenly_dataset: bool = False):
         """
         Partition the dataset into multiple partitions.
 
@@ -70,7 +73,6 @@ class Partitioner:
             timestamps (torch.Tensor): The timestamps of the edges.
             eids (torch.Tensor): The edge IDs of the edges.
             return_evenly_dataset (bool): Whether to return the evenly partitioned dataset.
-            is_initial_ingestion (bool): Whether it is the initial ingestion batch.
         Returns:
             A list of partitions
             A evenly partitioned dataset if return_evenly_dataset is True
@@ -136,46 +138,29 @@ class Partitioner:
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-        pt = None
-        if is_initial_ingestion:
-            pt = load_partition_table(self._dataset_name)
+        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+            timestamps[unassigned_mask], eids[unassigned_mask])
 
-        if pt is not None:
-            for pid in range(self._num_partitions):
-                mask = pt[src_nodes] == pid
+        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+        )
 
-                self._partition_table[src_nodes[mask]] = pid
+        # merge the partitions
+        for i in range(self._num_partitions):
+            mask = partition_table_for_unseen_nodes == i
 
-                partitions[pid] = Partition(
-                    torch.cat([partitions[pid].src_nodes, src_nodes[mask]]),
-                    torch.cat([partitions[pid].dst_nodes, dst_nodes[mask]]),
-                    torch.cat([partitions[pid].timestamps, timestamps[mask]]),
-                    torch.cat([partitions[pid].eids, eids[mask]]))
+            # update the partition table
+            self._partition_table[src_nodes[unassigned_mask][mask]] = i
 
-        else:
-            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-                timestamps[unassigned_mask], eids[unassigned_mask])
-
-            assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-            )
-
-            # merge the partitions
-            for i in range(self._num_partitions):
-                mask = partition_table_for_unseen_nodes == i
-
-                # update the partition table
-                self._partition_table[src_nodes[unassigned_mask][mask]] = i
-
-                # no need to sort edges here
-                partitions[i] = Partition(
-                    torch.cat([partitions[i].src_nodes,
-                               src_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].dst_nodes,
-                               dst_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].timestamps,
-                               timestamps[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+            # no need to sort edges here
+            partitions[i] = Partition(
+                torch.cat([partitions[i].src_nodes,
+                           src_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].dst_nodes,
+                           dst_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].timestamps,
+                           timestamps[unassigned_mask][mask]]),
+                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
         evenly_partitioned_dataset = None
         if return_evenly_dataset:
@@ -452,8 +437,7 @@ class FennelPartitioner(Partitioner):
     # Fennel Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor,
-                  return_evenly_dataset: bool = False,
-                  is_initial_ingestion: bool = False):
+                  return_evenly_dataset: bool = False):
 
         # resize the partition table if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
@@ -482,46 +466,29 @@ class FennelPartitioner(Partitioner):
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-        pt = None
-        if is_initial_ingestion:
-            pt = load_partition_table(self._dataset_name)
+        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+            timestamps[unassigned_mask], eids[unassigned_mask])
 
-        if pt is not None:
-            for pid in range(self._num_partitions):
-                mask = pt[src_nodes] == pid
+        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+        )
 
-                self._partition_table[src_nodes[mask]] = pid
+        # merge the partitions
+        for i in range(self._num_partitions):
+            mask = partition_table_for_unseen_nodes == i
 
-                partitions[pid] = Partition(
-                    torch.cat([partitions[pid].src_nodes, src_nodes[mask]]),
-                    torch.cat([partitions[pid].dst_nodes, dst_nodes[mask]]),
-                    torch.cat([partitions[pid].timestamps, timestamps[mask]]),
-                    torch.cat([partitions[pid].eids, eids[mask]]))
+            # update the partition table
+            self._partition_table[src_nodes[unassigned_mask][mask]] = i
 
-        else:
-            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-                timestamps[unassigned_mask], eids[unassigned_mask])
-
-            assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-            )
-
-            # merge the partitions
-            for i in range(self._num_partitions):
-                mask = partition_table_for_unseen_nodes == i
-
-                # update the partition table
-                self._partition_table[src_nodes[unassigned_mask][mask]] = i
-
-                # no need to sort edges here
-                partitions[i] = Partition(
-                    torch.cat([partitions[i].src_nodes,
-                               src_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].dst_nodes,
-                               dst_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].timestamps,
-                               timestamps[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+            # no need to sort edges here
+            partitions[i] = Partition(
+                torch.cat([partitions[i].src_nodes,
+                           src_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].dst_nodes,
+                           dst_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].timestamps,
+                           timestamps[unassigned_mask][mask]]),
+                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
         evenly_partitioned_dataset = None
         if return_evenly_dataset:
@@ -584,13 +551,13 @@ class FennelEdgePartitioner(Partitioner):
         # edges partitioned
         self._edges_partitioned = 0
         # edges partitioned w.r.t. partitions
-        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.long)
+        self._edges_partitioned_num_list = torch.zeros(
+            num_partitions, dtype=torch.long)
 
     # Fennel Edge Partition
     def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                   timestamps: torch.Tensor, eids: torch.Tensor,
-                  return_evenly_dataset: bool = False,
-                  is_initial_ingestion: bool = False):
+                  return_evenly_dataset: bool = False):
 
         # resize the partition table and node's out degree if necessary
         max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
@@ -619,10 +586,12 @@ class FennelEdgePartitioner(Partitioner):
 
             # update the out degree
             local_src_nodes_mask = src_nodes[mask].clone()
-            unique_src_node_mask_id_list, cnt_seq = torch.unique(local_src_nodes_mask, return_counts=True)
+            unique_src_node_mask_id_list, cnt_seq = torch.unique(
+                local_src_nodes_mask, return_counts=True)
 
             for src_id_idx in range(len(unique_src_node_mask_id_list)):
-                self._out_degree[unique_src_node_mask_id_list[src_id_idx]] += cnt_seq[src_id_idx]
+                self._out_degree[unique_src_node_mask_id_list[src_id_idx]
+                                 ] += cnt_seq[src_id_idx]
 
             # add to partition
             self._edges_partitioned_num_list[i] += len(src_nodes[mask])
@@ -630,57 +599,30 @@ class FennelEdgePartitioner(Partitioner):
             partitions.append(Partition(
                 src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
 
-        pt = None
-        if is_initial_ingestion:
-            pt = load_partition_table(self._dataset_name)
+        # Use Normal Insertion Method
+        partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
+            src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
+            timestamps[unassigned_mask], eids[unassigned_mask])
 
-        if pt is not None:
-            for pid in range(self._num_partitions):
-                mask = pt[src_nodes] == pid
+        assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
+        )
 
-                self._partition_table[src_nodes[mask]] = pid
+        # merge the partitions
+        for i in range(self._num_partitions):
+            mask = partition_table_for_unseen_nodes == i
 
-                # update the out degree
-                local_src_nodes_mask = src_nodes[mask].clone()
-                unique_src_node_mask_id_list, cnt_seq = torch.unique(local_src_nodes_mask, return_counts=True)
+            # update the partition table
+            self._partition_table[src_nodes[unassigned_mask][mask]] = i
 
-                for src_id_idx in range(len(unique_src_node_mask_id_list)):
-                    self._out_degree[unique_src_node_mask_id_list[src_id_idx]] += cnt_seq[src_id_idx]
-
-                # add to partition
-                self._edges_partitioned_num_list[pid] += len(src_nodes[mask])
-
-                partitions[pid] = Partition(
-                    torch.cat([partitions[pid].src_nodes, src_nodes[mask]]),
-                    torch.cat([partitions[pid].dst_nodes, dst_nodes[mask]]),
-                    torch.cat([partitions[pid].timestamps, timestamps[mask]]),
-                    torch.cat([partitions[pid].eids, eids[mask]]))
-
-        else:
-            # Use Normal Insertion Method
-            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-                timestamps[unassigned_mask], eids[unassigned_mask])
-
-            assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-            )
-
-            # merge the partitions
-            for i in range(self._num_partitions):
-                mask = partition_table_for_unseen_nodes == i
-
-                # update the partition table
-                self._partition_table[src_nodes[unassigned_mask][mask]] = i
-
-                # no need to sort edges here
-                partitions[i] = Partition(
-                    torch.cat([partitions[i].src_nodes,
-                               src_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].dst_nodes,
-                               dst_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].timestamps,
-                               timestamps[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
+            # no need to sort edges here
+            partitions[i] = Partition(
+                torch.cat([partitions[i].src_nodes,
+                           src_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].dst_nodes,
+                           dst_nodes[unassigned_mask][mask]]),
+                torch.cat([partitions[i].timestamps,
+                           timestamps[unassigned_mask][mask]]),
+                torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
 
         evenly_partitioned_dataset = None
         if return_evenly_dataset:
@@ -707,7 +649,8 @@ class FennelEdgePartitioner(Partitioner):
         local_partition_table = self._partition_table[dst_nodes]
 
         # unique to get the neighbor quant
-        npt_list, npt_cnt = torch.unique(local_partition_table, return_counts=True)
+        npt_list, npt_cnt = torch.unique(
+            local_partition_table, return_counts=True)
         npt_map = {}
         for i in range(len(npt_list)):
             npt_map[npt_list[i]] = npt_cnt[i]
@@ -735,11 +678,13 @@ class FennelEdgePartitioner(Partitioner):
 
             # calculate neighbor's out degree sum
             neighbour_in_partition_mask = local_partition_table == i
-            neighbour_in_partition_id = torch.unique(dst_nodes[neighbour_in_partition_mask])
+            neighbour_in_partition_id = torch.unique(
+                dst_nodes[neighbour_in_partition_mask])
 
             out_degree_sum = 0
             if len(neighbour_in_partition_id) != 0:
-                out_degree_sum = self._out_degree[neighbour_in_partition_id].sum().item()
+                out_degree_sum = self._out_degree[neighbour_in_partition_id].sum(
+                ).item()
 
             locality_score = neighbour_in_partition_size + out_degree_sum
 
@@ -757,6 +702,7 @@ class FennelEdgePartitioner(Partitioner):
 
         return int(np.random.choice(np.where(partition_score == partition_score.max())[0])), debug_map
         # return int(np.argmax(partition_score)), debug_map
+
     def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
                                             dst_nodes_list: List[torch.Tensor],
                                             timestamps_list: List[torch.Tensor],
@@ -775,169 +721,16 @@ class FennelEdgePartitioner(Partitioner):
         for i in range(len(unique_src_nodes)):
             sorted_idx = argsort_list[i]
 
-            pid, debug_map = self.fennelEdge(int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
+            pid, debug_map = self.fennelEdge(
+                int(unique_src_nodes[sorted_idx]), dst_nodes_list[sorted_idx])
             partition_table[sorted_idx] = pid
             self._partition_table[int(unique_src_nodes[sorted_idx])] = pid
-            self._out_degree[unique_src_nodes[sorted_idx]] += len(dst_nodes_list[sorted_idx])
+            self._out_degree[unique_src_nodes[sorted_idx]
+                             ] += len(dst_nodes_list[sorted_idx])
 
             # update the edge partition num_list
-            self._edges_partitioned_num_list[pid] += len(dst_nodes_list[sorted_idx])
-
-        return partition_table
-
-
-
-# SOTA Partitoner
-class GingerPartitioner(Partitioner):
-    """
-        Ginger
-        https://ipads.se.sjtu.edu.cn/projects/powerlyra/powerlyra-eurosys-final.pdf
-    """
-
-    def __init__(self, num_partitions: int, local_world_size: int, dataset_name: str, assign_with_dst_node: bool = False, upsilon: float = 1.1, gamma: float = 1.5):
-        super().__init__(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
-
-        # ideal partition capacity
-        self._partition_capacity = 0
-        # edges partitioned
-        self._edges_partitioned = 0
-
-        self._edges_partitioned_num_list = torch.zeros(num_partitions, dtype=torch.long)
-
-        self._upsilon = upsilon
-        self._gamma = gamma
-
-    # Fennel Partition
-    def partition(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
-                  timestamps: torch.Tensor, eids: torch.Tensor,
-                  return_evenly_dataset: bool = False,
-                  is_initial_ingestion: bool = False):
-
-        # resize the partition table if necessary
-        max_node = int(torch.max(torch.max(src_nodes), torch.max(dst_nodes)))
-        if max_node > self._max_node:
-            self._partition_table.resize_(max_node + 1)
-            if self._max_node == 0:
-                self._partition_table[:] = self.UNASSIGNED
-            else:
-                self._partition_table[self._max_node + 1:] = self.UNASSIGNED
-            self._max_node = max_node
-
-        # update edges partitioned
-        self._edges_partitioned = self._edges_partitioned + len(src_nodes)
-        # update the capacity
-        self._partition_capacity = (
-            max_node * self._upsilon) / self._num_partitions
-
-        partitions = []
-
-        # partition the edges for the unseen source nodes
-        unassigned_mask = self._partition_table[src_nodes] == self.UNASSIGNED
-
-        # dispatch edges to already assigned source nodes
-        for i in range(self._num_partitions):
-            mask = self._partition_table[src_nodes] == i
-            partitions.append(Partition(
-                src_nodes[mask], dst_nodes[mask], timestamps[mask], eids[mask]))
-
-            # add to partition
-            self._edges_partitioned_num_list[i] += len(src_nodes[mask])
-
-        pt = None
-        if is_initial_ingestion:
-            pt = load_partition_table(self._dataset_name)
-
-        if pt is not None:
-            for pid in range(self._num_partitions):
-                mask = pt[src_nodes] == pid
-
-                self._partition_table[src_nodes[mask]] = pid
-
-                partitions[pid] = Partition(
-                    torch.cat([partitions[pid].src_nodes, src_nodes[mask]]),
-                    torch.cat([partitions[pid].dst_nodes, dst_nodes[mask]]),
-                    torch.cat([partitions[pid].timestamps, timestamps[mask]]),
-                    torch.cat([partitions[pid].eids, eids[mask]]))
-
-                # add to partition
-                self._edges_partitioned_num_list[pid] += len(src_nodes[mask])
-
-        else:
-            partition_table_for_unseen_nodes = self._do_partition_for_unseen_nodes(
-                src_nodes[unassigned_mask], dst_nodes[unassigned_mask],
-                timestamps[unassigned_mask], eids[unassigned_mask])
-
-            assert partition_table_for_unseen_nodes.shape[0] == unassigned_mask.sum(
-            )
-
-            # merge the partitions
-            for i in range(self._num_partitions):
-                mask = partition_table_for_unseen_nodes == i
-
-                # update the partition table
-                self._partition_table[src_nodes[unassigned_mask][mask]] = i
-
-                # no need to sort edges here
-                partitions[i] = Partition(
-                    torch.cat([partitions[i].src_nodes,
-                               src_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].dst_nodes,
-                               dst_nodes[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].timestamps,
-                               timestamps[unassigned_mask][mask]]),
-                    torch.cat([partitions[i].eids, eids[unassigned_mask][mask]]))
-
-        evenly_partitioned_dataset = None
-        if return_evenly_dataset:
-            # make the partitions evenly
-            evenly_partitioned_dataset = self._make_partitions_evenly(
-                partitions)
-
-        return partitions, evenly_partitioned_dataset
-
-    def Ginger(self, vid: int, dst_nodes: torch.Tensor):
-        partition_score = []
-
-        # hyper parameter
-        alpha = (self._num_partitions ** 0.5) * \
-            self._edges_partitioned / (self._max_node ** 1.5)
-
-        local_partition_table = self._partition_table[dst_nodes]
-
-        for i in range(self._num_partitions):
-            partition_size = (self._partition_table == i).sum().item()
-
-            if partition_size >= 1.5 * self._partition_capacity:
-                partition_score.append(-10000000000)
-                continue
-
-            # calculate the neighbor in partition i
-            neighbour_in_partition_size = (
-                local_partition_table == i).sum().item()
-
-            node_number = len(self._partition_table[self._partition_table != -1])
-
-            bal_score = 0.5 * (partition_size + (node_number / self._edges_partitioned) * self._edges_partitioned_num_list[i])
-
-            partition_score.append(
-                neighbour_in_partition_size - alpha * self._gamma * (bal_score ** (self._gamma - 1)))
-
-        partition_score = np.array(partition_score)
-
-        return int(np.argmax(partition_score))
-
-    def _do_partition_for_unseen_nodes_impl(self, unique_src_nodes: torch.Tensor,
-                                            dst_nodes_list: List[torch.Tensor],
-                                            timestamps_list: List[torch.Tensor],
-                                            eids_list: List[torch.Tensor]) -> torch.Tensor:
-        partition_table = torch.zeros(len(unique_src_nodes), dtype=torch.int8)
-        for i in range(len(unique_src_nodes)):
-            pid = self.Ginger(int(unique_src_nodes[i]), dst_nodes_list[i])
-            partition_table[i] = pid
-            self._partition_table[int(unique_src_nodes[i])] = pid
-
-            # update the edge partition num_list
-            self._edges_partitioned_num_list[pid] += len(dst_nodes_list[i])
+            self._edges_partitioned_num_list[pid] += len(
+                dst_nodes_list[sorted_idx])
 
         return partition_table
 
@@ -973,7 +766,5 @@ def get_partitioner(partition_strategy: str, num_partitions: int, local_world_si
         return FennelPartitioner(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     elif partition_strategy == "fennel_edge":
         return FennelEdgePartitioner(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
-    elif partition_strategy == "ginger":
-        return GingerPartitioner(num_partitions, local_world_size, dataset_name, assign_with_dst_node)
     else:
         raise ValueError("Invalid partition strategy: %s" % partition_strategy)
