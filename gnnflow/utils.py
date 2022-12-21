@@ -120,7 +120,7 @@ def load_partition_table(dataset: str):
 
     logging.info(
         "Find corresponding file under path {}. Using this file to skip the initial partition phase!".format(path))
-    pt = torch.load(path)
+    pt = torch.load(path).to(torch.int8)
     return pt
 
 
