@@ -344,7 +344,6 @@ def main():
         torch.distributed.rpc.shutdown()
         torch.distributed.destroy_process_group()
         logging.info("Rank {} shutdown done".format(args.rank))
-        sys.exit(0)
 
 
 def train(train_data, val_data, sampler, model, optimizer, criterion,
@@ -505,3 +504,4 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
 if __name__ == '__main__':
     main()
+    logging.info('Training finished')
