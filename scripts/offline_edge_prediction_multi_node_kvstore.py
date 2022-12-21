@@ -83,7 +83,7 @@ logging.info(args)
 checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
 
-MB = 1 << 20
+MiB = 1 << 20
 
 start = time.time()
 
@@ -191,8 +191,8 @@ def main():
 
         # print graph edge memory size and metadata
         # avg_linked_list_length = dgraph._dgraph.avg_linked_list_length()
-        graph_memory_usage = dgraph._dgraph.get_graph_memory_usage() / MB
-        metadata_memory_usage = dgraph._dgraph.get_metadata_memory_usage() / MB
+        graph_memory_usage = dgraph._dgraph.get_graph_memory_usage() / MiB
+        metadata_memory_usage = dgraph._dgraph.get_metadata_memory_usage() / MiB
 
         # all reduce
         data_list = torch.tensor(
@@ -202,7 +202,7 @@ def main():
         data_list /= args.world_size
         graph_memory_usage, metadata_memory_usage = data_list.tolist()
         graph_memory_usage *= args.num_nodes
-        logging.info('graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size: {})'.format(
+        logging.info('graph mem usage: {:.2f}MiB, metadata (on GPU) mem usage: {:.2f}MiB (adaptive-block-size: {})'.format(
             graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
 
     else:
@@ -299,7 +299,7 @@ def main():
     # only gnnlab static need to pass param
     if args.cache == 'GNNLabStaticCache':
         cache.init_cache(sampler=sampler, train_df=train_data,
-                         pre_sampling_rounds=1)
+                         pre_sampling_rounds=2, batch_size=args.batch_size)
     else:
         cache.init_cache()
     init_time = time.time() - init_start
@@ -312,8 +312,8 @@ def main():
         init_time /= args.world_size
         init_time = init_time.item()
 
-    logging.info("cache mem size: {:.2f} MB, init cache time: {:.2f}s".format(
-        cache.get_mem_size() / 1000 / 1000, init_time))
+    logging.info("cache mem size: {:.2f} MiB, init cache time: {:.2f}s".format(
+        cache.get_mem_size() / MiB, init_time))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
