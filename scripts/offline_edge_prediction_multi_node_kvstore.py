@@ -338,6 +338,7 @@ def main():
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
+        logging.info("Rank {} is done".format(args.rank))
         torch.distributed.barrier()
 
 
