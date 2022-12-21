@@ -1,12 +1,13 @@
 from typing import List, Optional, Union
 
+import numpy as np
 import torch
 from dgl.heterograph import DGLBlock
 
 from gnnflow.cache.cache import Cache
 from gnnflow.distributed.kvstore import KVStoreClient
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import get_batch
+from gnnflow.utils import get_batch_no_neg
 
 
 class GNNLabStaticCache(Cache):
@@ -87,57 +88,88 @@ class GNNLabStaticCache(Cache):
         """
         Init the caching with features
         """
-        node_sampled_count = torch.zeros(
-            self.num_nodes, dtype=torch.int32, device=self.device)
-        edge_sampled_count = torch.zeros(
-            self.num_edges, dtype=torch.int32, device=self.device)
+        node_sampled_count = torch.zeros(self.num_nodes, dtype=torch.int32)
+        edge_sampled_count = torch.zeros(self.num_edges, dtype=torch.int32)
+        eid_to_nid = torch.zeros(self.num_edges, dtype=torch.int64)
 
         sampler = kwargs['sampler']
-        assert isinstance(sampler, TemporalSampler)
         train_df = kwargs['train_df']
         pre_sampling_rounds = kwargs.get('pre_sampling_rounds', 2)
         batch_size = kwargs.get('batch_size', 600)
 
         # Do sampling for multiple rounds
         for _ in range(pre_sampling_rounds):
-            for target_nodes, ts, _ in get_batch(train_df, batch_size):
+            for target_nodes, ts, _ in get_batch_no_neg(train_df, batch_size):
                 mfgs = sampler.sample(target_nodes, ts)
-                if self.node_feats is not None:
+                if self.node_feats is not None or self.dim_node_feat != 0:
                     for b in mfgs[0]:
                         node_sampled_count[b.srcdata['ID']] += 1
-                if self.edge_feats is not None:
+                if self.edge_feats is not None or self.dim_edge_feat != 0:
                     for mfg in mfgs:
                         for b in mfg:
                             if b.num_src_nodes() > b.num_dst_nodes():
                                 edge_sampled_count[b.edata['ID']] += 1
+                                eid_to_nid[b.edata['ID']
+                                           ] = b.srcdata['ID'][b.num_dst_nodes():]
 
-        if self.node_feats is not None:
-            # Get the top-k nodes with the highest sampling count
-            cache_node_id = torch.topk(
-                node_sampled_count, k=self.node_capacity, largest=True).indices.to(self.device)
+        if self.distributed:
+            if self.dim_node_feat != 0 and self.node_capacity > 0:
+                # Get the top-k nodes with the highest sampling count
+                cache_node_id = torch.topk(
+                    node_sampled_count, k=self.node_capacity, largest=True).indices.to(self.device)
 
-            # Init parameters related to feature fetching
-            cache_node_index = torch.arange(
-                self.node_capacity, dtype=torch.int64).to(self.device)
-            self.cache_node_buffer[cache_node_index] = self.node_feats[cache_node_id].to(
-                self.device, non_blocking=True)
-            self.cache_node_flag[cache_node_id] = True
-            self.cache_node_map[cache_node_id] = cache_node_index
+                # Init parameters related to feature fetching
+                cache_node_index = torch.arange(
+                    self.node_capacity, dtype=torch.int64).to(self.device)
+                self.cache_node_buffer[cache_node_index] = self.kvstore_client.pull(
+                    cache_node_id.cpu(), mode='node').to(self.device)
+                self.cache_node_flag[cache_node_id] = True
+                self.cache_node_map[cache_node_id] = cache_node_index
+        else:
+            if self.node_feats is not None:
+                # Get the top-k nodes with the highest sampling count
+                cache_node_id = torch.topk(
+                    node_sampled_count, k=self.node_capacity, largest=True).indices.to(self.device)
 
-        if self.edge_feats is not None:
-            # Get the top-k edges with the highest sampling count
-            cache_edge_id = torch.topk(
-                edge_sampled_count, k=self.edge_capacity, largest=True).indices.to(self.device)
+                # Init parameters related to feature fetching
+                cache_node_index = torch.arange(
+                    self.node_capacity, dtype=torch.int64).to(self.device)
+                self.cache_node_buffer[cache_node_index] = self.node_feats[cache_node_id].to(
+                    self.device, non_blocking=True)
+                self.cache_node_flag[cache_node_id] = True
+                self.cache_node_map[cache_node_id] = cache_node_index
 
-            # Init parameters related to feature fetching
-            cache_edge_index = torch.arange(
-                self.edge_capacity, dtype=torch.int64).to(self.device)
-            self.cache_edge_buffer[cache_edge_index] = self.edge_feats[cache_edge_id].to(
-                self.device, non_blocking=True)
-            self.cache_edge_flag[cache_edge_id] = True
-            self.cache_edge_map[cache_edge_id] = cache_edge_index
+        if self.distributed:
+            if self.dim_edge_feat != 0 and self.edge_capacity > 0:
+                # Get the top-k edges with the highest sampling count
+                cache_edge_id = torch.topk(
+                    edge_sampled_count, k=self.edge_capacity, largest=True).indices.to(self.device)
 
-    def fetch_feature(self, mfgs: List[List[DGLBlock]], update_cache: bool = True):
+                # Init parameters related to feature fetching
+                cache_edge_index = torch.arange(
+                    self.edge_capacity, dtype=torch.int64).to(self.device)
+                self.cache_edge_buffer[cache_edge_index] = self.kvstore_client.pull(
+                    cache_edge_id.cpu(), mode='edge', nid=eid_to_nid[cache_edge_id.cpu()]).to(self.device)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_edge_map[cache_edge_id] = cache_edge_index
+
+        else:
+            if self.edge_feats is not None:
+                # Get the top-k edges with the highest sampling count
+                cache_edge_id = torch.topk(
+                    edge_sampled_count, k=self.edge_capacity, largest=True).indices.to(self.device)
+
+                # Init parameters related to feature fetching
+                cache_edge_index = torch.arange(
+                    self.edge_capacity, dtype=torch.int64).to(self.device)
+                self.cache_edge_buffer[cache_edge_index] = self.edge_feats[cache_edge_id].to(
+                    self.device, non_blocking=True)
+                self.cache_edge_flag[cache_edge_id] = True
+                self.cache_edge_map[cache_edge_id] = cache_edge_index
+
+    def fetch_feature(self, mfgs: List[List[DGLBlock]],
+                      eid: Optional[np.ndarray] = None, update_cache: bool = True,
+                      target_edge_features: bool = True):
         """Fetching the node features of input_node_ids
 
         Args:
@@ -147,4 +179,4 @@ class GNNLabStaticCache(Cache):
         Returns:
             mfgs: message-passing flow graphs with node/edge features
         """
-        return super(GNNLabStaticCache, self).fetch_feature(mfgs, update_cache=False)
+        return super(GNNLabStaticCache, self).fetch_feature(mfgs, eid=eid, update_cache=False, target_edge_features=target_edge_features)

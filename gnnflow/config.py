@@ -1,7 +1,7 @@
 import sys
 
-MB = 1 << 20
-GB = 1 << 30
+MiB = 1 << 20
+GiB = 1 << 30
 
 
 def get_default_config(model: str, dataset: str):
@@ -38,7 +38,8 @@ _tgn_default_config = {
     "use_memory": True,
     "dim_time": 100,
     "dim_embed": 100,
-    "dim_memory": 100
+    "dim_memory": 100,
+    "batch_size": 4000
 }
 
 _tgat_default_config = {
@@ -53,7 +54,8 @@ _tgat_default_config = {
     "prop_time": False,
     "use_memory": False,
     "dim_time": 100,
-    "dim_embed": 100
+    "dim_embed": 100,
+    "batch_size": 600
 }
 
 _dysat_default_config = {
@@ -69,7 +71,8 @@ _dysat_default_config = {
     "prop_time": True,
     "use_memory": False,
     "dim_time": 0,
-    "dim_embed": 100
+    "dim_embed": 100,
+    "batch_size": 600
 }
 
 _graphsage_default_config = {
@@ -82,28 +85,30 @@ _graphsage_default_config = {
     "snapshot_time_window": 0,
     "prop_time": False,
     "use_memory": False,
-    "is_static": True
+    "is_static": True,
+    "batch_size": 1200
 }
 
 _gat_default_config = {
-    "dim_embed": 100,
+    "dropout": 0.1,
+    "att_head": 2,
+    "att_dropout": 0.1,
     "num_layers": 2,
-    "attn_head": [8, 1],
-    "feat_drop": 0.6,
-    "attn_drop": 0.6,
-    "allow_zero_in_degree": True,
-    "fanouts": [15, 10],
+    "fanouts": [10, 10],
     "sample_strategy": "uniform",
     "num_snapshots": 1,
     "snapshot_time_window": 0,
-    "use_memory": False,
     "prop_time": False,
-    "is_static": True
+    "use_memory": False,
+    "dim_time": 0,
+    "dim_embed": 100,
+    "is_static": True,
+    "batch_size": 600
 }
 
 _wiki_default_config = {
-    "initial_pool_size": 10 * MB,
-    "maximum_pool_size": 30 * MB,
+    "initial_pool_size": 10 * MiB,
+    "maximum_pool_size": 30 * MiB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 18,
     "blocks_to_preallocate": 1024,
@@ -111,12 +116,11 @@ _wiki_default_config = {
     "undirected": True,
     "node_feature": False,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _reddit_default_config = {
-    "initial_pool_size": 20 * MB,
-    "maximum_pool_size": 50 * MB,
+    "initial_pool_size": 20 * MiB,
+    "maximum_pool_size": 50 * MiB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 62,
     "blocks_to_preallocate": 1024,
@@ -124,12 +128,11 @@ _reddit_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _mooc_default_config = {
-    "initial_pool_size": 20 * MB,
-    "maximum_pool_size": 50 * MB,
+    "initial_pool_size": 20 * MiB,
+    "maximum_pool_size": 50 * MiB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 59,
     "blocks_to_preallocate": 1024,
@@ -137,12 +140,11 @@ _mooc_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _lastfm_default_config = {
-    "initial_pool_size": 50 * MB,
-    "maximum_pool_size": 100 * MB,
+    "initial_pool_size": 50 * MiB,
+    "maximum_pool_size": 100 * MiB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 650,
     "blocks_to_preallocate": 1024,
@@ -150,12 +152,11 @@ _lastfm_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
-    "batch_size": 600
 }
 
 _gdelt_default_config = {
-    "initial_pool_size": 10*GB,
-    "maximum_pool_size": 20*GB,
+    "initial_pool_size": 10*GiB,
+    "maximum_pool_size": 20*GiB,
     "mem_resource_type": "unified",
     "minimum_block_size": 123,
     "blocks_to_preallocate": 8196,
@@ -163,12 +164,11 @@ _gdelt_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
-    "batch_size": 4000
 }
 
 _mag_default_config = {
-    "initial_pool_size": 50*GB,
-    "maximum_pool_size": 300*GB,
+    "initial_pool_size": 5*GiB,
+    "maximum_pool_size": 50*GiB,
     "mem_resource_type": "unified",
     "minimum_block_size": 11,
     "blocks_to_preallocate": 65536,
@@ -176,5 +176,4 @@ _mag_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": False,
-    "batch_size": 600
 }

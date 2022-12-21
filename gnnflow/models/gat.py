@@ -10,8 +10,8 @@ class GAT(nn.Module):
     def __init__(self, dim_in: int, dim_out: int,
                  num_layers: int = 2,
                  attn_head: List[int] = [8, 1],
-                 feat_drop: float = 0.6,
-                 attn_drop: float = 0.6,
+                 feat_drop: float = 0,
+                 attn_drop: float = 0,
                  allow_zero_in_degree: bool = True):
         if num_layers != len(attn_head):
             raise ValueError(
@@ -29,8 +29,8 @@ class GAT(nn.Module):
                     dim_in,
                     dim_out,
                     attn_head[0],
-                    feat_drop=0.6,
-                    attn_drop=0.6,
+                    feat_drop=feat_drop,
+                    attn_drop=attn_drop,
                     activation=F.elu,
                     allow_zero_in_degree=allow_zero_in_degree
                 )
@@ -39,8 +39,8 @@ class GAT(nn.Module):
                     dim_out * attn_head[l-1],
                     dim_out,
                     attn_head[l],
-                    feat_drop=0.6,
-                    attn_drop=0.6,
+                    feat_drop=feat_drop,
+                    attn_drop=attn_drop,
                     activation=None,
                     allow_zero_in_degree=allow_zero_in_degree
                 )
@@ -53,6 +53,9 @@ class GAT(nn.Module):
             nn.Linear(dim_out, dim_out),
             nn.ReLU(),
             nn.Linear(dim_out, 1))
+
+    def reset(self):
+        pass
 
     def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1, *args, **kwargs):
         for l in range(self.num_layers):

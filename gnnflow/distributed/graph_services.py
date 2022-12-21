@@ -12,6 +12,7 @@ from gnnflow.distributed.common import SamplingResultTorch
 from gnnflow.distributed.dist_graph import DistributedDynamicGraph
 from gnnflow.distributed.dist_sampler import DistributedTemporalSampler
 from gnnflow.distributed.kvstore import KVStoreServer
+from gnnflow.utils import DstRandEdgeSampler
 
 global DGRAPH
 global DSAMPLER
@@ -19,8 +20,7 @@ global KVSTORE_SERVER
 global DIM_NODE
 global DIM_EDGE
 global TRAIN_RAND_SAMPLER
-global TEST_RAND_SAMPLER
-global VAL_RAND_SAMPLER
+global EVAL_RAND_SAMPLER
 
 global TRAIN_DATA
 TRAIN_DATA = None
@@ -135,16 +135,17 @@ def add_train_data(source_vertices: torch.Tensor, target_vertices: torch.Tensor,
 
     if TRAIN_DATA is None:
         TRAIN_DATA = [
-            source_vertices.numpy(),
-            target_vertices.numpy(),
-            timestamps.numpy(),
-            eids.numpy()
+            [source_vertices.numpy()],
+            [target_vertices.numpy()],
+            [timestamps.numpy()],
+            [eids.numpy()]
         ]
     else:
-        TRAIN_DATA[0] = np.concatenate((TRAIN_DATA[0], source_vertices.numpy()))
-        TRAIN_DATA[1] = np.concatenate((TRAIN_DATA[1], target_vertices.numpy()))
-        TRAIN_DATA[2] = np.concatenate((TRAIN_DATA[2], timestamps.numpy()))
-        TRAIN_DATA[3] = np.concatenate((TRAIN_DATA[3], eids.numpy()))
+        # append
+        TRAIN_DATA[0].append(source_vertices.numpy())
+        TRAIN_DATA[1].append(target_vertices.numpy())
+        TRAIN_DATA[2].append(timestamps.numpy())
+        TRAIN_DATA[3].append(eids.numpy())
 
 
 def get_train_data() -> pd.DataFrame:
@@ -157,12 +158,24 @@ def get_train_data() -> pd.DataFrame:
     global TRAIN_DATA
     if TRAIN_DATA is None:
         raise RuntimeError("The training data has not been initialized.")
-    return pd.DataFrame({
-        "src": TRAIN_DATA[0],
-        "dst": TRAIN_DATA[1],
-        "time": TRAIN_DATA[2],
-        "eid": TRAIN_DATA[3]
-    })
+    # concat until getting the data
+    src = np.concatenate(TRAIN_DATA[0])
+    TRAIN_DATA[0] = []
+    dst = np.concatenate(TRAIN_DATA[1])
+    TRAIN_DATA[1] = []
+    ts = np.concatenate(TRAIN_DATA[2])
+    TRAIN_DATA[2] = []
+    eid = np.concatenate(TRAIN_DATA[3])
+    TRAIN_DATA[3] = []
+    df = pd.DataFrame({
+        "src": src,
+        "dst": dst,
+        "time": ts,
+        "eid": eid
+    }, copy=False)
+    TRAIN_DATA = None
+
+    return df
 
 
 def set_graph_metadata(num_vertices: int, num_edges: int, max_vertex_id: int, num_partitions: int):
@@ -316,31 +329,17 @@ def push_tensors(keys: torch.Tensor, tensors: torch.Tensor, mode: str):
     kvstore_server.push(keys, tensors, mode)
 
 
-def init_memory(keys: torch.Tensor, dim_memory: int, dim_edge: int):
+def load_tensors(keys: torch.Tensor, mode: str):
     """
     Init memory
 
     Args:
         keys (torch.Tensor): The key of the memory
-        dim_memory (int): The dimension of memory
-        dim_edge (int): The dimension of edge features
     """
     kvstore_server = get_kvstore_server()
-    memory = torch.zeros(
-        (len(keys), dim_memory), dtype=torch.float32)
-    memory_ts = torch.zeros(len(keys), dtype=torch.float32)
-    dim_raw_message = 2 * dim_memory + dim_edge
-    mailbox = torch.zeros(
-        (len(keys), dim_raw_message), dtype=torch.float32)
-    mailbox_ts = torch.zeros(
-        (len(keys), ), dtype=torch.float32)
-    all_mem = torch.cat((memory,
-                        memory_ts.unsqueeze(dim=1),
-                        mailbox,
-                        mailbox_ts.unsqueeze(dim=1),
-                         ), dim=1)
-    kvstore_server.push(keys, all_mem, mode='memory')
-    del all_mem, mailbox_ts, mailbox, memory, memory_ts
+    kvstore_server.load(keys, mode)
+    logging.info("Rank %d: load %s finished",
+                 torch.distributed.get_rank(), mode)
 
 
 def pull_tensors(keys: torch.Tensor, mode: str) -> torch.Tensor:
@@ -457,16 +456,17 @@ def get_dim_node_edge() -> Tuple[int, int]:
     return DIM_NODE, DIM_EDGE
 
 
-def set_rand_sampler(train_rand_sampler, val_rand_sampler, test_rand_sampler):
+def set_rand_sampler(train_dst_set: torch.Tensor, nontrain_dst_set: torch.Tensor):
     """
     Set rand edge sampler
     """
     global TRAIN_RAND_SAMPLER
-    global TEST_RAND_SAMPLER
-    global VAL_RAND_SAMPLER
-    TRAIN_RAND_SAMPLER = train_rand_sampler
-    TEST_RAND_SAMPLER = test_rand_sampler
-    VAL_RAND_SAMPLER = val_rand_sampler
+    global EVAL_RAND_SAMPLER
+    full_dst_set = torch.cat([train_dst_set, nontrain_dst_set])
+    TRAIN_RAND_SAMPLER = DstRandEdgeSampler(train_dst_set.numpy())
+    EVAL_RAND_SAMPLER = DstRandEdgeSampler(full_dst_set.numpy())
+    logging.info("Rank %d: set rand sampler finished",
+                 torch.distributed.get_rank())
 
 
 def get_rand_sampler():
@@ -474,18 +474,14 @@ def get_rand_sampler():
     Get rand edge sampler
 
     Returns:
-        train, val, test rand sampler
+        train and eval rand sampler
     """
     global TRAIN_RAND_SAMPLER
     if TRAIN_RAND_SAMPLER is None:
         raise RuntimeError(
             "The TRAIN_RAND_SAMPLER has not been initialized.")
-    global TEST_RAND_SAMPLER
-    if TEST_RAND_SAMPLER is None:
+    global EVAL_RAND_SAMPLER
+    if EVAL_RAND_SAMPLER is None:
         raise RuntimeError(
-            "The TEST_RAND_SAMPLER has not been initialized.")
-    global VAL_RAND_SAMPLER
-    if VAL_RAND_SAMPLER is None:
-        raise RuntimeError(
-            "The VAL_RAND_SAMPLER has not been initialized.")
-    return TRAIN_RAND_SAMPLER, VAL_RAND_SAMPLER, TEST_RAND_SAMPLER
+            "The EVAL_RAND_SAMPLER has not been initialized.")
+    return TRAIN_RAND_SAMPLER, EVAL_RAND_SAMPLER

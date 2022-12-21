@@ -5,7 +5,6 @@ import pandas as pd
 import torch
 import torch.distributed
 import torch.distributed.rpc as rpc
-from tqdm import tqdm
 
 import gnnflow.distributed.graph_services as graph_services
 from gnnflow.distributed.partition import get_partitioner
@@ -20,21 +19,27 @@ class Dispatcher:
     Dispatch the graph data to the workers.
     """
 
-    def __init__(self, partition_strategy: str, num_partitions: int):
+    def __init__(self, partition_strategy: str, num_partitions: int, node_feat: bool, edge_feat: bool,
+                 memory: bool, dataset_name: str):
         self._rank = torch.distributed.get_rank()
         assert self._rank == 0, "Only rank 0 can initialize the dispatcher."
         self._num_partitions = num_partitions
         self._local_world_size = local_world_size()
         self._partitioner = get_partitioner(
-            partition_strategy, num_partitions, self._local_world_size)
+            partition_strategy, num_partitions, self._local_world_size, dataset_name)
 
         self._num_edges = 0
         self._max_nodex = 0
-        self._nodes = set()
+
+        self._node_feat = node_feat
+        self._edge_feat = edge_feat
+        self._memory = memory
+
+        self._train_dst_set = set()
+        self._nontrain_dst_set = set()
 
     def dispatch_edges(self, src_nodes: torch.Tensor, dst_nodes: torch.Tensor,
                        timestamps: torch.Tensor, eids: torch.Tensor,
-                       edge_feats: Optional[np.memmap] = None,
                        partition_train_data: bool = False):
         """
         Dispatch the edges to the workers.
@@ -44,11 +49,8 @@ class Dispatcher:
             dst_nodes (torch.Tensor): The destination nodes of the edges.
             timestamps (torch.Tensor): The timestamps of the edges.
             eids (torch.Tensor): The edge IDs of the edges.
-            edge_feats (torch.Tensor): The edge features of the edges.
-            defer_sync (bool): Whether to defer the synchronization.
+            partition_train_data (bool): Whether to partition the training data.
         """
-        self._nodes.update(src_nodes.tolist())
-        self._nodes.update(dst_nodes.tolist())
         self._num_edges += torch.unique(eids).size(0)
 
         partitions, evenly_partitioned_dataset = self._partitioner.partition(
@@ -83,73 +85,105 @@ class Dispatcher:
                         futures.append(rpc.rpc_async("worker%d" % worker_rank, graph_services.add_train_data,
                                                      args=(*dataset, )))
 
-        for partition_id, edges in enumerate(partitions):
-            edges = list(edges)
-            # the KVStore server is in local_rank 0
-            # TODO: maybe each worker will have a KVStore server
-            # node_feats and memory dispatch later using partition table.
-            kvstore_rank = partition_id * self._local_world_size
-            if edge_feats is not None:
+        if self._edge_feat:
+            for partition_id, edges in enumerate(partitions):
+                edges = list(edges)
+                # the KVStore server is in local_rank 0
+                # TODO: maybe each worker will have a KVStore server
+                # node_feats and memory dispatch later using partition table.
+                kvstore_rank = partition_id * self._local_world_size
                 keys = edges[3]
-                features = torch.from_numpy(edge_feats[keys.numpy()])
-                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.push_tensors,
-                                             args=(keys, features, 'edge')))
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.load_tensors,
+                                             args=(keys, 'edge')))
 
-        return futures
+        for future in futures:
+            future.wait()
 
-    def partition_graph(self, dataset: pd.DataFrame, initial_ingestion_batch_size: int,
-                        ingestion_batch_size: int, undirected: bool,
-                        node_feats: Optional[np.memmap] = None,
-                        edge_feats: Optional[np.memmap] = None,
-                        dim_memory: int = 0, partition_train_data: bool = False):
+    def partition_graph(self, dataset: pd.DataFrame, dispatch_node_memory: bool = False):
         """
         partition the dataset to the workers.
 
         Args:
             dataset (df.DataFrame): The dataset to ingest.
-            initial_ingestion_batch_size (int): The initial ingestion batch size.
-            ingestion_batch_size (int): The number of samples to ingest in each iteration.
-            undirected (bool): Whether the graph is undirected.
-            node_feats (torch.Tensor): The node features of the dataset.
-            edge_feats (torch.Tensor): The edge features of the dataset.
-            dim_memory (int): The dimension of the memory.
-            partition_train_data (bool): Whether to partition the training data.
+            node_feat (bool): Whether to partition the node features.
+            edge_feat (bool): Whether to partition the edge features.
+            memory (bool): Whether to partition the memory.
         """
         # Partition the dataset.
+        src_nodes = torch.from_numpy(dataset["src"].values.astype(np.int64))
+        dst_nodes = torch.from_numpy(dataset["dst"].values.astype(np.int64))
+        timestamps = torch.from_numpy(dataset["time"].values.astype(np.float32))
+        eids = torch.from_numpy(dataset["eid"].values.astype(np.int64))
+        train_end = dataset['ext_roll'].values.searchsorted(1)
+
+        # dispatch edges
+        src_nodes_train = src_nodes[:train_end]
+        dst_nodes_train = dst_nodes[:train_end]
+        timestamps_train = timestamps[:train_end]
+        eids_train = eids[:train_end]
+
+        if len(src_nodes_train) > 0:
+            self._train_dst_set.update(dst_nodes_train.tolist())
+            self.dispatch_edges(src_nodes_train, dst_nodes_train,
+                                timestamps_train, eids_train, partition_train_data=True)
+
+        src_nodes_nontrain = src_nodes[train_end:]
+        dst_nodes_nontrain = dst_nodes[train_end:]
+        timestamps_nontrain = timestamps[train_end:]
+        eids_nontrain = eids[train_end:]
+
+        if len(src_nodes_nontrain) > 0:
+            self._nontrain_dst_set.update(dst_nodes_nontrain.tolist())
+            self.dispatch_edges(src_nodes_nontrain, dst_nodes_nontrain,
+                                timestamps_nontrain, eids_nontrain, partition_train_data=False)
+
+        # deal with unpartitioned nodes
+        partition_table = self._partitioner._partition_table
+        unassigned_nodes_index = (
+            partition_table == -1).nonzero().squeeze(dim=1)
+
+        if len(unassigned_nodes_index) > 0:
+            partition_id = torch.arange(
+                len(unassigned_nodes_index), dtype=torch.int8) % self._num_partitions
+            partition_table[unassigned_nodes_index] = partition_id
+
+        self.broadcast_graph_metadata()
+        self.broadcast_partition_table()
+
+        if dispatch_node_memory:
+            self.dispatch_node_memory()
+
+    def dispatch_node_memory(self):
+        partition_table = self._partitioner._partition_table
+        # dispatch node feature/memory
         futures = []
-        range_list = [0] + \
-            list(range(initial_ingestion_batch_size,
-                       len(dataset), ingestion_batch_size)) + [len(dataset)]
-        t = tqdm(total=len(dataset))
-        for i in range(len(range_list)-1):
-            batch = dataset[range_list[i]:range_list[i+1]]
-            src_nodes = batch["src"].values.astype(np.int64)
-            dst_nodes = batch["dst"].values.astype(np.int64)
-            timestamps = batch["time"].values.astype(np.float32)
-            eids = batch["eid"].values.astype(np.int64)
+        if self._node_feat:
+            for partition_id in range(self._num_partitions):
+                # the KVStore server is in local_rank 0
+                partition_mask = partition_table == partition_id
+                assert partition_mask.sum() > 0  # should not be 0
+                vertices = torch.arange(len(partition_table), dtype=torch.long)
+                partition_vertices = vertices[partition_mask]
+                keys = partition_vertices
+                kvstore_rank = partition_id * local_world_size()
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.load_tensors,
+                                             args=(keys, 'node')))
 
-            if undirected:
-                src_nodes_ext = np.concatenate([src_nodes, dst_nodes])
-                dst_nodes_ext = np.concatenate([dst_nodes, src_nodes])
-                src_nodes = src_nodes_ext
-                dst_nodes = dst_nodes_ext
-                timestamps = np.concatenate([timestamps, timestamps])
-                eids = np.concatenate([eids, eids])
-
-            src_nodes = torch.from_numpy(src_nodes)
-            dst_nodes = torch.from_numpy(dst_nodes)
-            timestamps = torch.from_numpy(timestamps)
-            eids = torch.from_numpy(eids)
-            futures.extend(self.dispatch_edges(src_nodes, dst_nodes,
-                                               timestamps, eids, edge_feats,
-                                               partition_train_data))
-
-            for future in futures:
-                future.wait()
+        if self._memory:
             futures = []
-            t.update(len(batch))
+            for partition_id in range(self._num_partitions):
+                partition_mask = partition_table == partition_id
+                assert partition_mask.sum() > 0  # should not be 0
+                vertices = torch.arange(
+                    len(partition_table), dtype=torch.long)
+                partition_vertices = vertices[partition_mask]
+                keys = partition_vertices.contiguous()
+                kvstore_rank = partition_id * local_world_size()
+                futures.append(rpc.rpc_async("worker%d" % kvstore_rank, graph_services.load_tensors,
+                                             args=(keys, 'memory')))
 
-        t.close()
+        for future in futures:
+            future.wait()
 
     def broadcast_graph_metadata(self):
         """
@@ -161,7 +195,7 @@ class Dispatcher:
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_graph_metadata,
-                             args=(len(self._nodes), self._num_edges, self._max_node, self._num_partitions))
+                             args=(self._max_node, self._num_edges, self._max_node, self._num_partitions))
 
     def broadcast_partition_table(self):
         """
@@ -185,28 +219,41 @@ class Dispatcher:
                 rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_dim_node_edge,
                              args=(dim_node, dim_edge))
 
-    def broadcast_rand_sampler(self, train_rand_sampler, val_rand_sampler, test_rand_sampler):
+    def broadcast_rand_sampler(self):
+        train_dst_set = torch.LongTensor(list(self._train_dst_set))
+        nontrain_dst_set = torch.LongTensor(list(self._nontrain_dst_set))
+        futures = []
         for partition_id in range(self._num_partitions):
             for worker_id in range(self._local_world_size):
                 worker_rank = partition_id * self._local_world_size + worker_id
-                rpc.rpc_sync("worker%d" % worker_rank, graph_services.set_rand_sampler,
-                             args=(train_rand_sampler, val_rand_sampler, test_rand_sampler))
+                if worker_rank == self._rank:
+                    graph_services.set_rand_sampler(
+                        train_dst_set, nontrain_dst_set)
+                else:
+                    futures.append(rpc.rpc_async("worker%d" % worker_rank, graph_services.set_rand_sampler,
+                                                 args=(train_dst_set, nontrain_dst_set)))
+
+        for future in futures:
+            future.wait()
 
 
-def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None):
+def get_dispatcher(partition_strategy: Optional[str] = None, num_partitions: Optional[int] = None,
+                   node_feat: bool = False, edge_feat: bool = False, memory: bool = False, dataset_name: str = ""):
     """
     Get the dispatcher singleton.
 
     Args:
         partition_strategy (str): The partitioning strategy.
         num_partitions (int): The number of partitions to split the dataset into.
+        node_feat (bool): Whether to load node features.
+        edge_feat (bool): Whether to load edge features.
+        memory (bool): Whether to load memory.
 
     Returns:
         The dispatcher singleton.
     """
     global dispatcher
     if dispatcher is None:
-        assert partition_strategy is not None and num_partitions is not None, \
-            "The dispatcher is not initialized. Please specify the partitioning strategy and the number of partitions."
-        dispatcher = Dispatcher(partition_strategy, num_partitions)
+        dispatcher = Dispatcher(
+            partition_strategy, num_partitions, node_feat, edge_feat, memory, dataset_name)
     return dispatcher

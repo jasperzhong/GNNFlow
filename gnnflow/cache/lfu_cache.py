@@ -102,7 +102,7 @@ class LFUCache(Cache):
                     self.device)
                 self.cache_edge_map[keys] = cache_edge_id
 
-                self.cache_edge_count[self.cache_index_to_edge_id] += 1
+                self.cache_edge_count.zero_()
         else:
             if self.edge_feats is not None:
                 cache_edge_id = torch.arange(
@@ -115,7 +115,7 @@ class LFUCache(Cache):
                 self.cache_index_to_edge_id = cache_edge_id
                 self.cache_edge_map[cache_edge_id] = cache_edge_id
 
-                self.cache_edge_count[self.cache_index_to_edge_id] += 1
+                self.cache_edge_count.zero_()
 
     def resize(self, new_num_nodes: int, new_num_edges: int):
         """

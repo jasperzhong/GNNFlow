@@ -38,6 +38,9 @@ class SAGE(nn.Module):
             nn.ReLU(),
             nn.Linear(dim_out, 1))
 
+    def reset(self):
+        pass
+
     def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1, *args, **kwargs):
         """
         Args:
