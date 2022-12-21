@@ -416,8 +416,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                     cv_sampling_time += std / mean
 
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Total feature fetch time: {:.2f}s | Total time: {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_data)//args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, time.time() - epoch_time_start))
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Total feature fetch time: {:.2f}s | Total time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
+                        train_data)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, time.time() - epoch_time_start))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -437,8 +437,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             cv_sampling_time += std / mean
 
         if args.rank == 0:
-            logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Epoch training time: {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                train_data)//args.batch_size), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, epoch_time))
+            logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Epoch training time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
+                train_data)/args.batch_size), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, epoch_time))
 
         # Validation
         val_start = time.time()
