@@ -82,8 +82,10 @@ class RandomStartBatchSampler(BatchSampler):
         self.chunk_size = batch_size // num_chunks
         self.reorder = self.num_chunks > 1
         self.random_size = batch_size
-        self.local_rank = local_rank()
-        self.device = torch.device('cuda', self.local_rank)
+        if world_size > 1:
+            self.device = torch.device('cuda', local_rank())
+        else:
+            self.device = torch.device('cpu')
         self.world_size = world_size
 
     def __iter__(self) -> Iterator[List[int]]:
