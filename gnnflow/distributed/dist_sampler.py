@@ -62,6 +62,7 @@ class DistributedTemporalSampler:
                 self._load_table_lock = threading.Lock()
 
     def __del__(self):
+        logging.info("DistributedTemporalSampler: stop sampling thread")
         self._sampling_task_queue.put((None, None, None, None, None, None))
         self._sampling_thread.join()
 
