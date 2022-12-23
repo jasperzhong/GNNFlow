@@ -340,6 +340,8 @@ def main():
 
     if args.distributed:
         torch.distributed.barrier()
+        dgraph.shutdown()
+        sampler.shutdown()
         logging.info("Rank {} shutdown".format(args.rank))
         torch.distributed.rpc.shutdown()
         torch.distributed.destroy_process_group()

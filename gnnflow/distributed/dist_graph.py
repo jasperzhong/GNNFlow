@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from queue import Queue
@@ -34,10 +35,18 @@ class DistributedDynamicGraph:
         self._add_edges_queue = Queue()
         self._add_edges_thread.start()
 
+    def shutdown(self):
+        logging.info('DistributedDynamicGraph shutdown')
+        self._add_edges_queue.put((None, None, None, None, None))
+        self._add_edges_thread.join()
+
     def _add_edges_loop(self):
         while True:
             while not self._add_edges_queue.empty():
                 source_vertices, target_vertices, timestamps, eids, handle = self._add_edges_queue.get()
+                if handle is None:
+                    return
+
                 self._dgraph.add_edges(
                     source_vertices, target_vertices, timestamps, eids)
 

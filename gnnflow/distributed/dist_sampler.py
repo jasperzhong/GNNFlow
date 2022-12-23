@@ -61,11 +61,19 @@ class DistributedTemporalSampler:
                 self._load_table = torch.ones(self._local_world_size)
                 self._load_table_lock = threading.Lock()
 
+    def shutdown(self):
+        logging.info("DistributedTemporalSampler shutdown")
+        self._sampling_task_queue.put((None, None, None, None, None, None))
+        self._sampling_thread.join()
+
     def _sampling_loop(self):
         while True:
             while not self._sampling_task_queue.empty():
                 target_vertices, timestamps, layer, snapshot, result, \
                     handle = self._sampling_task_queue.get()
+
+                if handle is None:
+                    return
 
                 start = time.time()
                 ret = self.sample_layer_local(
