@@ -35,7 +35,7 @@ class DistributedDynamicGraph:
         self._add_edges_queue = Queue()
         self._add_edges_thread.start()
 
-    def __del__(self):
+    def shutdown(self):
         logging.info('DistributedDynamicGraph is being deleted.')
         self._add_edges_queue.put((None, None, None, None, None))
         self._add_edges_thread.join()

@@ -61,7 +61,7 @@ class DistributedTemporalSampler:
                 self._load_table = torch.ones(self._local_world_size)
                 self._load_table_lock = threading.Lock()
 
-    def __del__(self):
+    def shutdown(self):
         logging.info("DistributedTemporalSampler: stop sampling thread")
         self._sampling_task_queue.put((None, None, None, None, None, None))
         self._sampling_thread.join()

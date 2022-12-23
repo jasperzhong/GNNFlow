@@ -339,6 +339,8 @@ def main():
         logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
+        dgraph.shutdown()
+        sampler.shutdown()
         torch.distributed.barrier()
         logging.info("Rank {} shutdown".format(args.rank))
         torch.distributed.rpc.shutdown()
