@@ -72,7 +72,7 @@ class DistributedTemporalSampler:
                     handle = self._sampling_task_queue.get()
 
                 if handle is None:
-                    break
+                    return
 
                 start = time.time()
                 ret = self.sample_layer_local(

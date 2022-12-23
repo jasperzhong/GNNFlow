@@ -43,7 +43,7 @@ class DistributedDynamicGraph:
             while not self._add_edges_queue.empty():
                 source_vertices, target_vertices, timestamps, eids, handle = self._add_edges_queue.get()
                 if handle is None:
-                    break
+                    return
 
                 self._dgraph.add_edges(
                     source_vertices, target_vertices, timestamps, eids)
