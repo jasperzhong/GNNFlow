@@ -22,7 +22,7 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor, RandEdgeSampler,
+from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
                            build_dynamic_graph, get_pinned_buffers,
                            get_project_root_dir, load_dataset, load_feat,
                            mfgs_to_cuda)
@@ -52,8 +52,10 @@ parser.add_argument("--seed", type=int, default=42)
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
                     '|'.join(cache_names))
-parser.add_argument("--cache-ratio", type=float, default=0,
-                    help="cache ratio for feature cache")
+parser.add_argument("--edge-cache-ratio", type=float, default=0,
+                    help="cache ratio for edge feature cache")
+parser.add_argument("--node-cache-ratio", type=float, default=0,
+                    help="cache ratio for node feature cache")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
@@ -91,9 +93,14 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             if args.use_memory:
                 # NB: no need to do backward here
                 # use one function
-                model.module.memory.update_mem_mail(
-                    **model.module.last_updated, edge_feats=cache.target_edge_features,
-                    neg_sample_ratio=1)
+                if args.distributed:
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
+                else:
+                    model.memory.update_mem_mail(
+                        **model.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
 
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -145,7 +152,7 @@ def main():
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
 
-    batch_size = data_config['batch_size']
+    batch_size = model_config['batch_size']
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
@@ -215,8 +222,8 @@ def main():
         dim_node, dim_edge)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.cache_ratio, num_nodes,
-                                        num_edges, device,
+    cache = caches.__dict__[args.cache](args.edge_cache_ratio, args.node_cache_ratio,
+                                        num_nodes, num_edges, device,
                                         node_feats, edge_feats,
                                         dim_node, dim_edge,
                                         pinned_nfeat_buffs,
@@ -285,9 +292,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 # NB: no need to do backward here
                 with torch.no_grad():
                     # use one function
-                    model.module.memory.update_mem_mail(
-                        **model.module.last_updated, edge_feats=cache.target_edge_features,
-                        neg_sample_ratio=1)
+                    if args.distributed:
+                        model.module.memory.update_mem_mail(
+                            **model.module.last_updated, edge_feats=cache.target_edge_features,
+                            neg_sample_ratio=1)
+                    else:
+                        model.memory.update_mem_mail(
+                            **model.last_updated, edge_feats=cache.target_edge_features,
+                            neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
