@@ -74,6 +74,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     test_data = full_data[val_end:]
     return train_data, val_data, test_data, full_data
 
+
 def load_partition_table(dataset: str):
     """
     Loads the dataset and returns the dataframes for the train, validation, test and
@@ -92,12 +93,15 @@ def load_partition_table(dataset: str):
     path = os.path.join(data_dir, dataset + '_metis_partition.pt')
 
     if not os.path.exists(path):
-        logging.info("Didn't find Partition table under path: {}, using default partition algorithm to partition...".format(path))
+        logging.info(
+            "Didn't find Partition table under path: {}, using default partition algorithm to partition...".format(path))
         return None
 
-    logging.info("Find corresponding file under path {}. Using this file to skip the initial partition phase!".format(path))
+    logging.info(
+        "Find corresponding file under path {}. Using this file to skip the initial partition phase!".format(path))
     pt = torch.load(path)
     return pt
+
 
 def load_partition_table(dataset: str):
     """
@@ -358,6 +362,9 @@ class DstRandEdgeSampler:
     def reset_random_state(self):
         self.random_state = np.random.RandomState(self.seed)
 
+    def add_dst_list(self, dst):
+        self.dst_list = np.unique(np.concatenate((self.dst_list, dst)))
+
 
 def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
               rand_edge_sampler: DstRandEdgeSampler, world_size: int = 1):
@@ -384,6 +391,33 @@ def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
         eid = rows['eid'].values
 
         yield target_nodes, ts, eid
+
+
+def weighted_sample(replay_ratio, df, weights, phase1,
+                    i, incremental_step, retrain_interval, retrain_count):
+
+    weights = torch.cat(
+        (weights, torch.tensor([retrain_count] * (retrain_interval * incremental_step))))
+    phase2_new_data_start = phase1 + incremental_step * (i - retrain_interval)
+    phase2_new_data_end = phase1 + incremental_step * i
+    new_data_index = torch.arange(
+        phase2_new_data_start, phase2_new_data_end)
+    # first fetch replay samples in old data
+    # new data will all be selected to the replay samples
+    if replay_ratio != 0:
+        num_replay = int(replay_ratio * phase2_new_data_start)
+        index_select = torch.multinomial(weights[:phase2_new_data_start],
+                                         num_replay).sort().values
+        all_index = torch.cat((index_select, new_data_index))
+    else:
+        all_index = new_data_index
+    train_length = int(len(all_index) * 0.9) + 1
+    train_index = all_index[:train_length]
+    val_index = all_index[train_length:]
+    phase2_train_df = df.iloc[train_index.numpy()]
+    phase2_val_df = df.iloc[val_index.numpy()]
+
+    return phase2_train_df, phase2_val_df, phase2_new_data_end, weights
 
 
 def get_batch_no_neg(df: pd.DataFrame, batch_size: int):
