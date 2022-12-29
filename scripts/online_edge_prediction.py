@@ -55,6 +55,10 @@ parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="node cache ratio for feature cache")
 
 # online learning
+parser.add_argument("--phase1-ratio", type=float, default=0.3,
+                    help="ratio of phase 1")
+parser.add_argument("--val-ratio", type=float, default=0.1,
+                    help="ratio of validation set")
 parser.add_argument("--replay-ratio", type=float, default=0,
                     help="replay ratio")
 parser.add_argument("--retrain-ratio", type=int, default=1,
@@ -98,9 +102,14 @@ def evaluate(df, sampler, model, criterion, cache, device, rand_edge_sampler):
             if args.use_memory:
                 # NB: no need to do backward here
                 # use one function
-                model.module.memory.update_mem_mail(
-                    **model.module.last_updated, edge_feats=cache.target_edge_features,
-                    neg_sample_ratio=1)
+                if args.distributed:
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
+                else:
+                    model.memory.update_mem_mail(
+                        **model.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
 
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -140,46 +149,40 @@ def main():
     total_training_time = 0
     # Phase 1
     if args.distributed:
-        # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
-        phase1_build_graph_start = time.time()
-        _, _, _, full_data = load_dataset(args.data)
-        # deal with phase 1 dataset
-        phase1_len = int(len(full_data) * 0.3)
-        phase1_train = int(phase1_len * 0.9) + 1
-        phase1_train_df = full_data[:phase1_train]
-        phase1_val_df = full_data[phase1_train:phase1_len]
-        train_rand_sampler = DstRandEdgeSampler(
-            phase1_train_df['dst'].to_numpy())
-        val_rand_sampler = DstRandEdgeSampler(
-            full_data[:phase1_len]['dst'].to_numpy())
 
-        logging.info("world_size: {}".format(args.world_size))
-        dgraph = build_dynamic_graph(
-            **data_config, device=args.local_rank, dataset_df=full_data[:phase1_len])
-        phase1_build_graph_end = time.time()
-        phase1_build_graph_time = phase1_build_graph_end - phase1_build_graph_start
-        logging.info("phase1 build graph time: {}".format(
-            phase1_build_graph_time))
-        build_graph_time += phase1_build_graph_time
-        logging.info("full len: {}".format(len(full_data)))
-        logging.info("phase1 len: {}".format(phase1_len))
-        logging.info("phase1 train len all: {}".format(len(phase1_train_df)))
-        # Fetch their own dataset, no redudancy
-        train_index = list(range(args.rank, phase1_train, args.world_size))
-        phase1_train_df = phase1_train_df.iloc[train_index]
-        logging.info("rank {} own train dataset len {}".format(
-            args.rank, len(phase1_train_df)))
-        val_index = list(
-            range(args.rank, len(phase1_val_df), args.world_size))
-        phase1_val_df = phase1_val_df.iloc[val_index]
-    else:
-        # TODO: single GPU not implemented
-        raise NotImplementedError("Single GPU not implemented")
-        # train_data, val_data, test_data, full_data = load_dataset(args.data)
-        # train_rand_sampler = DstRandEdgeSampler(train_data['dst'].values)
-        # val_rand_sampler = DstRandEdgeSampler(full_data['dst'].values)
-        # test_rand_sampler = DstRandEdgeSampler(full_data['dst'].values)
+    # graph is stored in shared memory
+    phase1_build_graph_start = time.time()
+    _, _, _, full_data = load_dataset(args.data)
+    # deal with phase 1 dataset
+    phase1_len = int(len(full_data) * args.phase1_ratio)
+    phase1_train = int(phase1_len * (1-args.val_ratio)) + 1
+    phase1_train_df = full_data[:phase1_train]
+    phase1_val_df = full_data[phase1_train:phase1_len]
+    train_rand_sampler = DstRandEdgeSampler(
+        phase1_train_df['dst'].to_numpy())
+    val_rand_sampler = DstRandEdgeSampler(
+        full_data[:phase1_len]['dst'].to_numpy())
+
+    logging.info("world_size: {}".format(args.world_size))
+    dgraph = build_dynamic_graph(
+        **data_config, device=args.local_rank, dataset_df=full_data[:phase1_len])
+    phase1_build_graph_end = time.time()
+    phase1_build_graph_time = phase1_build_graph_end - phase1_build_graph_start
+    logging.info("phase1 build graph time: {}".format(
+        phase1_build_graph_time))
+    build_graph_time += phase1_build_graph_time
+    logging.info("full len: {}".format(len(full_data)))
+    logging.info("phase1 len: {}".format(phase1_len))
+    logging.info("phase1 train len all: {}".format(len(phase1_train_df)))
+    # Fetch their own dataset, no redudancy
+    train_index = list(range(args.rank, phase1_train, args.world_size))
+    phase1_train_df = phase1_train_df.iloc[train_index]
+    logging.info("rank {} own train dataset len {}".format(
+        args.rank, len(phase1_train_df)))
+    val_index = list(
+        range(args.rank, len(phase1_val_df), args.world_size))
+    phase1_val_df = phase1_val_df.iloc[val_index]
 
     args.batch_size = model_config['batch_size']
     # NB: learning rate is scaled by the number of workers
@@ -347,7 +350,7 @@ def main():
                 all_index = torch.cat((old_data_index, new_data_index))
             else:
                 all_index = new_data_index
-            phase2_train_len = int(len(all_index) * 0.9) + 1
+            phase2_train_len = int(len(all_index) * (1-args.val_ratio)) + 1
             train_index = all_index[:phase2_train_len]
             val_index = all_index[phase2_train_len:]
             phase2_train_df = full_data.iloc[train_index.numpy()]
@@ -435,9 +438,14 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
                 # NB: no need to do backward here
                 with torch.no_grad():
                     # use one function
-                    model.module.memory.update_mem_mail(
-                        **model.module.last_updated, edge_feats=cache.target_edge_features,
-                        neg_sample_ratio=1)
+                    if args.distributed:
+                        model.module.memory.update_mem_mail(
+                            **model.module.last_updated, edge_feats=cache.target_edge_features,
+                            neg_sample_ratio=1)
+                    else:
+                        model.memory.update_mem_mail(
+                            **model.last_updated, edge_feats=cache.target_edge_features,
+                            neg_sample_ratio=1)
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
