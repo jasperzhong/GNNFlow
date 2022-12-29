@@ -74,6 +74,7 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     test_data = full_data[val_end:]
     return train_data, val_data, test_data, full_data
 
+
 def load_partition_table(dataset: str):
     """
     Loads the dataset and returns the dataframes for the train, validation, test and
@@ -92,12 +93,15 @@ def load_partition_table(dataset: str):
     path = os.path.join(data_dir, dataset + '_metis_partition.pt')
 
     if not os.path.exists(path):
-        logging.info("Didn't find Partition table under path: {}, using default partition algorithm to partition...".format(path))
+        logging.info(
+            "Didn't find Partition table under path: {}, using default partition algorithm to partition...".format(path))
         return None
 
-    logging.info("Find corresponding file under path {}. Using this file to skip the initial partition phase!".format(path))
+    logging.info(
+        "Find corresponding file under path {}. Using this file to skip the initial partition phase!".format(path))
     pt = torch.load(path)
     return pt
+
 
 def load_partition_table(dataset: str):
     """
@@ -357,6 +361,9 @@ class DstRandEdgeSampler:
 
     def reset_random_state(self):
         self.random_state = np.random.RandomState(self.seed)
+
+    def add_dst_list(self, dst):
+        self.dst_list = np.unique(np.concatenate((self.dst_list, dst)))
 
 
 def get_batch(df: pd.DataFrame, batch_size: int, num_chunks: int,
