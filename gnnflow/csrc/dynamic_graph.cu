@@ -397,10 +397,10 @@ std::size_t DynamicGraph::OffloadOldBlocks(TimestampType timestamp,
           }
         }
 
+        RemoveBlock(node, cur);
         if (to_file) {
           allocator_.SaveToFile(cur, node);
         } else {
-          RemoveBlock(node, cur);
           allocator_.Deallocate(cur);  // `delete block`
         }
         num_blocks++;
