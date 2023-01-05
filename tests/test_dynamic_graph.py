@@ -69,7 +69,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges sorted by timestamps passed. (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_sorted_by_timestamps_add_reverse(
             self, mem_resource_type):
@@ -117,7 +117,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges sorted by timestamps passed (add reverse) (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_unsorted(self, mem_resource_type):
         """
@@ -162,7 +162,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges unsorted passed (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_multiple_times_insert(self, mem_resource_type):
         """
@@ -243,7 +243,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges multiple times passed. (insert policy) (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_multiple_times_replace(self, mem_resource_type):
         """
