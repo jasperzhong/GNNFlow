@@ -169,7 +169,73 @@ class TestTemporalSampler(unittest.TestCase):
         self.assertEqual(block.edges()[0].tolist(), [3, 4, 5, 6, 7, 8])
         self.assertEqual(block.edges()[1].tolist(), [0, 0, 1, 1, 2, 2])
 
-        print("Test sample_layer passed")
+        print("Test sample_layer with multiple blocks passed")
+
+    @parameterized.expand(
+        itertools.product(["pinned"], [True, False]))
+    def test_sample_layer_with_multiple_blocks_offload(self, mem_resource_type, to_file):
+        # build the dynamic graph
+        config = default_config.copy()
+        config["mem_resource_type"] = mem_resource_type
+        config["minimum_block_size"] = 4
+        dgraph = DynamicGraph(**config)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
+
+        # add more edges
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, add_reverse=False)
+
+        dgraph.offload_old_blocks(3.5, to_file)
+
+        # sample 1-hop neighbors
+        sampler = TemporalSampler(dgraph, [2])
+        target_vertices = np.array([0, 1, 2])
+        blocks = sampler.sample(target_vertices,
+                                np.array([1.5, 1.5, 1.5]))
+        blocks = blocks[0]
+
+        block = blocks[0]
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            1.5, 1.5, 1.5])
+        self.assertEqual(block.edata['dt'].tolist(), [])
+        self.assertEqual(block.edata['ID'].tolist(), [])
+        self.assertEqual(block.num_src_nodes(), 3)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [])
+        self.assertEqual(block.edges()[1].tolist(), [])
+
+        target_vertices = np.array([0, 1, 2])
+        blocks = sampler.sample(target_vertices,
+                                np.array([4.5, 4.5, 4.5]))
+        blocks = blocks[0]
+
+        block = blocks[0]
+        self.assertEqual(block.srcdata['ID'].tolist(), [
+            0, 1, 2,
+            2, 2, 2])
+        self.assertEqual(block.srcdata['ts'].tolist(), [
+            4.5, 4.5, 4.5,
+            4, 4, 4])
+        self.assertEqual(block.edata['dt'].tolist(), [
+            0.5, 0.5, 0.5])
+        self.assertEqual(block.edata['ID'].tolist(), [
+            10, 13, 16])
+        self.assertEqual(block.num_src_nodes(), 6)
+        self.assertEqual(block.num_dst_nodes(), 3)
+        self.assertEqual(block.edges()[0].tolist(), [
+            3, 4, 5])
+        self.assertEqual(block.edges()[1].tolist(), [
+            0, 1, 2])
+        print("Test sample_layer with multiple blocks (offload) passed")
 
     @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))

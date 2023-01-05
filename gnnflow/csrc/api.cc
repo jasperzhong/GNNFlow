@@ -47,6 +47,8 @@ PYBIND11_MODULE(libgnnflow, m) {
            py::arg("device"), py::arg("adaptive_block_size"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
            py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"))
+      .def("offload_old_blocks", &DynamicGraph::OffloadOldBlocks,
+           py::arg("timestamp"), py::arg("to_file") = false)
       .def("num_vertices", &DynamicGraph::num_nodes)
       .def("num_source_vertices", &DynamicGraph::num_src_nodes)
       .def("num_edges", &DynamicGraph::num_edges)

@@ -1,3 +1,4 @@
+#include <fstream>
 #include <limits>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
@@ -16,7 +17,9 @@ TemporalBlockAllocator::TemporalBlockAllocator(
     std::size_t initial_pool_size, std::size_t maximum_pool_size,
     std::size_t minium_block_size, MemoryResourceType mem_resource_type,
     int device)
-    : minium_block_size_(minium_block_size), device_(device) {
+    : mem_resource_type_(mem_resource_type),
+      minium_block_size_(minium_block_size),
+      device_(device) {
   LOG(DEBUG) << "set device to " << device;
   CUDA_CALL(cudaSetDevice(device));
   // create a memory pool
@@ -112,6 +115,8 @@ void TemporalBlockAllocator::Deallocate(TemporalBlock *block) {
     blocks_.erase(std::remove(blocks_.begin(), blocks_.end(), block),
                   blocks_.end());
   }
+
+  delete block;
 }
 
 void TemporalBlockAllocator::Reallocate(TemporalBlock *block, std::size_t size,
@@ -168,5 +173,85 @@ void TemporalBlockAllocator::DeallocateInternal(TemporalBlock *block) {
     block->eids = nullptr;
     allocated_ -= block->capacity * sizeof(EIDType);
   }
+
+  block->size = 0;
+  block->capacity = 0;
+  // NB: we don't reset the timestamps and prev/next
+}
+
+void TemporalBlockAllocator::SaveToFile(TemporalBlock *block,
+                                        NIDType src_node) {
+  if (mem_resource_type_ != MemoryResourceType::kMemoryResourceTypePinned &&
+      mem_resource_type_ != MemoryResourceType::kMemoryResourceTypeShared) {
+    LOG(FATAL) << "Only pinned and shared memory resources are supported";
+  }
+
+  // NB: only first rank saves the temporal block
+  if (device_ == 0) {
+    std::string file_name = "temporal_block_" + std::to_string(src_node) + "-" +
+                            std::to_string(num_saved_blocks_[src_node]) +
+                            ".bin";
+    std::ofstream file(file_name, std::ios::out | std::ios::binary);
+    file.write(reinterpret_cast<char *>(&block->size), sizeof(block->size));
+    file.write(reinterpret_cast<char *>(&block->capacity),
+               sizeof(block->capacity));
+    file.write(reinterpret_cast<char *>(&block->start_timestamp),
+               sizeof(block->start_timestamp));
+    file.write(reinterpret_cast<char *>(&block->end_timestamp),
+               sizeof(block->end_timestamp));
+    file.write(reinterpret_cast<char *>(block->dst_nodes),
+               sizeof(NIDType) * block->size);
+    file.write(reinterpret_cast<char *>(block->timestamps),
+               sizeof(TimestampType) * block->size);
+    file.write(reinterpret_cast<char *>(block->eids),
+               sizeof(EIDType) * block->size);
+    file.write(reinterpret_cast<char *>(&block->prev), sizeof(block->prev));
+    file.write(reinterpret_cast<char *>(&block->next), sizeof(block->next));
+    file.close();
+
+    saved_blocks_[block] = file_name;
+    num_saved_blocks_[src_node]++;
+
+    LOG(INFO) << "Temporal block saved to " << file_name;
+  }
+
+  // NB: all ranks need to deallocate the temporal block (but only first rank
+  // release the memory)
+  DeallocateInternal(block);
+}
+
+void TemporalBlockAllocator::ReadFromFile(TemporalBlock *block,
+                                          NIDType src_node) {
+  if (mem_resource_type_ != MemoryResourceType::kMemoryResourceTypePinned) {
+    LOG(FATAL) << "Only pinned memory resources are supported";
+    // NB: shared memory resources are not supported because we need to know the
+    // offset of the temporal block in the shared memory
+  }
+  CHECK_EQ(device_, 0) << "Only first rank can read temporal blocks from file";
+
+  std::string file_name = saved_blocks_[block];
+  std::ifstream file(file_name, std::ios::in | std::ios::binary);
+  file.read(reinterpret_cast<char *>(&block->size), sizeof(block->size));
+  file.read(reinterpret_cast<char *>(&block->capacity),
+            sizeof(block->capacity));
+  AllocateInternal(block, block->capacity);
+  file.read(reinterpret_cast<char *>(&block->start_timestamp),
+            sizeof(block->start_timestamp));
+  file.read(reinterpret_cast<char *>(&block->end_timestamp),
+            sizeof(block->end_timestamp));
+  file.read(reinterpret_cast<char *>(block->dst_nodes),
+            sizeof(NIDType) * block->size);
+  file.read(reinterpret_cast<char *>(block->timestamps),
+            sizeof(TimestampType) * block->size);
+  file.read(reinterpret_cast<char *>(block->eids),
+            sizeof(EIDType) * block->size);
+  file.read(reinterpret_cast<char *>(&block->prev), sizeof(block->prev));
+  file.read(reinterpret_cast<char *>(&block->next), sizeof(block->next));
+  file.close();
+
+  saved_blocks_.erase(block);
+  num_saved_blocks_[src_node]--;
+
+  LOG(INFO) << "Temporal block read from " << file_name;
 }
 }  // namespace gnnflow

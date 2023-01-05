@@ -75,6 +75,16 @@ class DynamicGraph {
    */
   void AddNodes(NIDType max_node);
 
+  /**
+   * @brief Offload all blocks that are older than the given timestamp.
+   *
+   * @params src_node The source node of the blocks.
+   * @params timestamp The timestamp of the blocks.
+   *
+   * @return The number of blocks offloaded.
+   */
+  std::size_t OffloadOldBlocks(TimestampType timestamp, bool to_file = false);
+
   std::size_t num_nodes() const;
   std::size_t num_edges() const;
   std::size_t num_src_nodes() const;
@@ -115,6 +125,9 @@ class DynamicGraph {
   void InsertBlock(NIDType node_id, TemporalBlock* block,
                    cudaStream_t stream = nullptr);
 
+  void RemoveBlock(NIDType node_id, TemporalBlock* block,
+                   cudaStream_t stream = nullptr);
+
   void SyncBlock(TemporalBlock* block, cudaStream_t stream = nullptr);
 
  private:
@@ -137,7 +150,7 @@ class DynamicGraph {
 
   std::set<NIDType> nodes_;
   std::set<NIDType> src_nodes_;
-  std::set<EIDType> edges_;
+  std::unordered_map<EIDType, std::size_t> edges_;
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 

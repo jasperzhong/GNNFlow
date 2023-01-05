@@ -37,7 +37,7 @@ __global__ void SampleLayerRecentKernel(
   uint32_t offset = tid * fanout;
   int start_idx, end_idx;
   uint32_t sampled = 0;
-  while (curr != nullptr && sampled < fanout) {
+  while (curr != nullptr && curr->capacity > 0 && sampled < fanout) {
     if (end_timestamp < curr->start_timestamp) {
       // search in the previous block
       curr = curr->prev;
@@ -128,7 +128,7 @@ __global__ void SampleLayerUniformKernel(
   int start_idx, end_idx;
   int curr_idx = 0;
   const int offset_by_thread = offset_per_thread * threadIdx.x;
-  while (curr != nullptr) {
+  while (curr != nullptr && curr->capacity > 0) {
     if (end_timestamp < curr->start_timestamp) {
       // search in the prev block
       curr = curr->prev;
@@ -186,7 +186,7 @@ __global__ void SampleLayerUniformKernel(
   curr = list.tail;
   curr_idx = 0;
   uint32_t cumsum = 0;
-  while (curr != nullptr) {
+  while (curr != nullptr && curr->capacity > 0) {
     if (end_timestamp < curr->start_timestamp) {
       // search in the prev block
       curr = curr->prev;

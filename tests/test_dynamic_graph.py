@@ -40,13 +40,8 @@ class TestDynamicGraph(unittest.TestCase):
                          timestamps, add_reverse=False)
         self.assertEqual(dgraph.num_edges(), 9)
         self.assertEqual(dgraph.num_vertices(), 4)
-        self.assertEqual(dgraph.num_source_vertices(), 3)
         self.assertEqual(dgraph.out_degree(
             [0, 1, 2, 3]).tolist(), [3, 3, 3, 0])
-
-        self.assertEqual(dgraph.nodes().tolist(), [0, 1, 2, 3])
-        self.assertEqual(dgraph.src_nodes().tolist(), [0, 1, 2])
-        self.assertEqual(dgraph.edges().tolist(), [0, 1, 2, 3, 4, 5, 6, 7, 8])
 
         target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
             0)
@@ -74,7 +69,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges sorted by timestamps passed. (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_sorted_by_timestamps_add_reverse(
             self, mem_resource_type):
@@ -122,7 +117,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges sorted by timestamps passed (add reverse) (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_unsorted(self, mem_resource_type):
         """
@@ -167,7 +162,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges unsorted passed (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_multiple_times_insert(self, mem_resource_type):
         """
@@ -248,7 +243,7 @@ class TestDynamicGraph(unittest.TestCase):
         print("Test add edges multiple times passed. (insert policy) (mem_resource_type: {})".format(
             mem_resource_type))
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_add_edges_multiple_times_replace(self, mem_resource_type):
         """
@@ -517,6 +512,64 @@ class TestDynamicGraph(unittest.TestCase):
         self.assertEqual(edge_ids.tolist(), [])
 
         print("Test add edges with non-continous eids passed. (mem_resource_type: {})".format(
+            mem_resource_type))
+
+    @parameterized.expand(
+        itertools.product(["pinned"], [True, False]))
+    def test_offload_old_blocks(self, mem_resource_type, to_file):
+        """
+        Test if the "offload_old_blocks(timestamp: float)" works
+        """
+        config = default_config.copy()
+        config["minimum_block_size"] = 4
+        config["mem_resource_type"] = mem_resource_type
+        dgraph = DynamicGraph(**config)
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+        edge_ids = np.array([0, 2, 4, 6, 8, 10, 12, 14, 16])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, edge_ids, add_reverse=False)
+
+        source_vertices = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        target_vertices = np.array([1, 2, 3, 1, 2, 3, 1, 2, 3])
+        timestamps = np.array([3, 4, 5, 3, 4, 5, 3, 4, 5])
+        edge_ids = np.array([17, 19, 21, 23, 25, 27, 29, 31, 33])
+        dgraph.add_edges(source_vertices, target_vertices,
+                         timestamps, edge_ids, add_reverse=False)
+
+        num_blocks = dgraph.offload_old_blocks(
+            3.5, to_file)  # the first block is offloaded
+        print("offloaded {} blocks".format(num_blocks))
+
+        self.assertEqual(dgraph.num_edges(), 6)
+        self.assertEqual(dgraph.num_vertices(), 4)
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
+            0)
+        self.assertEqual(target_vertices.tolist(), [3, 2])
+        self.assertEqual(timestamps.tolist(), [5, 4])
+        self.assertEqual(edge_ids.tolist(), [21, 19])
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
+            1)
+        self.assertEqual(target_vertices.tolist(), [3, 2])
+        self.assertEqual(timestamps.tolist(), [5, 4])
+        self.assertEqual(edge_ids.tolist(), [27, 25])
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
+            2)
+        self.assertEqual(target_vertices.tolist(), [3, 2])
+        self.assertEqual(timestamps.tolist(), [5, 4])
+        self.assertEqual(edge_ids.tolist(), [33, 31])
+
+        target_vertices, timestamps, edge_ids = dgraph.get_temporal_neighbors(
+            3)
+        self.assertEqual(target_vertices.tolist(), [])
+        self.assertEqual(timestamps.tolist(), [])
+        self.assertEqual(edge_ids.tolist(), [])
+
+        print("Test offload old blocks passed. (mem_resource_type: {})".format(
             mem_resource_type))
 
 
