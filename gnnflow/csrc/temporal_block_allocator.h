@@ -75,6 +75,9 @@ class TemporalBlockAllocator {
   void Reallocate(TemporalBlock* block, std::size_t size,
                   cudaStream_t stream = nullptr);
 
+  void SaveToFile(TemporalBlock* block, NIDType src_node);
+  void ReadFromFile(TemporalBlock* block, NIDType src_node);
+
   std::size_t get_total_memory_usage() const { return allocated_; }
 
  private:
@@ -87,7 +90,11 @@ class TemporalBlockAllocator {
   std::vector<TemporalBlock*> blocks_;
 
   std::size_t minium_block_size_;
+  MemoryResourceType mem_resource_type_;
   std::stack<rmm::mr::device_memory_resource*> mem_resources_;
+
+  std::unordered_map<TemporalBlock*, std::string> saved_blocks_;
+  std::unordered_map<NIDType, std::size_t> num_saved_blocks_;
 
   std::mutex mutex_;
 

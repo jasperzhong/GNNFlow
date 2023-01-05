@@ -192,6 +192,7 @@ rmm_log.txt
 col*.txt
 row*.txt
 partition_table.txt
+*.bin
 
 # MacOS
 .DS_Store

@@ -89,7 +89,10 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
   src_nodes_.insert(src_nodes.begin(), src_nodes.end());
   nodes_.insert(src_nodes.begin(), src_nodes.end());
   nodes_.insert(dst_nodes.begin(), dst_nodes.end());
-  edges_.insert(eids.begin(), eids.end());
+
+  for (auto eid : eids) {
+    edges_[eid]++;
+  }
 
   nodes_.insert(src_nodes.begin(), src_nodes.end());
 
@@ -168,6 +171,26 @@ void DynamicGraph::InsertBlock(NIDType node_id, TemporalBlock* block,
 
   // update the mapping
   h2d_mapping_[block] = d_block;
+}
+
+void DynamicGraph::RemoveBlock(NIDType node_id, TemporalBlock* block,
+                               cudaStream_t stream) {
+  CHECK_NOTNULL(block);
+  // host
+  RemoveBlockFromDoublyLinkedList(h_copy_of_d_node_table_.data(), node_id,
+                                  block);
+
+  // device
+  auto d_block = h2d_mapping_[block];
+  RemoveBlockFromDoublyLinkedListKernel<<<1, 1, 0, stream>>>(
+      thrust::raw_pointer_cast(d_node_table_.data()), node_id, d_block);
+
+  // release the memory
+  auto mr = rmm::mr::get_current_device_resource();
+  mr->deallocate(d_block, sizeof(TemporalBlock));
+
+  // update the mapping
+  h2d_mapping_.erase(block);
 }
 
 void DynamicGraph::SyncBlock(TemporalBlock* block, cudaStream_t stream) {
@@ -324,7 +347,11 @@ std::vector<NIDType> DynamicGraph::src_nodes() const {
   return {src_nodes_.begin(), src_nodes_.end()};
 }
 std::vector<EIDType> DynamicGraph::edges() const {
-  return {edges_.begin(), edges_.end()};
+  std::vector<EIDType> keys;
+  for (auto kv : edges_) {
+    keys.push_back(kv.first);
+  }
+  return keys;
 }
 
 NIDType DynamicGraph::max_node_id() const { return max_node_id_; }
@@ -350,5 +377,37 @@ float DynamicGraph::graph_metadata_mem_usage() {
   d_node_table_.shrink_to_fit();
   sum += sizeof(DoublyLinkedList) * d_node_table_.capacity();
   return sum;
+}
+
+std::size_t DynamicGraph::OffloadOldBlocks(TimestampType timestamp,
+                                           bool to_file) {
+  std::size_t num_blocks = 0;
+  for (auto& node : nodes_) {
+    auto& list = h_copy_of_d_node_table_[node];
+    auto cur = list.head;  // the oldest block for the node
+    while (cur != nullptr) {
+      auto next = cur->next;
+      if (cur->end_timestamp < timestamp) {
+        // remove from `edges_`
+        for (auto i = 0; i < cur->size; i++) {
+          auto eid = cur->eids[i];
+          edges_[eid]--;
+          if (edges_[eid] == 0) {
+            edges_.erase(eid);
+          }
+        }
+
+        if (to_file) {
+          allocator_.SaveToFile(cur, node);
+        } else {
+          RemoveBlock(node, cur);
+          allocator_.Deallocate(cur);  // `delete block`
+        }
+        num_blocks++;
+      }
+      cur = next;
+    }
+  }
+  return num_blocks;
 }
 }  // namespace gnnflow

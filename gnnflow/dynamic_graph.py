@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from libgnnflow import MemoryResourceType, InsertionPolicy, _DynamicGraph
+from libgnnflow import InsertionPolicy, MemoryResourceType, _DynamicGraph
 
 
 class DynamicGraph:
@@ -124,6 +124,19 @@ class DynamicGraph:
 
         self._dgraph.add_edges(
             source_vertices, target_vertices, timestamps, eids)
+
+    def offload_old_blocks(self, timestamp: float, to_file: bool = False):
+        """
+        Offload the old blocks from the graph.
+
+        Args:
+            timestamp: the current timestamp.
+            to_file: whether to offload the blocks to file.
+
+        Return:
+            the number of blocks offloaded.
+        """
+        return self._dgraph.offload_old_blocks(timestamp, to_file)
 
     def num_vertices(self) -> int:
         return self._dgraph.num_vertices()
