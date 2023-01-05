@@ -237,7 +237,7 @@ class TestTemporalSampler(unittest.TestCase):
             0, 1, 2])
         print("Test sample_layer with multiple blocks (offload) passed")
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_sampler_layer_with_duplicate_vertices(self, mem_resource_type):
         # build the dynamic graph
@@ -292,7 +292,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sampler_layer_with_duplicate_vertices passed")
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_sample_multi_layers(self, mem_resource_type):
         # build the dynamic graph
@@ -385,7 +385,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_layers passed")
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_sample_multi_snapshots(self, mem_resource_type):
         # build the dynamic graph
@@ -488,7 +488,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_snapshots passed")
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_sample_multi_layers_multi_snapshots(self, mem_resource_type):
         # build the dynamic graph
@@ -655,7 +655,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_multi_layers_multi_snapshots passed")
 
-    @ parameterized.expand(
+    @parameterized.expand(
         itertools.product(["cuda", "unified", "pinned", "shared"]))
     def test_sample_layer_with_different_batch_size(self, mem_resource_type):
         # build the dynamic graph
@@ -681,7 +681,7 @@ class TestTemporalSampler(unittest.TestCase):
 
         print("Test sample_layer_with_different_batch_size passed")
 
-    @ unittest.skip("debug only")
+    @unittest.skip("debug only")
     def test_sampler_use_df(self):
         train_df, _, _, df = load_dataset(dataset="REDDIT")
         train_edge_end = df[df['ext_roll'].gt(0)].index[0]
