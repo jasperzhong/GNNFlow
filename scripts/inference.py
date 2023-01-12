@@ -211,6 +211,8 @@ def main():
     embed3, ap3, auc3 = get_embed(3600)
     embed4, ap4, auc4 = get_embed(60)
 
+    print(f"full data AP: {ap1:.4f}, AUC: {auc1:.4f}\nsliding time window (T=1d) AP: {ap2:.4f}, AUC: {auc2:.4f}\nsliding time window (T=1hr) AP: {ap3:.4f}, AUC: {auc3:.4f}\nsliding time window (T=1min) AP: {ap4:.4f}, AUC: {auc4:.4f}")
+
     # scale
     embed1 = StandardScaler().fit_transform(embed1).astype(np.float32)
     embed2 = StandardScaler().fit_transform(embed2).astype(np.float32)
@@ -233,8 +235,6 @@ def main():
                 label='sliding time window (T=1min)', s=5)
     plt.legend()
     plt.savefig(f"{args.model}_{args.data}.png", dpi=400, bbox_inches='tight')
-
-    print(f"full data AP: {ap1:.4f}, AUC: {auc1:.4f}\nsliding time window (T=1d) AP: {ap2:.4f}, AUC: {auc2:.4f}\nsliding time window (T=1hr) AP: {ap3:.4f}, AUC: {auc3:.4f}\nsliding time window (T=1min) AP: {ap4:.4f}, AUC: {auc4:.4f}")
 
 
 if __name__ == "__main__":
