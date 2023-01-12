@@ -48,10 +48,6 @@ TemporalSampler::TemporalSampler(const DynamicGraph& graph,
       rand_states_(nullptr),
       maximum_num_root_nodes_(0),
       maximum_sampled_nodes_(0) {
-  if (num_snapshots_ == 1 && std::fabs(snapshot_time_window_) > 0.0f) {
-    LOG(WARNING) << "Snapshot time window must be 0 when num_snapshots = 1. "
-                    "Ignore the snapshot time window.";
-  }
   shared_memory_size_ = GetSharedMemoryMaxSize();
   stream_holders_.reset(new StreamHolder[num_snapshots_]);
   device_ = graph_.device();

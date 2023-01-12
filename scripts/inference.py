@@ -209,27 +209,32 @@ def main():
     embed1, ap1, auc1 = get_embed(0)
     embed2, ap2, auc2 = get_embed(86400)
     embed3, ap3, auc3 = get_embed(3600)
+    embed4, ap4, auc4 = get_embed(60)
 
     # scale
     embed1 = StandardScaler().fit_transform(embed1).astype(np.float32)
     embed2 = StandardScaler().fit_transform(embed2).astype(np.float32)
     embed3 = StandardScaler().fit_transform(embed3).astype(np.float32)
+    embed4 = StandardScaler().fit_transform(embed4).astype(np.float32)
 
     tsne = TSNE(n_components=2)
     embed1 = tsne.fit_transform(embed1)
     embed2 = tsne.fit_transform(embed2)
     embed3 = tsne.fit_transform(embed3)
+    embed4 = tsne.fit_transform(embed4)
 
-    plt.title(f"T-SNE of {args.model} on {args.data} node embedding")
+    plt.title(f"t-SNE of {args.model} on {args.data} node embedding")
     plt.scatter(embed1[:, 0], embed1[:, 1], c='r', label='full data', s=5)
     plt.scatter(embed2[:, 0], embed2[:, 1], c='b',
                 label='sliding time window (T=1d)', s=5)
     plt.scatter(embed3[:, 0], embed3[:, 1], c='g',
                 label='sliding time window (T=1hr)', s=5)
+    plt.scatter(embed4[:, 0], embed4[:, 1], c='y',
+                label='sliding time window (T=1min)', s=5)
     plt.legend()
     plt.savefig(f"{args.model}_{args.data}.png", dpi=400, bbox_inches='tight')
 
-    print(f"full data AP: {ap1:.4f}, AUC: {auc1:.4f}\nsliding time window (T=1d) AP: {ap2:.4f}, AUC: {auc2:.4f}\nsliding time window (T=1hr) AP: {ap3:.4f}, AUC: {auc3:.4f}")
+    print(f"full data AP: {ap1:.4f}, AUC: {auc1:.4f}\nsliding time window (T=1d) AP: {ap2:.4f}, AUC: {auc2:.4f}\nsliding time window (T=1hr) AP: {ap3:.4f}, AUC: {auc3:.4f}\nsliding time window (T=1min) AP: {ap4:.4f}, AUC: {auc4:.4f}")
 
 
 if __name__ == "__main__":
