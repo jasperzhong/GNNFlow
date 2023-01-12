@@ -173,7 +173,7 @@ def main():
     embed2 = tsne.fit_transform(embed2)
     embed3 = tsne.fit_transform(embed3)
 
-    plt.title(f"{args.model} on {args.data} node embedding visualization")
+    plt.title(f"T-SNE of {args.model} on {args.data} node embedding")
     plt.scatter(embed1[:, 0], embed1[:, 1], c='r', label='full data', s=5)
     plt.scatter(embed2[:, 0], embed2[:, 1], c='b',
                 label='sliding time window (T=1d)', s=5)
