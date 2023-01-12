@@ -116,7 +116,11 @@ __global__ void SampleLayerUniformKernel(
   TimestampType root_timestamp = root_timestamps[tid];
   TimestampType start_timestamp, end_timestamp;
   if (num_snapshots == 1) {
-    start_timestamp = root_timestamp - snapshot_time_window;
+    if (abs(snapshot_time_window) < 1e-6) {
+      start_timestamp = 0;
+    } else {
+      start_timestamp = root_timestamp - snapshot_time_window;
+    }
     end_timestamp = root_timestamp;
   } else {
     end_timestamp = root_timestamp -
