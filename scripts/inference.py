@@ -34,7 +34,6 @@ parser.add_argument("--model", choices=model_names, required=True,
                     help="model architecture" + '|'.join(model_names))
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
-parser.add_argument("--snapshot-time-window", type=int, default=0)
 parser.add_argument("--seed", type=int, default=42)
 
 # optimization
@@ -140,8 +139,10 @@ def main():
             with torch.no_grad():
                 for target_nodes, ts, eid in get_batch_no_neg(test_data, batch_size):
                     mfgs = sampler.sample(target_nodes, ts)
-                    prepare_input(mfgs, node_feats, edge_feats)
+
                     mfgs_to_cuda(mfgs, device)
+                    mfgs = cache.fetch_feature(mfgs, eid)
+
                     embed = model(mfgs, return_embed=True)
 
                     embeds.append(embed.cpu().numpy())
@@ -152,25 +153,31 @@ def main():
                             model.memory.update_mem_mail(
                                 **model.last_updated, edge_feats=cache.target_edge_features,
                                 neg_sample_ratio=0)
+
             embeds = np.concatenate(embeds, axis=0)[-1000:]
             embeds_list.append(embeds)
         return torch.from_numpy(np.mean(embeds_list, axis=0))
 
     embed1 = get_embed(0)
-    embed2 = get_embed(args.snapshot_time_window)
+    embed2 = get_embed(86400)
+    embed3 = get_embed(3600)
 
     # scale
     embed1 = embed1 / torch.norm(embed1, dim=1, keepdim=True)
     embed2 = embed2 / torch.norm(embed2, dim=1, keepdim=True)
+    embed3 = embed3 / torch.norm(embed3, dim=1, keepdim=True)
 
     tsne = TSNE(n_components=2, initial_dims=100, verbose=True)
     embed1 = tsne.fit_transform(embed1)
     embed2 = tsne.fit_transform(embed2)
+    embed3 = tsne.fit_transform(embed3)
 
-    plt.scatter(embed1[:, 0], embed1[:, 1], c='r', label='full data', s=1)
+    plt.scatter(embed1[:, 0], embed1[:, 1], c='r', label='full data', s=5)
     plt.scatter(embed2[:, 0], embed2[:, 1], c='b',
-                label='sliding time window (T=1d)', s=1)
-
+                label='sliding time window (T=1d)', s=5)
+    plt.scatter(embed3[:, 0], embed3[:, 1], c='g',
+                label='sliding time window (T=1hr)', s=5)
+    plt.legend(ncol=2)
     plt.savefig('{}.png'.format(args.model))
 
 
