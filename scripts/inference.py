@@ -154,7 +154,7 @@ def main():
                                 **model.last_updated, edge_feats=cache.target_edge_features,
                                 neg_sample_ratio=0)
 
-            embeds = np.concatenate(embeds, axis=0)[-1000:]
+            embeds = np.concatenate(embeds, axis=0)[-3000:]
             embeds_list.append(embeds)
         return torch.from_numpy(np.mean(embeds_list, axis=0))
 
@@ -172,13 +172,15 @@ def main():
     embed2 = tsne.fit_transform(embed2)
     embed3 = tsne.fit_transform(embed3)
 
+    plt.rcParams.update({'font.size': 32, 'font.family': 'Myriad Pro'})
+    plt.title(f"{args.model} on {args.data} node embedding visualization")
     plt.scatter(embed1[:, 0], embed1[:, 1], c='r', label='full data', s=5)
     plt.scatter(embed2[:, 0], embed2[:, 1], c='b',
                 label='sliding time window (T=1d)', s=5)
     plt.scatter(embed3[:, 0], embed3[:, 1], c='g',
                 label='sliding time window (T=1hr)', s=5)
-    plt.legend(ncol=2)
-    plt.savefig('{}.png'.format(args.model))
+    plt.legend()
+    plt.savefig(f"{args.model}_{args.data}.png", dpi=400, bbox_inches='tight')
 
 
 if __name__ == "__main__":
