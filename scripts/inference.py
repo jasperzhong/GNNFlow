@@ -10,6 +10,7 @@ import torch.distributed
 import torch.nn
 import torch.nn.parallel
 import torch.utils.data
+from sklearn.preprocessing import StandardScaler
 from tsne_torch import TorchTSNE as TSNE
 
 import gnnflow.cache as caches
@@ -163,9 +164,9 @@ def main():
     embed3 = get_embed(3600)
 
     # scale
-    embed1 = embed1 / torch.norm(embed1, dim=1, keepdim=True)
-    embed2 = embed2 / torch.norm(embed2, dim=1, keepdim=True)
-    embed3 = embed3 / torch.norm(embed3, dim=1, keepdim=True)
+    embed1 = StandardScaler().fit_transform(embed1)
+    embed2 = StandardScaler().fit_transform(embed2)
+    embed3 = StandardScaler().fit_transform(embed3)
 
     tsne = TSNE(n_components=2, initial_dims=100, verbose=True)
     embed1 = tsne.fit_transform(embed1)
