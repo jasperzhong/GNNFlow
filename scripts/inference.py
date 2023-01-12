@@ -11,7 +11,7 @@ import torch.nn
 import torch.nn.parallel
 import torch.utils.data
 from sklearn.preprocessing import StandardScaler
-from tsne_torch import TorchTSNE as TSNE
+from sklearn.manifold import TSNE
 
 import gnnflow.cache as caches
 from gnnflow.config import get_default_config
@@ -168,7 +168,7 @@ def main():
     embed2 = StandardScaler().fit_transform(embed2).astype(np.float32)
     embed3 = StandardScaler().fit_transform(embed3).astype(np.float32)
 
-    tsne = TSNE(n_components=2, initial_dims=100, verbose=True)
+    tsne = TSNE(n_components=2)
     embed1 = tsne.fit_transform(embed1)
     embed2 = tsne.fit_transform(embed2)
     embed3 = tsne.fit_transform(embed3)
