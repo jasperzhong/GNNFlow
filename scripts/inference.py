@@ -164,9 +164,9 @@ def main():
     embed3 = get_embed(3600)
 
     # scale
-    embed1 = StandardScaler().fit_transform(embed1)
-    embed2 = StandardScaler().fit_transform(embed2)
-    embed3 = StandardScaler().fit_transform(embed3)
+    embed1 = StandardScaler().fit_transform(embed1).astype(np.float32)
+    embed2 = StandardScaler().fit_transform(embed2).astype(np.float32)
+    embed3 = StandardScaler().fit_transform(embed3).astype(np.float32)
 
     tsne = TSNE(n_components=2, initial_dims=100, verbose=True)
     embed1 = tsne.fit_transform(embed1)
