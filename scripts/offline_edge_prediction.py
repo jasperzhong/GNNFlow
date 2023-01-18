@@ -56,6 +56,9 @@ parser.add_argument("--edge-cache-ratio", type=float, default=0,
                     help="cache ratio for edge feature cache")
 parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="cache ratio for node feature cache")
+parser.add_argument("--snapshot-time-window", type=float, default=0,
+                    help="time window for sampling")
+
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
@@ -134,6 +137,7 @@ def main():
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
     model_config, data_config = get_default_config(args.model, args.data)
+    model_config["snapshot_time_window"] = args.snapshot_time_window
     args.use_memory = model_config['use_memory']
 
     if args.distributed:

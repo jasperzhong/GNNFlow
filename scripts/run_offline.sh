@@ -5,6 +5,7 @@ DATA=$2
 CACHE="${3:-LFUCache}"
 EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
+TIME_WINDOW="${6:-0}" # default 0
 NPROC_PER_NODE=${6:-1}
 
 if [[ $NPROC_PER_NODE -gt 1 ]]; then
@@ -13,11 +14,11 @@ if [[ $NPROC_PER_NODE -gt 1 ]]; then
         --standalone \
         offline_edge_prediction.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO \
-        --node-cache-ratio $NODE_CACHE_RATIO"
+        --node-cache-ratio $NODE_CACHE_RATIO --snapshot-time-window $TIME_WINDOW"
 else
     cmd="python offline_edge_prediction.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO \
-        --node-cache-ratio $NODE_CACHE_RATIO"
+        --node-cache-ratio $NODE_CACHE_RATIO --snapshot-time-window $TIME_WINDOW"
 fi
 
 echo $cmd

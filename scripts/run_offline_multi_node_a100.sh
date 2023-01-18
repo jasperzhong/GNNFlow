@@ -7,6 +7,7 @@ CACHE="${3:-LFUCache}"
 EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${6:-hash}"
+TIME_WINDOW="${7:-0}"
 
 HOST_NODE_ADDR=10.28.1.30
 HOST_NODE_PORT=29400
@@ -34,7 +35,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 100000 \
     --initial-ingestion-batch-size 500000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --epoch 5 --lr 0.0001"
+    --epoch 5 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
 
 echo $cmd
 LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd

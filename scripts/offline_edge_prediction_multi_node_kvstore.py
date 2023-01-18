@@ -75,6 +75,8 @@ parser.add_argument("--dynamic-scheduling", action="store_true",
                     help="whether to use dynamic scheduling")
 parser.add_argument("--not-partition-train-data", action="store_true",
                     help="whether not to partition the training data")
+parser.add_argument("--snapshot-time-window", type=float, default=0,
+                    help="time window for sampling")
 
 args = parser.parse_args()
 
@@ -155,6 +157,7 @@ def main():
     set_seed(args.seed + args.rank)
 
     model_config, data_config = get_default_config(args.model, args.data)
+    model_config["snapshot_time_window"] = args.snapshot_time_window
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
