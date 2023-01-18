@@ -250,7 +250,16 @@ def main():
 
     if args.rank == 0:
         logging.info('Loading model at epoch {}...'.format(best_e))
-        model.load_state_dict(torch.load(checkpoint_path))
+        ckpt = torch.load(checkpoint_path)
+        if args.distributed:
+            model.module.load_state_dict(ckpt['model'])
+        else:
+            model.load_state_dict(ckpt['model'])
+        if args.use_memory:
+            if args.distributed:
+                model.module.memory.restore(ckpt['memory'])
+            else:
+                model.memory.restore(ckpt['memory'])
 
         ap, auc = evaluate(test_loader, sampler, model,
                            criterion, cache, device)
@@ -358,7 +367,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap
-            torch.save(model.state_dict(), checkpoint_path)
+            if args.distributed:
+                model_to_save = model.module
+            else:
+                model_to_save = model
+            torch.save({
+                'model': model_to_save.state_dict(),
+                'memory': model_to_save.memory.backup() if args.use_memory else None
+            }, checkpoint_path)
             logging.info(
                 "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
 
