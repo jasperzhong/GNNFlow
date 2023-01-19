@@ -42,6 +42,9 @@ class TemporalSampler:
         else:
             sample_strategy = SamplingPolicy.UNIFORM
 
+        print("TemporalSampler: sample_strategy={}, num_snapshots={}, snapshot_time_window={}, prop_time={}".format(
+            sample_strategy, num_snapshots, snapshot_time_window, prop_time))
+
         self._sampler = _TemporalSampler(
             graph._dgraph, fanouts, sample_strategy, num_snapshots,
             snapshot_time_window, prop_time, seed)

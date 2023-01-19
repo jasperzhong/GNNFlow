@@ -39,7 +39,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=100)
+                    type=int, default=50)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -220,7 +220,7 @@ def main():
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank])
+            model, device_ids=[args.local_rank], find_unused_parameters=True)
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], batch_size,
@@ -382,9 +382,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             logging.info(
                 "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
 
-        if early_stopper.early_stop_check(val_ap):
-            logging.info("Early stop at epoch {}".format(e))
-            break
+        # if early_stopper.early_stop_check(val_ap):
+        #     logging.info("Early stop at epoch {}".format(e))
+        #     break
 
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))

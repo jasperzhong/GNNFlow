@@ -120,7 +120,7 @@ _wiki_default_config = {
 
 _reddit_default_config = {
     "initial_pool_size": 20 * MiB,
-    "maximum_pool_size": 50 * MiB,
+    "maximum_pool_size": 1000 * MiB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 62,
     "blocks_to_preallocate": 1024,

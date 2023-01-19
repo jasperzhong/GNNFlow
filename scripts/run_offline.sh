@@ -6,7 +6,7 @@ CACHE="${3:-LFUCache}"
 EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
 TIME_WINDOW="${6:-0}" # default 0
-NPROC_PER_NODE=${6:-1}
+NPROC_PER_NODE=${7:-1}
 
 if [[ $NPROC_PER_NODE -gt 1 ]]; then
     cmd="torchrun \
@@ -22,6 +22,6 @@ else
 fi
 
 echo $cmd
-OMP_NUM_THREADS=8 exec $cmd > $MODEL-$DATA-$CACHE-$EDGE_CACHE_RATIO-$NODE_CACHE_RATIO-$NPROC_PER_NODE.log 2>&1
+CUDA_LAUNCH_BLOCKING=1 OMP_NUM_THREADS=8 exec $cmd > $MODEL-w-memory-$DATA-$CACHE-$EDGE_CACHE_RATIO-$NODE_CACHE_RATIO-$NPROC_PER_NODE-$TIME_WINDOW.log 2>&1
 
 

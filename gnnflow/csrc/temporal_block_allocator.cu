@@ -112,8 +112,7 @@ void TemporalBlockAllocator::Deallocate(TemporalBlock *block) {
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_.erase(std::remove(blocks_.begin(), blocks_.end(), block),
-                  blocks_.end());
+    blocks_.erase(std::remove(blocks_.begin(), blocks_.end(), block));
   }
 
   delete block;
