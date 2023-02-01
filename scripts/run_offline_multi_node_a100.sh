@@ -32,10 +32,10 @@ cmd="torchrun \
     --rdzv_conf is_host=$IS_HOST \
     offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
     --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO\
-    --partition --ingestion-batch-size 100000 \
-    --initial-ingestion-batch-size 500000 \
+    --partition --ingestion-batch-size 10000000 \
+    --initial-ingestion-batch-size 100000000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --epoch 5 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
+    --epoch 1 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
 
 echo $cmd
 LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
