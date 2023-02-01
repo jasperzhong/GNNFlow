@@ -39,7 +39,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=50)
+                    type=int, default=1)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -193,7 +193,7 @@ def main():
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank, dataset_df=full_data)
 
-    num_nodes = dgraph.num_vertices() + 1
+    num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(

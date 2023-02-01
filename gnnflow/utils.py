@@ -300,10 +300,12 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         node_feats_shm, edge_feats_shm = None, None
         if local_rank == 0:
             if node_feats is not None:
+                node_feats = node_feats.to(torch.float32)
                 node_feats_shm = create_shared_mem_array(
                     'node_feats', node_feats.shape, node_feats.dtype)
                 node_feats_shm[:] = node_feats[:]
             if edge_feats is not None:
+                edge_feats = edge_feats.to(torch.float32)
                 edge_feats_shm = create_shared_mem_array(
                     'edge_feats', edge_feats.shape, edge_feats.dtype)
                 edge_feats_shm[:] = edge_feats[:]
