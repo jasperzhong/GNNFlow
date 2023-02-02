@@ -13,6 +13,7 @@ import torch.nn.parallel
 import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch.utils.data import BatchSampler, SequentialSampler
+from tqdm import tqdm
 
 import gnnflow.cache as caches
 from gnnflow.config import get_default_config
@@ -48,6 +49,8 @@ parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
 parser.add_argument("--print-freq", help="print frequency",
                     type=int, default=100)
 parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--ingestion-batch-size", type=int, default=1000,
+                    help="ingestion batch size")
 
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
@@ -194,7 +197,17 @@ def main():
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
     dgraph = build_dynamic_graph(
-        **data_config, device=args.local_rank, dataset_df=full_data)
+        **data_config, device=args.local_rank)
+
+    # insert in batch
+    for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
+        batch = full_data[i:i + args.ingestion_batch_size]
+        src_nodes = batch["src"].values.astype(np.int64)
+        dst_nodes = batch["dst"].values.astype(np.int64)
+        timestamps = batch["time"].values.astype(np.float32)
+        eids = batch["eid"].values.astype(np.int64)
+        dgraph.add_edges(src_nodes, dst_nodes, timestamps,
+                         eids, add_reverse=False)
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
