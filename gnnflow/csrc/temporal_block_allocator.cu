@@ -19,7 +19,8 @@ TemporalBlockAllocator::TemporalBlockAllocator(
     int device)
     : mem_resource_type_(mem_resource_type),
       minium_block_size_(minium_block_size),
-      device_(device) {
+      device_(device),
+      allocated_(0) {
   LOG(DEBUG) << "set device to " << device;
   CUDA_CALL(cudaSetDevice(device));
   // create a memory pool
