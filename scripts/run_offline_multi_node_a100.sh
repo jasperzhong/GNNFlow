@@ -38,6 +38,6 @@ cmd="torchrun \
     --epoch 50 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
 
 echo $cmd
-LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
+LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd 2>&1 | tee ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${PARTITION_STRATEGY}_${TIME_WINDOW}.log
 
 
