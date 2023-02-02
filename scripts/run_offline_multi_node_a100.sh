@@ -12,7 +12,7 @@ TIME_WINDOW="${7:-0}"
 HOST_NODE_ADDR=10.28.1.30
 HOST_NODE_PORT=29400
 NNODES=2
-NPROC_PER_NODE=1
+NPROC_PER_NODE=4
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
