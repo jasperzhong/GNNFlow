@@ -15,7 +15,7 @@ if [[ $NPROC_PER_NODE -gt 1 ]]; then
         offline_edge_prediction.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO \
         --node-cache-ratio $NODE_CACHE_RATIO --snapshot-time-window $TIME_WINDOW \
-        --ingestion-batch-size 10000000"
+        --ingestion-batch-size 100000"
 else
     cmd="python offline_edge_prediction.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO \
@@ -24,4 +24,4 @@ else
 fi
 
 echo $cmd
-OMP_NUM_THREADS=8 exec $cmd > $MODEL-w-memory-$DATA-$CACHE-$EDGE_CACHE_RATIO-$NODE_CACHE_RATIO-$NPROC_PER_NODE-$TIME_WINDOW.log 2>&1
+OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${TIME_WINDOW}.log 2>&1
