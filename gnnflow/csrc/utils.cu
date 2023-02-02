@@ -40,7 +40,7 @@ void CopyEdgesToBlock(TemporalBlock* block,
   CHECK_EQ(eids.size(), timestamps.size());
   CHECK_LE(block->size + num_edges, block->capacity);
   // NB: we assume that the incoming edges are newer than the existing ones.
-  if (block->end_timestamp <= timestamps[start_idx + num_edges - 1]) {
+  if (block->end_timestamp > timestamps[start_idx + num_edges - 1]) {
     LOG(FATAL) << "block->end_timestamp: " << block->end_timestamp
                << " timestamps[start_idx + num_edges - 1]: "
                << timestamps[start_idx + num_edges - 1];
