@@ -39,7 +39,7 @@ def main():
         timestamps = batch["time"].values.astype(np.float32)
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
-                         eids, add_reverse=True)
+                         eids, add_reverse=False)
     build_end = time.time()
     build_time = build_end - build_start
 
