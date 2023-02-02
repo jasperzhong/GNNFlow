@@ -446,10 +446,6 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             mean = all_sampling_time.mean(dim=1).mean()
             cv_sampling_time += std / mean
 
-        if args.rank == 0:
-            logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Epoch training time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
-                train_data)/args.batch_size), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, epoch_time))
-
         # Validation
         val_start = time.time()
         val_ap, val_auc = evaluate(
@@ -473,8 +469,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                 total_samples = metrics.tolist()
 
             all_sampling_time = sampler.get_sampling_time()
-            if args.rank == 0:
-                print(all_sampling_time)
+            # if args.rank == 0:
+            #     print(all_sampling_time)
 
             std = all_sampling_time.std(dim=1).mean()
             mean = all_sampling_time.mean(dim=1).mean()
@@ -483,8 +479,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         all_total_samples += total_samples
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
 
         if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1

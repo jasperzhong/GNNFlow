@@ -35,7 +35,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 100000 \
     --initial-ingestion-batch-size 100000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --epoch 1 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
+    --epoch 50 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
 
 echo $cmd
 LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
