@@ -170,15 +170,18 @@ def main():
             SequentialSampler(val_ds),
             batch_size=batch_size, drop_last=False, rank=args.rank,
             world_size=args.world_size)
+        test_sampler = DistributedBatchSampler(
+            SequentialSampler(test_ds),
+            batch_size=batch_size, drop_last=False, rank=args.rank,
+            world_size=args.world_size)
     else:
         train_sampler = RandomStartBatchSampler(
             SequentialSampler(train_ds), batch_size=batch_size, drop_last=False)
         val_sampler = BatchSampler(
             SequentialSampler(val_ds), batch_size=batch_size, drop_last=False)
-
-    test_sampler = BatchSampler(
-        SequentialSampler(test_ds),
-        batch_size=batch_size, drop_last=False)
+        test_sampler = BatchSampler(
+            SequentialSampler(test_ds),
+            batch_size=batch_size, drop_last=False)
 
     train_loader = torch.utils.data.DataLoader(
         train_ds, sampler=train_sampler,
@@ -252,22 +255,27 @@ def main():
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device)
 
-    if args.rank == 0:
-        logging.info('Loading model at epoch {}...'.format(best_e))
-        ckpt = torch.load(checkpoint_path)
+    logging.info('Loading model at epoch {}...'.format(best_e))
+    ckpt = torch.load(checkpoint_path)
+    if args.distributed:
+        model.module.load_state_dict(ckpt['model'])
+    else:
+        model.load_state_dict(ckpt['model'])
+    if args.use_memory:
         if args.distributed:
-            model.module.load_state_dict(ckpt['model'])
+            model.module.memory.restore(ckpt['memory'])
         else:
-            model.load_state_dict(ckpt['model'])
-        if args.use_memory:
-            if args.distributed:
-                model.module.memory.restore(ckpt['memory'])
-            else:
-                model.memory.restore(ckpt['memory'])
+            model.memory.restore(ckpt['memory'])
 
-        ap, auc = evaluate(test_loader, sampler, model,
-                           criterion, cache, device)
-        logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+    ap, auc = evaluate(test_loader, sampler, model,
+                       criterion, cache, device)
+    if args.distributed:
+        metrics = torch.tensor([ap, auc], device=device)
+        torch.distributed.all_reduce(metrics)
+        metrics /= args.world_size
+        ap, auc = metrics.tolist()
+        if args.rank == 0:
+            logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
         torch.distributed.barrier()
@@ -286,17 +294,23 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
+        total_sampling_time = 0
+        total_feature_fetch_time = 0
         total_samples = 0
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             # Sample
+            sample_start_time = time.time()
             mfgs = sampler.sample(target_nodes, ts)
+            total_sampling_time += time.time() - sample_start_time
 
             # Feature
             mfgs_to_cuda(mfgs, device)
+            feature_start_time = time.time()
             mfgs = cache.fetch_feature(
                 mfgs, eid)
+            total_feature_fetch_time += time.time() - feature_start_time
 
             # Train
             optimizer.zero_grad()
@@ -328,16 +342,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                            cache_node_ratio_sum, total_samples],
-                                           device=device)
+                                            cache_node_ratio_sum, total_samples,
+                                            total_sampling_time, total_feature_fetch_time]).to(device)
                     torch.distributed.all_reduce(metrics)
                     metrics /= args.world_size
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                        total_samples = metrics.tolist()
+                        total_samples, total_sampling_time, total_feature_fetch_time = metrics.tolist()
 
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
+                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, time.time() - epoch_time_start))
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -358,15 +372,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         if args.distributed:
             metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples], device=device)
+                                    cache_node_ratio_sum, total_samples,
+                                    total_sampling_time, total_feature_fetch_time]).to(device)
             torch.distributed.all_reduce(metrics)
             metrics /= args.world_size
             val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples = metrics.tolist()
+                total_samples, total_sampling_time, total_feature_fetch_time = metrics.tolist()
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f}".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Epoch Time {:.2f}s".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, epoch_time))
 
         if args.rank == 0 and e > 1 and val_ap > best_ap:
             best_e = e + 1
