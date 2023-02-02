@@ -248,17 +248,17 @@ void DynamicGraph::AddEdgesForOneNode(
       }
 
       std::size_t new_block_size;
-      if (adaptive_block_size_ &&
-          (h_list.num_edges > 8192 || dst_nodes.size() > 256)) {
-        new_block_size = dst_nodes.size();
-        // round to the smallest larger number which is a multiple of 204
-        while (new_block_size % 204 != 0) {
-          new_block_size++;
-        }
+      if (adaptive_block_size_) {
+        // (h_list.num_edges > 8192 || dst_nodes.size() > 256)) {
+        // new_block_size = dst_nodes.size();
+        // // round to the smallest larger number which is a multiple of 204
+        // while (new_block_size % 204 != 0) {
+        //   new_block_size++;
+        // }
 
-        // new_block_size = std::max(num_edges, avg_edges_per_insertion);
-        // // round up to the nearest power of 2
-        // new_block_size = get_next_power_of_two(new_block_size);
+        new_block_size = std::max(num_edges, avg_edges_per_insertion);
+        // round up to the nearest power of 2
+        new_block_size = get_next_power_of_two(new_block_size);
       } else {
         new_block_size = num_edges;
       }
