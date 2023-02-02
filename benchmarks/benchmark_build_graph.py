@@ -37,9 +37,6 @@ def main():
         src_nodes = batch["src"].values.astype(np.int64)
         dst_nodes = batch["dst"].values.astype(np.int64)
         timestamps = batch["time"].values.astype(np.float32)
-        # find negative values in timestamps 
-        neg = timestamps < 0
-        print("Negative timestamps:", neg.sum())
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
                          eids, add_reverse=False)
