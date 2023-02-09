@@ -167,32 +167,33 @@ class Memory:
         all_nodes = b.srcdata['ID']
         assert isinstance(all_nodes, torch.Tensor)
 
+        all_nodes_unique, inv = torch.unique(
+            all_nodes.cpu(), return_inverse=True)
+
         if self.partition:
             # unique all nodes
-            all_nodes_unique, inv = torch.unique(
-                all_nodes.cpu(), return_inverse=True)
             pulled_memory = self.kvstore_client.pull(
                 all_nodes_unique, mode='memory')
-            mem = pulled_memory[0][inv].to(device)
-            mem_ts = pulled_memory[1][inv].to(device)
-            mail = pulled_memory[2][inv].to(device)
-            mail_ts = pulled_memory[3][inv].to(device)
-
-            b.srcdata['mem'] = mem
-            b.srcdata['mem_ts'] = mem_ts
-            b.srcdata['mail_ts'] = mail_ts
-            b.srcdata['mem_input'] = mail
+            mem = pulled_memory[0].to(device)
+            mem_ts = pulled_memory[1].to(device)
+            mail = pulled_memory[2].to(device)
+            mail_ts = pulled_memory[3].to(device)
         else:
-            b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
-            b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
-            b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
-            b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
+            mem = self.node_memory[all_nodes_unique].to(device)
+            mem_ts = self.node_memory_ts[all_nodes_unique].to(device)
+            mail = self.mailbox[all_nodes_unique].to(device)
+            mail_ts = self.mailbox_ts[all_nodes_unique].to(device)
+
+        b.srcdata['mem'] = mem[inv]
+        b.srcdata['mem_ts'] = mem_ts[inv]
+        b.srcdata['mail_ts'] = mail_ts[inv]
+        b.srcdata['mem_input'] = mail[inv]
 
     def update_mem_mail(self, last_updated_nid: torch.Tensor,
                         last_updated_memory: torch.Tensor,
                         last_updated_ts: torch.Tensor,
-                        edge_feats: Optional[torch.Tensor] = None,
-                        neg_sample_ratio: int = 1):
+                        edge_feats: Optional[torch.Tensor]=None,
+                        neg_sample_ratio: int=1):
         """
         Update the mem and mailbox of last updated nodes.
 
@@ -214,6 +215,7 @@ class Memory:
             edge_feats = torch.zeros(
                 last_updated_nid.shape[0] // split_chunks, self.dim_edge,
                 device=self.device)
+
 
         edge_feats = edge_feats.to(self.device)
 
