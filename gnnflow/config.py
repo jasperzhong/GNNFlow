@@ -39,7 +39,7 @@ _tgn_default_config = {
     "dim_time": 100,
     "dim_embed": 100,
     "dim_memory": 100,
-    "batch_size": 4000
+    "batch_size": 600
 }
 
 _tgat_default_config = {
@@ -119,8 +119,8 @@ _wiki_default_config = {
 }
 
 _reddit_default_config = {
-    "initial_pool_size": 20 * MiB,
-    "maximum_pool_size": 50 * MiB,
+    "initial_pool_size": 100 * MiB,
+    "maximum_pool_size": 200 * MiB,
     "mem_resource_type": "cuda",
     "minimum_block_size": 62,
     "blocks_to_preallocate": 1024,

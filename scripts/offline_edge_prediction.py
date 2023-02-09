@@ -39,7 +39,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=100)
+                    type=int, default=50)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -88,7 +88,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid)
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg, _, _ = model(mfgs)
 
             if args.use_memory:
                 # NB: no need to do backward here
@@ -265,6 +265,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    sample_time_sum = 0
+    feature_time_sum = 0
+    loader_time_sum = 0
+    model_time_sum = 0
+    iter_time_sum = 0
+    fetch_mem_time_sum = 0
+    update_mem_time_sum = 0
+    memory_updater_time_sum = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training...')
     for e in range(args.epoch):
@@ -277,18 +285,32 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
+            iter_time_start = time.time()
+            loader_end = time.time()
+            if i > 0:
+                loader_time_sum += loader_end - loader_start
             # Sample
+            sample_start = time.time()
             mfgs = sampler.sample(target_nodes, ts)
+            sample_end = time.time()
+            sample_time_sum += sample_end - sample_start
 
             # Feature
+            feature_start = time.time()
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid)
+            feature_end = time.time()
+            feature_time_sum += feature_end - feature_start
 
             # Train
+            model_start = time.time()
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg, fetch_mem_time, mem_updater_time = model(mfgs)
+            fetch_mem_time_sum += fetch_mem_time
+            memory_updater_time_sum += mem_updater_time
 
+            update_mem_start = time.time()
             if args.use_memory:
                 # NB: no need to do backward here
                 with torch.no_grad():
@@ -302,11 +324,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                             **model.last_updated, edge_feats=cache.target_edge_features,
                             neg_sample_ratio=1)
 
+            update_mem_end = time.time()
+
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
             total_loss += float(loss) * len(target_nodes)
             loss.backward()
             optimizer.step()
+            model_end = time.time()
+            model_time_sum += model_end - model_start
+            update_mem_time_sum += update_mem_end - update_mem_start
 
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
@@ -325,6 +352,10 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f}'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)))
+
+            loader_start = time.time()
+            iter_time_end = time.time()
+            iter_time_sum += iter_time_end - iter_time_start
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
@@ -362,12 +393,27 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             logging.info(
                 "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
 
-        if early_stopper.early_stop_check(val_ap):
-            logging.info("Early stop at epoch {}".format(e))
-            break
+        # if early_stopper.early_stop_check(val_ap):
+        #     logging.info("Early stop at epoch {}".format(e))
+        #     break
 
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+        logging.info('Avg sample time: {}'.format(
+            sample_time_sum / args.epoch))
+        logging.info('Avg fetch time: {}'.format(
+            feature_time_sum / args.epoch))
+        logging.info('Avg model time: {}'.format(model_time_sum / args.epoch))
+        logging.info('Avg loader time: {}'.format(
+            loader_time_sum / args.epoch))
+        logging.info('Avg fetch mem time: {}'.format(
+            fetch_mem_time_sum / args.epoch))
+        logging.info('Avg updater time: {}'.format(
+            memory_updater_time_sum / args.epoch))
+        logging.info('Avg update mem time: {}'.format(
+            update_mem_time_sum / args.epoch))
+        logging.info('Avg iter time: {}'.format(
+            iter_time_sum / args.epoch))
 
     if args.distributed:
         torch.distributed.barrier()

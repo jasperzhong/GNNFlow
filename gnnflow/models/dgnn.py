@@ -4,6 +4,7 @@ This code is based on the implementation of TGL's model module.
 Implementation at:
     https://github.com/amazon-research/tgl/blob/main/modules.py
 """
+import time
 from typing import Dict, List, Optional, Union
 
 import torch
@@ -122,10 +123,13 @@ class DGNN(torch.nn.Module):
             mfgs: list of list of DGLBlocks
             neg_sample_ratio: negative sampling ratio
         """
+        memory_start = time.time()
         if self.use_memory:
             b = mfgs[0][0]  # type: DGLBlock
             self.memory.prepare_input(b)
+            memory_fetch_end = time.time()
             self.last_updated = self.memory_updater(b)
+        memory_end = time.time()
 
         out = list()
         for l in range(self.num_layers):
@@ -143,4 +147,4 @@ class DGNN(torch.nn.Module):
             embed = torch.stack(out, dim=0)
             embed = self.combiner(embed)[0][-1, :, :]
 
-        return self.edge_predictor(embed)
+        return *self.edge_predictor(embed), memory_fetch_end - memory_start, memory_end - memory_fetch_end

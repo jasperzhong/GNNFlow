@@ -11,7 +11,7 @@ PARTITION_STRATEGY="${6:-hash}"
 HOST_NODE_ADDR=10.28.1.30
 HOST_NODE_PORT=29400
 NNODES=2
-NPROC_PER_NODE=4
+NPROC_PER_NODE=1
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
@@ -34,7 +34,7 @@ cmd="torchrun \
     --partition --ingestion-batch-size 100000 \
     --initial-ingestion-batch-size 500000 \
     --partition-strategy $PARTITION_STRATEGY \
-    --epoch 5 --lr 0.0001"
+    --epoch 50 --lr 0.0001"
 
 echo $cmd
 LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd
