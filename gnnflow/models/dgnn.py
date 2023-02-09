@@ -122,11 +122,6 @@ class DGNN(torch.nn.Module):
             mfgs: list of list of DGLBlocks
             neg_sample_ratio: negative sampling ratio
         """
-        if self.use_memory:
-            b = mfgs[0][0]  # type: DGLBlock
-            self.memory.prepare_input(b)
-            self.last_updated = self.memory_updater(b)
-
         out = list()
         for l in range(self.num_layers):
             for h in range(self.num_snapshots):
