@@ -19,7 +19,8 @@ TemporalBlockAllocator::TemporalBlockAllocator(
     int device)
     : mem_resource_type_(mem_resource_type),
       minium_block_size_(minium_block_size),
-      device_(device) {
+      device_(device),
+      allocated_(0) {
   LOG(DEBUG) << "set device to " << device;
   CUDA_CALL(cudaSetDevice(device));
   // create a memory pool
@@ -112,8 +113,7 @@ void TemporalBlockAllocator::Deallocate(TemporalBlock *block) {
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_.erase(std::remove(blocks_.begin(), blocks_.end(), block),
-                  blocks_.end());
+    blocks_.erase(std::remove(blocks_.begin(), blocks_.end(), block));
   }
 
   delete block;

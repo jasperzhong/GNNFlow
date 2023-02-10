@@ -4,7 +4,6 @@ import logging
 import math
 import os
 import random
-import sys
 import time
 
 import numpy as np
@@ -75,6 +74,8 @@ parser.add_argument("--dynamic-scheduling", action="store_true",
                     help="whether to use dynamic scheduling")
 parser.add_argument("--not-partition-train-data", action="store_true",
                     help="whether not to partition the training data")
+parser.add_argument("--snapshot-time-window", type=float, default=0,
+                    help="time window for sampling")
 
 args = parser.parse_args()
 
@@ -155,6 +156,7 @@ def main():
     set_seed(args.seed + args.rank)
 
     model_config, data_config = get_default_config(args.model, args.data)
+    model_config["snapshot_time_window"] = args.snapshot_time_window
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
@@ -191,20 +193,20 @@ def main():
             args.local_rank, dim_node, dim_edge, args.dim_memory)
 
         # print graph edge memory size and metadata
-        # avg_linked_list_length = dgraph._dgraph.avg_linked_list_length()
+        avg_linked_list_length = dgraph._dgraph.avg_linked_list_length()
         graph_memory_usage = dgraph._dgraph.get_graph_memory_usage() / MiB
         metadata_memory_usage = dgraph._dgraph.get_metadata_memory_usage() / MiB
 
         # all reduce
         data_list = torch.tensor(
-            [graph_memory_usage, metadata_memory_usage]).cuda()
+            [avg_linked_list_length, graph_memory_usage, metadata_memory_usage]).cuda()
         torch.distributed.all_reduce(
             data_list, op=torch.distributed.ReduceOp.SUM)
         data_list /= args.world_size
-        graph_memory_usage, metadata_memory_usage = data_list.tolist()
+        avg_linked_list_length, graph_memory_usage, metadata_memory_usage = data_list.tolist()
         graph_memory_usage *= args.num_nodes
-        logging.info('graph mem usage: {:.2f}MiB, metadata (on GPU) mem usage: {:.2f}MiB (adaptive-block-size: {})'.format(
-            graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
+        logging.info('avg_linked_list_length: {:.2f}, graph mem usage: {:.2f}MiB, metadata (on GPU) mem usage: {:.2f}MiB (adaptive-block-size: {})'.format(
+            avg_linked_list_length, graph_memory_usage, metadata_memory_usage, not args.disable_adaptive_block_size))
 
     else:
         dgraph = build_dynamic_graph(
@@ -277,7 +279,7 @@ def main():
     build_graph_end = time.time()
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], find_unused_parameters=True)
+            model, device_ids=[args.local_rank], find_unused_parameters=False)
 
     # pinned_nfeat_buffs, pinned_efeat_buffs = None, None
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
@@ -443,10 +445,6 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             mean = all_sampling_time.mean(dim=1).mean()
             cv_sampling_time += std / mean
 
-        if args.rank == 0:
-            logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Epoch training time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
-                train_data)/args.batch_size), total_samples * args.world_size / epoch_time, total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, epoch_time))
-
         # Validation
         val_start = time.time()
         val_ap, val_auc = evaluate(
@@ -470,8 +468,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                 total_samples = metrics.tolist()
 
             all_sampling_time = sampler.get_sampling_time()
-            if args.rank == 0:
-                print(all_sampling_time)
+            # if args.rank == 0:
+            #     print(all_sampling_time)
 
             std = all_sampling_time.std(dim=1).mean()
             mean = all_sampling_time.mean(dim=1).mean()
@@ -480,8 +478,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         all_total_samples += total_samples
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f}".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq)))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
 
         if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1

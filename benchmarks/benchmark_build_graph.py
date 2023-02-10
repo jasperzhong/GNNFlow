@@ -2,6 +2,7 @@ import argparse
 import time
 
 import numpy as np
+from tqdm import tqdm
 
 from gnnflow.config import get_default_config
 from gnnflow.utils import build_dynamic_graph, load_dataset
@@ -22,21 +23,23 @@ GB = 1 << 30
 def main():
     # Create a dynamic graph
     _, _, _, df = load_dataset(args.dataset)
+    print("Dataset loaded")
     build_start = time.time()
     _, dataset_config = get_default_config("TGN", args.dataset)
     dataset_config["mem_resource_type"] = args.mem_resource_type
     dgraph = build_dynamic_graph(
         **dataset_config,
         adaptive_block_size=not args.disable_adaptive_block_size)
+    print("Dynamic graph built")
     
-    for i in range(0, len(df), args.ingestion_batch_size):
+    for i in tqdm(range(0, len(df), args.ingestion_batch_size)):
         batch = df[i:i + args.ingestion_batch_size]
         src_nodes = batch["src"].values.astype(np.int64)
         dst_nodes = batch["dst"].values.astype(np.int64)
         timestamps = batch["time"].values.astype(np.float32)
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
-                         eids, add_reverse=True)
+                         eids, add_reverse=False)
     build_end = time.time()
     build_time = build_end - build_start
 

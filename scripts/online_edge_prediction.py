@@ -63,6 +63,8 @@ parser.add_argument("--replay-ratio", type=float, default=0,
                     help="replay ratio")
 parser.add_argument("--retrain-ratio", type=int, default=1,
                     help="retrain ratio")
+parser.add_argument("--snapshot-time-window", type=float, default=0,
+                    help="time window for sampling")
 
 args = parser.parse_args()
 
@@ -258,14 +260,17 @@ def main():
                                    'phase1_{}_{}.pt'.format(args.model, args.data))
     # phase1 training
     if os.path.exists(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(
-            checkpoint['optimizer_state_dict'])  # not used
-        epoch = checkpoint['epoch']
-        best_ap = checkpoint['best_ap']
-        logging.info("load checkpoint from {}, epoch: {}, best_ap: {}".format(
-            checkpoint_path, epoch, best_ap))
+        ckpt = torch.load(checkpoint_path)
+        if args.distributed:
+            model.module.load_state_dict(ckpt['model'])
+        else:
+            model.load_state_dict(ckpt['model'])
+        if args.use_memory:
+            if args.distributed:
+                model.module.memory.restore(ckpt['memory'])
+            else:
+                model.memory.restore(ckpt['memory'])
+        logging.info("load checkpoint from {}".format(checkpoint_path))
     else:
         phase1_train_start = time.time()
         best_e, best_ap, best_auc = train(phase1_train_df, phase1_val_df, sampler,
@@ -275,11 +280,13 @@ def main():
         logging.info("phase1 train time: {}".format(phase1_train_time))
         total_training_time += phase1_train_time
         if args.rank == 0:
+            if args.distributed:
+                model_to_save = model.module
+            else:
+                model_to_save = model
             torch.save({
-                'epoch': best_e,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'best_ap': best_ap,
+                'model': model_to_save.state_dict(),
+                'memory': model_to_save.memory.backup() if args.use_memory else None
             }, checkpoint_path)
             logging.info("save checkpoint to {}, epoch: {}, best_ap: {}".format(
                 checkpoint_path, best_e, best_ap))
@@ -297,6 +304,7 @@ def main():
     phase2_len = len(phase2_df)
     incremental_step = int(phase2_len / retrain_num)
     replay_ratio = args.replay_ratio
+    old_data_start_index = 0
     logging.info("replay ratio: {}".format(replay_ratio))
     logging.info("retrain ratio: {}".format(args.retrain_ratio))
     for i in range(retrain_num):
@@ -338,14 +346,20 @@ def main():
                 "{}th incremental evalutae ap: {} auc: {}".format(i+1, ap, auc))
         phase2_train_start = time.time()
         if (i + 1) % args.retrain_ratio == 0:
+            if args.snapshot_time_window > 0:
+                current_time = ts[0] # the min time of this batch
+                old_time = current_time - args.snapshot_time_window
+                # remove old data
+                num_blocks = dgraph.offload_old_blocks(old_time)
+                old_data_start_index = np.searchsorted(full_data['time'].values, old_time)
+                logging.info("{} old blocks are removed before time {}. old_data_start_index={}, phase2_new_data_start={}".format(num_blocks, old_time, old_data_start_index, phase2_new_data_start))
+
             num_replay = int(replay_ratio * phase2_new_data_start)
             new_data_index = torch.arange(
                 phase2_new_data_start, phase2_new_data_end)
             if num_replay > 0:
-                weights = np.ones(int(phase2_new_data_start)) / \
-                    phase2_new_data_start
                 old_data_index = np.random.choice(
-                    phase2_new_data_start, size=num_replay, p=weights, replace=False)
+                    np.arange(old_data_start_index, phase2_new_data_start), size=num_replay, replace=True)
                 old_data_index = torch.tensor(old_data_index).sort().values
                 all_index = torch.cat((old_data_index, new_data_index))
             else:
@@ -459,6 +473,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
+                    torch.distributed.barrier()
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
                                             cache_node_ratio_sum, total_samples, total_sample_time],
                                            device=device)
@@ -471,6 +486,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
                         train_df)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
 
+        torch.distributed.barrier()
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
@@ -480,6 +496,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
             val_df, sampler, model, criterion, cache, device, test_rand_sampler)
 
         if args.distributed:
+            torch.distributed.barrier()
             val_res = torch.tensor([val_ap, val_auc]).to(device)
             torch.distributed.all_reduce(val_res)
             val_res /= args.world_size
@@ -489,6 +506,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         val_time = val_end - val_start
 
         if args.distributed:
+            torch.distributed.barrier()
             metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
                                     cache_node_ratio_sum, total_samples, total_sample_time],
                                    device=device)

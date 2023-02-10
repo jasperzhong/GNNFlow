@@ -391,8 +391,7 @@ std::size_t DynamicGraph::OffloadOldBlocks(TimestampType timestamp,
         // remove from `edges_`
         for (auto i = 0; i < cur->size; i++) {
           auto eid = cur->eids[i];
-          edges_[eid]--;
-          if (edges_[eid] == 0) {
+          if (--edges_[eid] == 0) {
             edges_.erase(eid);
           }
         }
