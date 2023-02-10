@@ -332,6 +332,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
 
+    next_data = None
+
+    def sampling(target_nodes, ts, eid):
+        nonlocal next_data
+        mfgs = sampler.sample(target_nodes, ts)
+        next_data = (mfgs, eid)
+
     if args.local_rank == 0:
         gpu_load_thread = threading.Thread(target=gpu_load)
         gpu_load_thread.start()
@@ -360,11 +367,30 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_samples = 0
 
         epoch_time_start = time.time()
-        for i, (target_nodes, ts, eid) in enumerate(train_loader):
-            # Sample
-            sample_start_time = time.time()
-            mfgs = sampler.sample(target_nodes, ts)
-            total_sampling_time += time.time() - sample_start_time
+
+        train_iter = iter(train_loader)
+        target_nodes, ts, eid = next(train_iter)
+        mfgs = sampler.sample(target_nodes, ts)
+        next_data = (mfgs, eid)
+
+        sampling_thread = None
+
+        i = 0
+        while True:
+            if sampling_thread is not None:
+                sampling_thread.join()
+
+            mfgs, eid = next_data
+            num_target_nodes = len(eid) * 3
+
+            # Sampling for next batch
+            try:
+                next_target_nodes, next_ts, next_eid = next(train_iter)
+            except StopIteration:
+                break
+            sampling_thread = threading.Thread(target=sampling, args=(
+                next_target_nodes, next_ts, next_eid))
+            sampling_thread.start()
 
             # Feature
             mfgs_to_cuda(mfgs, device)
@@ -416,14 +442,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             model_train_start_time = time.time()
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
-            total_loss += float(loss) * len(target_nodes)
+            total_loss += float(loss) * num_target_nodes
             loss.backward()
             optimizer.step()
             total_model_train_time += time.time() - model_train_start_time
 
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
-            total_samples += len(target_nodes)
+            total_samples += num_target_nodes
+            i += 1
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
