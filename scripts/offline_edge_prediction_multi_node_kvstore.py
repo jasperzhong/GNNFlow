@@ -109,7 +109,7 @@ def evaluate(data, sampler, model, criterion, cache, device, rand_sampler):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg, _ = model(mfgs)
             if args.use_memory:
                 # NB: no need to do backward here
                 # use one function
@@ -353,6 +353,12 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    sample_time_sum = 0
+    feature_time_sum = 0
+    loader_time_sum = 0
+    model_time_sum = 0
+    iter_time_sum = 0
+    fetch_mem_time_sum = 0
     all_total_samples = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training... distributed: {}'.format(args.distributed))
@@ -373,21 +379,27 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(get_batch(train_data, args.batch_size,
                                                               args.num_chunks, train_rand_sampler, args.world_size)):
+            iter_time_start = time.time()
+            loader_end = time.time()
+            if i > 0:
+                loader_time_sum += loader_end - loader_start
             # Sample
             sample_start_time = time.time()
             mfgs = sampler.sample(target_nodes, ts)
             total_sampling_time += time.time() - sample_start_time
 
             # Feature
-            mfgs_to_cuda(mfgs, device)
             feature_start_time = time.time()
+            mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid, target_edge_features=args.use_memory)
             total_feature_fetch_time += time.time() - feature_start_time
 
             # Train
+            model_start = time.time()
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg, memory_time = model(mfgs)
+            fetch_mem_time_sum += memory_time
 
             if args.use_memory:
                 # NB: no need to do backward here
@@ -406,6 +418,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
+            model_end = time.time()
+            model_time_sum += model_end - model_start
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
@@ -426,8 +440,14 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Total feature fetch time: {:.2f}s | Total time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
                         train_data)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, time.time() - epoch_time_start))
 
+            loader_start = time.time()
+            iter_time_end = time.time()
+            iter_time_sum += iter_time_end - iter_time_start
+
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
+        sample_time_sum += total_sampling_time
+        feature_time_sum += total_feature_fetch_time
 
         if args.distributed:
             metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
@@ -470,8 +490,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                 total_samples = metrics.tolist()
 
             all_sampling_time = sampler.get_sampling_time()
-            if args.rank == 0:
-                print(all_sampling_time)
+            # if args.rank == 0:
+            #     print(all_sampling_time)
 
             std = all_sampling_time.std(dim=1).mean()
             mean = all_sampling_time.mean(dim=1).mean()
@@ -497,6 +517,17 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
     if args.rank == 0:
         logging.info('Avg epoch time: {}, Avg train throughput: {}'.format(
             epoch_time_sum / (e + 1), all_total_samples * args.world_size / epoch_time_sum))
+        logging.info('Avg sample time: {}'.format(
+            sample_time_sum / args.epoch))
+        logging.info('Avg fetch time: {}'.format(
+            feature_time_sum / args.epoch))
+        logging.info('Avg model time: {}'.format(model_time_sum / args.epoch))
+        logging.info('Avg loader time: {}'.format(
+            loader_time_sum / args.epoch))
+        logging.info('Avg fetch mem time: {}'.format(
+            fetch_mem_time_sum / args.epoch))
+        logging.info('Avg iter time: {}'.format(
+            iter_time_sum / args.epoch))
 
     if args.distributed:
         torch.distributed.barrier()

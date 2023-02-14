@@ -183,10 +183,19 @@ class Memory:
             b.srcdata['mail_ts'] = mail_ts
             b.srcdata['mem_input'] = mail
         else:
-            b.srcdata['mem'] = self.node_memory[all_nodes].to(device)
-            b.srcdata['mem_ts'] = self.node_memory_ts[all_nodes].to(device)
-            b.srcdata['mail_ts'] = self.mailbox_ts[all_nodes].to(device)
-            b.srcdata['mem_input'] = self.mailbox[all_nodes].to(device)
+            all_nodes_unique, inv = torch.unique(
+                all_nodes.cpu(), return_inverse=True)
+            mem = self.node_memory[all_nodes_unique].to(device)
+            mem_ts = self.node_memory_ts[all_nodes_unique].to(
+                device)
+            mail_ts = self.mailbox_ts[all_nodes_unique].to(
+                device)
+            mail = self.mailbox[all_nodes_unique].to(
+                device)
+            b.srcdata['mem'] = mem[inv]
+            b.srcdata['mem_ts'] = mem_ts[inv]
+            b.srcdata['mail_ts'] = mail_ts[inv]
+            b.srcdata['mem_input'] = mail[inv]
 
     def update_mem_mail(self, last_updated_nid: torch.Tensor,
                         last_updated_memory: torch.Tensor,
