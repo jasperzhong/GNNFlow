@@ -337,6 +337,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         gpu_load_thread.start()
 
     logging.info('Start training...')
+    if args.distributed:
+        torch.distributed.barrier()
+
     for e in range(args.epoch):
         model.train()
         cache.reset()
