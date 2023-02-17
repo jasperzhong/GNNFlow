@@ -49,7 +49,7 @@ parser.add_argument("--num-workers", help="num workers for dataloaders",
 parser.add_argument("--num-chunks", help="number of chunks for batch sampler",
                     type=int, default=8)
 parser.add_argument("--print-freq", help="print frequency",
-                    type=int, default=100)
+                    type=int, default=20)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
@@ -152,6 +152,51 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     return ap, auc_mrr
 
 
+def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
+    model.eval()
+    embeds = []
+    with torch.no_grad():
+        if args.use_memory:
+            memory_backup = model.memory.backup()
+
+        for target_nodes, ts, eid in dataloader:
+            mfgs = sampler.sample(target_nodes, ts)
+            mfgs_to_cuda(mfgs, device)
+            mfgs = cache.fetch_feature(
+                mfgs, eid)
+
+            if args.use_memory:
+                b = mfgs[0][0]  # type: DGLBlock
+                if args.distributed:
+                    model.module.memory.prepare_input(b)
+                    model.module.last_updated = model.module.memory_updater(b)
+                else:
+                    model.memory.prepare_input(b)
+                    model.last_updated = model.memory_updater(b)
+
+            embed = model(mfgs, return_embed=True)
+            embeds.append(embed.cpu().numpy())
+
+            if args.use_memory:
+                # NB: no need to do backward here
+                # use one function
+                if args.distributed:
+                    model.module.memory.update_mem_mail(
+                        **model.module.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
+                else:
+                    model.memory.update_mem_mail(
+                        **model.last_updated, edge_feats=cache.target_edge_features,
+                        neg_sample_ratio=1)
+
+        if args.use_memory:
+            model.memory.restore(memory_backup)
+
+    embeds = np.concatenate(embeds, axis=0)
+    # save to file
+    np.save("node_embeddings_{}.npy".format(num_iter), embeds)
+
+
 def main():
     args.distributed = int(os.environ.get('WORLD_SIZE', 0)) > 1
     if args.distributed:
@@ -226,8 +271,8 @@ def main():
 
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank)
-
-    torch.distributed.barrier()
+    if args.distributed:
+        torch.distributed.barrier()
     # insert in batch
     for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
         batch = full_data[i:i + args.ingestion_batch_size]
@@ -237,7 +282,8 @@ def main():
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
                          eids, add_reverse=False)
-        torch.distributed.barrier()
+        if args.distributed:
+            torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
@@ -330,6 +376,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    total_num_iters = 0
     early_stopper = EarlyStopMonitor()
 
     if args.local_rank == 0:
@@ -421,6 +468,10 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
+            total_num_iters += 1
+
+            if total_num_iters % args.print_freq == 0:
+                save_node_embeddings(val_loader, sampler, model, cache, device, total_num_iters)
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
@@ -441,6 +492,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s | Total Time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time, time.time() - epoch_time_start))
+
+
+
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time

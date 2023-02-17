@@ -194,6 +194,7 @@ row*.txt
 partition_table.txt
 *.bin
 *.png
+*.npy
 
 # MacOS
 .DS_Store
