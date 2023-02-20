@@ -72,7 +72,7 @@ _dysat_default_config = {
     "use_memory": False,
     "dim_time": 0,
     "dim_embed": 100,
-    "batch_size": 600
+    "batch_size": 4000
 }
 
 _graphsage_default_config = {

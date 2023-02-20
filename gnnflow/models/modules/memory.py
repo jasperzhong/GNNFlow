@@ -192,8 +192,8 @@ class Memory:
     def update_mem_mail(self, last_updated_nid: torch.Tensor,
                         last_updated_memory: torch.Tensor,
                         last_updated_ts: torch.Tensor,
-                        edge_feats: Optional[torch.Tensor]=None,
-                        neg_sample_ratio: int=1):
+                        edge_feats: Optional[torch.Tensor] = None,
+                        neg_sample_ratio: int = 1):
         """
         Update the mem and mailbox of last updated nodes.
 
@@ -215,7 +215,6 @@ class Memory:
             edge_feats = torch.zeros(
                 last_updated_nid.shape[0] // split_chunks, self.dim_edge,
                 device=self.device)
-
 
         edge_feats = edge_feats.to(self.device)
 

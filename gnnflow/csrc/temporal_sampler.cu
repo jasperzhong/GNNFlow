@@ -1,3 +1,5 @@
+#include <pybind11/embed.h>
+#include <pybind11/pybind11.h>
 #include <thrust/execution_policy.h>
 #include <thrust/remove.h>
 
@@ -17,6 +19,8 @@
 #include "sampling_kernels.h"
 #include "temporal_sampler.h"
 #include "utils.h"
+
+namespace py = pybind11;
 
 namespace gnnflow {
 
@@ -263,6 +267,7 @@ SamplingResult TemporalSampler::SampleLayer(
 std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps) {
+  py::gil_scoped_release release;  // release GIL
   CHECK_EQ(dst_nodes.size(), dst_timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
 
@@ -285,6 +290,7 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
       results.push_back(layer_results);
     }
   }
+  py::gil_scoped_acquire acquire;  // Recover GIL
   return results;
 }
 

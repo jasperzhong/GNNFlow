@@ -12,16 +12,16 @@ if [[ $NPROC_PER_NODE -gt 1 ]]; then
     cmd="torchrun \
         --nnodes=1 --nproc_per_node=$NPROC_PER_NODE \
         --standalone \
-        offline_edge_prediction.py --model $MODEL --data $DATA \
+        offline_edge_prediction_pipeline.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO \
         --node-cache-ratio $NODE_CACHE_RATIO --snapshot-time-window $TIME_WINDOW \
         --ingestion-batch-size 10000000"
 else
-    cmd="python offline_edge_prediction.py --model $MODEL --data $DATA \
+    cmd="python offline_edge_prediction_pipeline.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO \
         --node-cache-ratio $NODE_CACHE_RATIO --snapshot-time-window $TIME_WINDOW \
         --ingestion-batch-size 10000000"
 fi
 
 echo $cmd
-OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${TIME_WINDOW}.log 2>&1
+OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${TIME_WINDOW}_pipeline.log 2>&1
