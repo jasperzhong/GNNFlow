@@ -123,6 +123,7 @@ class DGNN(torch.nn.Module):
             neg_sample_ratio: negative sampling ratio
         """
         out = list()
+        embeds = []
         for l in range(self.num_layers):
             for h in range(self.num_snapshots):
                 key = 'l' + str(l) + 'h' + str(h)
@@ -131,6 +132,7 @@ class DGNN(torch.nn.Module):
                     mfgs[l + 1][h].srcdata['h'] = rst
                 else:
                     out.append(rst)
+                embeds.append(rst)
 
         if self.num_snapshots == 1:
             embed = out[0]
@@ -139,5 +141,5 @@ class DGNN(torch.nn.Module):
             embed = self.combiner(embed)[0][-1, :, :]
 
         if return_embed:
-            return embed
+            return embeds
         return self.edge_predictor(embed)

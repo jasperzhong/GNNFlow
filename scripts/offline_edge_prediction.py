@@ -53,6 +53,8 @@ parser.add_argument("--print-freq", help="print frequency",
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
+parser.add_argument("--save-node-embeddings-frequency", type=int, default=500,
+                    help="save node embedding frequency")
 
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
@@ -154,7 +156,7 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
 
 def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
     model.eval()
-    embeds = []
+    embeds_list = []
     with torch.no_grad():
         if args.use_memory:
             memory_backup = model.memory.backup()
@@ -174,8 +176,8 @@ def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
                     model.memory.prepare_input(b)
                     model.last_updated = model.memory_updater(b)
 
-            embed = model(mfgs, return_embed=True)
-            embeds.append(embed.cpu().numpy())
+            embeds = model(mfgs, return_embed=True)
+            embeds_list.append([embed.cpu().numpy() for embed in embeds])
 
             if args.use_memory:
                 # NB: no need to do backward here
@@ -192,9 +194,13 @@ def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
         if args.use_memory:
             model.memory.restore(memory_backup)
 
-    embeds = np.concatenate(embeds, axis=0)
-    # save to file
-    np.save("node_embeddings_{}.npy".format(num_iter), embeds)
+    # zip
+    embeds_list = list(zip(*embeds_list))
+    for layer, embeds in enumerate(embeds_list):
+        embeds = np.concatenate(embeds, axis=0)
+        # save to file
+        np.save("node_embeddings_{}_{}_layer{}_{}.npy".format(
+            args.model, args.data, layer, num_iter), embeds)
 
 
 def main():
@@ -470,8 +476,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             total_samples += len(target_nodes)
             total_num_iters += 1
 
-            if total_num_iters % args.print_freq == 0:
-                save_node_embeddings(val_loader, sampler, model, cache, device, total_num_iters)
+            if total_num_iters % args.save_node_embeddings_frequency == 0:
+                save_node_embeddings(val_loader, sampler,
+                                     model, cache, device, total_num_iters)
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
@@ -492,9 +499,6 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s | Total Time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
                         train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time, time.time() - epoch_time_start))
-
-
-
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
