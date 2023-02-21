@@ -168,7 +168,11 @@ def main():
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
     model_config, data_config = get_default_config(args.model, args.data)
-    model_config["snapshot_time_window"] = args.snapshot_time_window
+    if model_config["snapshot_time_window"] > 0 and args.data == "GDELT":
+        model_config["snapshot_time_window"] = 25
+    else:
+        model_config["snapshot_time_window"] = args.snapshot_time_window
+    logging.info("snapshot_time_window's value is {}".format(model_config["snapshot_time_window"]))
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
@@ -227,7 +231,8 @@ def main():
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank)
 
-    torch.distributed.barrier()
+    if args.distributed:
+        torch.distributed.barrier()
     # insert in batch
     for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
         batch = full_data[i:i + args.ingestion_batch_size]
@@ -237,7 +242,8 @@ def main():
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
                          eids, add_reverse=False)
-        torch.distributed.barrier()
+        if args.distributed:
+            torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
@@ -332,11 +338,21 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
 
+    next_data = None
+
+    def sampling(target_nodes, ts, eid):
+        nonlocal next_data
+        mfgs = sampler.sample(target_nodes, ts)
+        next_data = (mfgs, eid)
+
     if args.local_rank == 0:
         gpu_load_thread = threading.Thread(target=gpu_load)
         gpu_load_thread.start()
 
     logging.info('Start training...')
+    if args.distributed:
+        torch.distributed.barrier()
+
     for e in range(args.epoch):
         model.train()
         cache.reset()
@@ -357,11 +373,30 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_samples = 0
 
         epoch_time_start = time.time()
-        for i, (target_nodes, ts, eid) in enumerate(train_loader):
-            # Sample
-            sample_start_time = time.time()
-            mfgs = sampler.sample(target_nodes, ts)
-            total_sampling_time += time.time() - sample_start_time
+
+        train_iter = iter(train_loader)
+        target_nodes, ts, eid = next(train_iter)
+        mfgs = sampler.sample(target_nodes, ts)
+        next_data = (mfgs, eid)
+
+        sampling_thread = None
+
+        i = 0
+        while True:
+            if sampling_thread is not None:
+                sampling_thread.join()
+
+            mfgs, eid = next_data
+            num_target_nodes = len(eid) * 3
+
+            # Sampling for next batch
+            try:
+                next_target_nodes, next_ts, next_eid = next(train_iter)
+            except StopIteration:
+                break
+            sampling_thread = threading.Thread(target=sampling, args=(
+                next_target_nodes, next_ts, next_eid))
+            sampling_thread.start()
 
             # Feature
             mfgs_to_cuda(mfgs, device)
@@ -413,14 +448,15 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             model_train_start_time = time.time()
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
-            total_loss += float(loss) * len(target_nodes)
+            total_loss += float(loss) * num_target_nodes
             loss.backward()
             optimizer.step()
             total_model_train_time += time.time() - model_train_start_time
 
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
-            total_samples += len(target_nodes)
+            total_samples += num_target_nodes
+            i += 1
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
