@@ -231,7 +231,8 @@ def main():
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank)
 
-    torch.distributed.barrier()
+    if args.distributed:
+        torch.distributed.barrier()
     # insert in batch
     for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
         batch = full_data[i:i + args.ingestion_batch_size]
@@ -241,7 +242,8 @@ def main():
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
                          eids, add_reverse=False)
-        torch.distributed.barrier()
+        if args.distributed:
+            torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
