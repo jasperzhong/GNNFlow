@@ -168,7 +168,11 @@ def main():
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
     model_config, data_config = get_default_config(args.model, args.data)
-    model_config["snapshot_time_window"] = args.snapshot_time_window
+    if model_config["snapshot_time_window"] > 0 and args.data == "GDELT":
+        model_config["snapshot_time_window"] = 25
+    else:
+        model_config["snapshot_time_window"] = args.snapshot_time_window
+    logging.info("snapshot_time_window's value is {}".format(model_config["snapshot_time_window"]))
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
