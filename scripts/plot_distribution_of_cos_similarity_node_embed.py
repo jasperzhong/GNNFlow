@@ -4,12 +4,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-model = 'TGAT'
-layer = 1
+model = 'GRAPHSAGE'
+dataset = 'REDDIT'
+layer = 0
 
 def load_node_embeds():
     files = os.listdir()
-    files = [f for f in files if f.startswith('node_embeddings_layer{}'.format(layer))]
+    files = [f for f in files if f.startswith('node_embeddings_{}_{}_layer{}'.format(model, dataset, layer))]
     files = sorted(files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
     node_embed = torch.from_numpy(np.load(files[0])).cuda()
     cos_sim_list = []
@@ -41,4 +42,4 @@ if __name__ == '__main__':
     ax.set_xlabel('Rank')
     ax.set_ylabel('Cosine Similarity')
     ax.legend()
-    plt.savefig('cos_sim_layer{}.png'.format(layer), dpi=400, bbox_inches='tight')
+    plt.savefig('cos_sim_{}_{}_layer{}.png'.format(model, dataset, layer), dpi=400, bbox_inches='tight')

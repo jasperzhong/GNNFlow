@@ -41,7 +41,7 @@ class SAGE(nn.Module):
     def reset(self):
         pass
 
-    def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1, *args, **kwargs):
+    def forward(self, mfgs: List[List[DGLBlock]], neg_sample_ratio: int = 1, return_embed: bool = False):
         """
         Args:
             b: sampled message flow graph (mfg), where
@@ -53,12 +53,17 @@ class SAGE(nn.Module):
         Returns:
             output: output embedding of target nodes (shape: (num_dst_nodes, dim_out))
         """
+        embeds = []
         for l in range(self.num_layers):
             key = 'l' + str(l) + 'h' + str(0)
             h = self.layers[key](mfgs[l][0], mfgs[l][0].srcdata['h'])
             if l != self.num_layers - 1:
                 h = F.relu(h)
                 mfgs[l + 1][0].srcdata['h'] = h
+            embeds.append(h)
+
+        if return_embed:
+            return embeds
 
         num_edge = h.shape[0] // (neg_sample_ratio + 2)
         src_h = h[:num_edge]
@@ -67,4 +72,5 @@ class SAGE(nn.Module):
         h_pos = self.predictor(src_h * pos_dst_h)
         # TODO: it seems that neg sample of static graph is different from dynamic
         h_neg = self.predictor(src_h.tile(neg_sample_ratio, 1) * neg_dst_h)
+
         return h_pos, h_neg
