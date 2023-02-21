@@ -2,7 +2,7 @@
 import torch
 import logging
 from typing import Iterable
-
+from dgl.heterograph import DGLBlock
 from gnnflow.utils import mfgs_to_cuda
 
 
@@ -12,6 +12,7 @@ def sample(train_loader, sampler, queue_out):
     for i, (target_nodes, ts, eid) in enumerate(train_loader):
         mfgs = sampler.sample(target_nodes, ts)
         queue_out.put((mfgs, eid))
+        # mfgs.share_memory()
         # logging.info('Sample done and send to feature fetching')
     # add signal that we are done
     queue_out.put(None)
