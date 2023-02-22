@@ -55,6 +55,8 @@ parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
 parser.add_argument("--save-node-embeddings-frequency", type=int, default=500,
                     help="save node embedding frequency")
+parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
+                    help="save node embedding num last iter")
 
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
@@ -200,7 +202,7 @@ def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
         embeds = np.concatenate(embeds, axis=0)
         # save to file
         np.save("node_embeddings_{}_{}_layer{}_{}.npy".format(
-            args.model, args.data, layer, num_iter), embeds)
+            args.model, args.data, layer+1, num_iter), embeds)
 
 
 def main():
@@ -474,11 +476,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
-            total_num_iters += 1
 
-            if total_num_iters % args.save_node_embeddings_frequency == 0:
-                save_node_embeddings(val_loader, sampler,
-                                     model, cache, device, total_num_iters)
+            if args.rank == 0:
+                times = total_num_iters // args.save_node_embeddings_frequency * \
+                    args.save_node_embeddings_frequency
+                if total_num_iters % args.save_node_embeddings_frequency == 0 or \
+                        total_num_iters == (times + args.save_node_embeddings_num_last_iter):
+                    save_node_embeddings(val_loader, sampler,
+                                         model, cache, device, total_num_iters)
+
+            total_num_iters += 1
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
