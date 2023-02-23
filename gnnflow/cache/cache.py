@@ -1,5 +1,6 @@
 import logging
 from queue import Queue
+# import torch.multiprocessing as mp
 from typing import List, Optional, Union
 
 import numpy as np
@@ -101,9 +102,9 @@ class Cache:
         # we can add a flag to indicate whether it's distributed
         # so that we can only use one fetch feature function
         self.distributed = distributed
-        # self.target_edge_features = None
+        self.target_edge_features = None
         # TODO: use queue
-        self.target_edge_features = Queue(maxsize=10)
+        # self.target_edge_features = Queue(maxsize=10)
 
         # used to extract src_node id of input eid
         self.neg_sample_ratio = neg_sample_ratio
@@ -409,12 +410,12 @@ class Cache:
                     num_edges = mfgs[-1][0].num_dst_nodes() // (
                         self.neg_sample_ratio + 2)
                     nid = mfgs[-1][0].srcdata['ID'][:num_edges]
-                    self.target_edge_features.put(self.kvstore_client.pull(
-                        torch.from_numpy(eid), mode='edge', nid=nid).float())
-                    # self.target_edge_features = self.kvstore_client.pull(
-                    #     torch.from_numpy(eid), mode='edge', nid=nid).float()
+                    # self.target_edge_features.put(self.kvstore_client.pull(
+                    #     torch.from_numpy(eid), mode='edge', nid=nid).float())
+                    self.target_edge_features = self.kvstore_client.pull(
+                        torch.from_numpy(eid), mode='edge', nid=nid).float()
                 else:
-                    # self.target_edge_features = self.edge_feats[eid]
-                    self.target_edge_features.put(self.edge_feats[eid])
+                    self.target_edge_features = self.edge_feats[eid]
+                    # self.target_edge_features.put(self.edge_feats[eid])
 
         return mfgs

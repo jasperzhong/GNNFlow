@@ -78,6 +78,8 @@ logging.info(args)
 checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
 
+# mp.set_start_method('spawn', force=True)
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -271,7 +273,6 @@ def main():
         model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                      memory_device=device, memory_shared=args.distributed)
     model.to(device)
-    model.share_memory()
 
     sampler = TemporalSampler(dgraph, **model_config)
 
@@ -304,7 +305,7 @@ def main():
         cache.get_mem_size() / 1000 / 1000))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    criterion = torch.nn.BCEWithLogitsLoss().share_memory()
+    criterion = torch.nn.BCEWithLogitsLoss()
 
     best_e = train(train_loader, val_loader, sampler,
                    model, optimizer, criterion, cache, device, num_target_nodes)
