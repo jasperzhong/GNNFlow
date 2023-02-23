@@ -79,9 +79,9 @@ __global__ void SampleLayerRecentKernel(
     for (int i = end_idx - 1; sampled < fanout && i >= start_idx; --i) {
       src_nodes[offset + sampled] = curr->dst_nodes[i];
       eids[offset + sampled] = curr->eids[i];
-      timestamps[offset + sampled] =
-          prop_time ? root_timestamp : curr->timestamps[i];
-      delta_timestamps[offset + sampled] = root_timestamp - curr->timestamps[i];
+      auto ts = curr->timestamps[i];
+      timestamps[offset + sampled] = ts;
+      delta_timestamps[offset + sampled] = root_timestamp - ts;
       ++sampled;
     }
 
@@ -186,7 +186,7 @@ __global__ void SampleLayerUniformKernel(
   for (uint32_t i = 0; i < to_sample; i++) {
     indices[i] = curand(rand_states + tid) % num_candidates;
   }
-  QuickSort(indices, 0, to_sample - 1);
+  BubbleSort(indices, to_sample);
 
   uint32_t sampled = 0;
   uint32_t offset = tid * fanout;
@@ -239,10 +239,10 @@ __global__ void SampleLayerUniformKernel(
       // start from end_idx (newer edges)
       src_nodes[offset + sampled] = curr->dst_nodes[end_idx - idx - 1];
       eids[offset + sampled] = curr->eids[end_idx - idx - 1];
+      auto ts = curr->timestamps[end_idx - idx - 1];
       timestamps[offset + sampled] =
-          prop_time ? root_timestamp : curr->timestamps[end_idx - idx - 1];
-      delta_timestamps[offset + sampled] =
-          root_timestamp - curr->timestamps[end_idx - idx - 1];
+          prop_time ? root_timestamp : ts;
+      delta_timestamps[offset + sampled] = root_timestamp - ts;
       idx = indices[++sampled] - cumsum;
     }
 

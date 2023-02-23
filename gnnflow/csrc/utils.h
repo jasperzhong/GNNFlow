@@ -85,6 +85,9 @@ __host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
                                     TimestampType timestamp, int* idx);
 
 __host__ __device__ void QuickSort(uint32_t* indices, int lo, int hi);
+
+__host__ __device__ void BubbleSort(uint32_t* arr, int n);
+
 }  // namespace gnnflow
 
 #endif  // GNNFLOW_UTILS_H_
