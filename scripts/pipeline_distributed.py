@@ -100,6 +100,7 @@ def memory_update(model, distributed, cache, queue_in):
             # use one function
             if distributed:
                 model.module.memory.update_mem_mail(
+                    # cache must use a queue to maintain right version
                     **last_updated, edge_feats=cache.target_edge_features.get(),
                     neg_sample_ratio=1)
             else:

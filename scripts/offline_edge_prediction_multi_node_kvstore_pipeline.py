@@ -128,7 +128,7 @@ def evaluate(data, sampler, model, criterion, cache, device, rand_sampler):
                 # NB: no need to do backward here
                 # use one function
                 model.module.memory.update_mem_mail(
-                    **model.module.last_updated, edge_feats=cache.target_edge_features,
+                    **model.module.last_updated, edge_feats=cache.target_edge_features.get(),
                     neg_sample_ratio=1)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -423,19 +423,19 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
-        if args.distributed:
-            metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples, total_sampling_time],
-                                   device=device)
-            torch.distributed.all_reduce(metrics)
-            metrics /= args.world_size
-            total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples, total_sampling_time = metrics.tolist()
+        # if args.distributed:
+        #     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
+        #                             cache_node_ratio_sum, total_samples, total_sampling_time],
+        #                            device=device)
+        #     torch.distributed.all_reduce(metrics)
+        #     metrics /= args.world_size
+        #     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
+        #         total_samples, total_sampling_time = metrics.tolist()
 
-            all_sampling_time = sampler.get_sampling_time()
-            std = all_sampling_time.std(dim=1).mean()
-            mean = all_sampling_time.mean(dim=1).mean()
-            cv_sampling_time += std / mean
+        #     all_sampling_time = sampler.get_sampling_time()
+        #     std = all_sampling_time.std(dim=1).mean()
+        #     mean = all_sampling_time.mean(dim=1).mean()
+        #     cv_sampling_time += std / mean
 
         # Validation
         val_start = time.time()
@@ -470,8 +470,10 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         all_total_samples += total_samples
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s |".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time))
+            # logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
+            #     e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
 
         if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1
