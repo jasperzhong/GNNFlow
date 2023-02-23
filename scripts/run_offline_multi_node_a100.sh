@@ -30,7 +30,7 @@ cmd="torchrun \
     --rdzv_id=1234 --rdzv_backend=c10d \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
     --rdzv_conf is_host=$IS_HOST \
-    offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
+    offline_edge_prediction_multi_node_kvstore_pipeline.py --model $MODEL --data $DATA \
     --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO\
     --partition --ingestion-batch-size 10000000 \
     --initial-ingestion-batch-size 10000000 \
