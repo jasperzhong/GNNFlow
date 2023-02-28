@@ -21,6 +21,7 @@ import gnnflow.cache as caches
 from gnnflow.config import get_default_config
 from gnnflow.data import (DistributedBatchSampler, EdgePredictionDataset,
                           RandomStartBatchSampler, default_collate_ndarray)
+from gnnflow.dynamic_graph import DynamicGraph
 from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
@@ -53,7 +54,7 @@ parser.add_argument("--print-freq", help="print frequency",
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
-parser.add_argument("--save-node-embeddings-frequency", type=int, default=500,
+parser.add_argument("--save-node-embeddings-frequency", type=int, default=20,
                     help="save node embedding frequency")
 parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
                     help="save node embedding num last iter")
@@ -203,6 +204,20 @@ def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
         # save to file
         np.save("node_embeddings_{}_{}_layer{}_{}.npy".format(
             args.model, args.data, layer+1, num_iter), embeds)
+
+
+def save_node_memory(model: DynamicGraph, epoch: int, num_iter: int):
+    if args.distributed:
+        memory = model.module.memory.node_memory
+        mailbox = model.module.memory.mailbox
+    else:
+        memory = model.memory.node_memory
+        mailbox = model.memory.mailbox
+
+    np.save("memory/node_memory_{}_{}_{}_{}.npy".format(
+        args.model, args.data, epoch, num_iter), memory)
+    np.save("memory/mailbox_{}_{}_{}_{}.npy".format(
+        args.model, args.data, epoch, num_iter), mailbox)
 
 
 def main():
@@ -478,12 +493,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             total_samples += len(target_nodes)
 
             if args.rank == 0:
-                times = total_num_iters // args.save_node_embeddings_frequency * \
+                times = i // args.save_node_embeddings_frequency * \
                     args.save_node_embeddings_frequency
-                if total_num_iters % args.save_node_embeddings_frequency == 0 or \
-                        total_num_iters == (times + args.save_node_embeddings_num_last_iter):
-                    save_node_embeddings(val_loader, sampler,
-                                         model, cache, device, total_num_iters)
+                if i % args.save_node_embeddings_frequency == 0 or \
+                        i == (times + args.save_node_embeddings_num_last_iter):
+                    # save_node_embeddings(val_loader, sampler,
+                    #                      model, cache, device, total_num_iters)
+                    save_node_memory(model, e, i)
 
             total_num_iters += 1
 
