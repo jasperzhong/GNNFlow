@@ -39,7 +39,7 @@ _tgn_default_config = {
     "dim_time": 100,
     "dim_embed": 100,
     "dim_memory": 100,
-    "batch_size": 600
+    "batch_size": 4000
 }
 
 _tgat_default_config = {

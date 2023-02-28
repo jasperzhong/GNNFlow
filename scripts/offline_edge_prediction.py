@@ -54,7 +54,7 @@ parser.add_argument("--print-freq", help="print frequency",
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
-parser.add_argument("--save-node-embeddings-frequency", type=int, default=20,
+parser.add_argument("--save-node-embeddings-frequency", type=int, default=500,
                     help="save node embedding frequency")
 parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
                     help="save node embedding num last iter")
@@ -215,9 +215,9 @@ def save_node_memory(model: DynamicGraph, epoch: int, num_iter: int):
         mailbox = model.memory.mailbox
 
     np.save("memory/node_memory_{}_{}_{}_{}.npy".format(
-        args.model, args.data, epoch, num_iter), memory)
+        args.model, args.data, epoch, num_iter), memory.cpu())
     np.save("memory/mailbox_{}_{}_{}_{}.npy".format(
-        args.model, args.data, epoch, num_iter), mailbox)
+        args.model, args.data, epoch, num_iter), mailbox.cpu())
 
 
 def main():
