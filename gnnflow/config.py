@@ -39,7 +39,7 @@ _tgn_default_config = {
     "dim_time": 100,
     "dim_embed": 100,
     "dim_memory": 100,
-    "batch_size": 4000
+    "batch_size": 600 
 }
 
 _tgat_default_config = {
@@ -157,7 +157,7 @@ _lastfm_default_config = {
 _gdelt_default_config = {
     "initial_pool_size": 10*GiB,
     "maximum_pool_size": 20*GiB,
-    "mem_resource_type": "unified",
+    "mem_resource_type": "pinned",
     "minimum_block_size": 123,
     "blocks_to_preallocate": 8196,
     "insertion_policy": "insert",

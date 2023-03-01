@@ -53,7 +53,7 @@ parser.add_argument("--print-freq", help="print frequency",
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
-parser.add_argument("--save-node-embeddings-frequency", type=int, default=500,
+parser.add_argument("--save-node-embeddings-frequency", type=int, default=100,
                     help="save node embedding frequency")
 parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
                     help="save node embedding num last iter")
@@ -75,6 +75,8 @@ logging.info(args)
 
 checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
+
+training_nodes = set()
 
 
 def set_seed(seed):
@@ -156,18 +158,22 @@ def evaluate(dataloader, sampler, model, criterion, cache, device):
     return ap, auc_mrr
 
 
-def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
+def split_given_size(a, size):
+    return np.split(a, np.arange(size, len(a), size))
+
+
+def save_node_embeddings(nodes, cur_ts, sampler, model, cache, device, epoch, num_iter):
     model.eval()
     embeds_list = []
     with torch.no_grad():
         if args.use_memory:
             memory_backup = model.memory.backup()
 
-        for target_nodes, ts, eid in dataloader:
-            mfgs = sampler.sample(target_nodes, ts)
+        for target_nodes in split_given_size(nodes, args.batch_size):
+            mfgs = sampler.sample(target_nodes, np.array(
+                [cur_ts] * len(target_nodes)))
             mfgs_to_cuda(mfgs, device)
-            mfgs = cache.fetch_feature(
-                mfgs, eid)
+            mfgs = cache.fetch_feature(mfgs)
 
             if args.use_memory:
                 b = mfgs[0][0]  # type: DGLBlock
@@ -181,18 +187,6 @@ def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
             embeds = model(mfgs, return_embed=True)
             embeds_list.append([embed.cpu().numpy() for embed in embeds])
 
-            if args.use_memory:
-                # NB: no need to do backward here
-                # use one function
-                if args.distributed:
-                    model.module.memory.update_mem_mail(
-                        **model.module.last_updated, edge_feats=cache.target_edge_features,
-                        neg_sample_ratio=1)
-                else:
-                    model.memory.update_mem_mail(
-                        **model.last_updated, edge_feats=cache.target_edge_features,
-                        neg_sample_ratio=1)
-
         if args.use_memory:
             model.memory.restore(memory_backup)
 
@@ -201,8 +195,8 @@ def save_node_embeddings(dataloader, sampler, model, cache, device, num_iter):
     for layer, embeds in enumerate(embeds_list):
         embeds = np.concatenate(embeds, axis=0)
         # save to file
-        np.save("node_embeddings_{}_{}_layer{}_{}.npy".format(
-            args.model, args.data, layer+1, num_iter), embeds)
+        np.save("node_embeddings_{}_{}_layer{}_{}_{}.npy".format(
+            args.model, args.data, layer+1, epoch, num_iter), embeds)
 
 
 def main():
@@ -236,11 +230,15 @@ def main():
     test_rand_sampler = DstRandEdgeSampler(
         full_data['dst'].to_numpy(dtype=np.int32))
 
+    training_nodes.update(train_data['src'].to_numpy(dtype=np.int64))
+    training_nodes.update(train_data['dst'].to_numpy(dtype=np.int64))
+
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
 
     batch_size = model_config['batch_size']
+    args.batch_size = batch_size
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
@@ -384,7 +382,6 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
-    total_num_iters = 0
     early_stopper = EarlyStopMonitor()
 
     if args.local_rank == 0:
@@ -400,6 +397,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 model.module.reset()
             else:
                 model.reset()
+
         total_loss = 0
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
@@ -478,14 +476,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             total_samples += len(target_nodes)
 
             if args.rank == 0:
-                times = total_num_iters // args.save_node_embeddings_frequency * \
+                times = i // args.save_node_embeddings_frequency * \
                     args.save_node_embeddings_frequency
-                if total_num_iters % args.save_node_embeddings_frequency == 0 or \
-                        total_num_iters == (times + args.save_node_embeddings_num_last_iter):
-                    save_node_embeddings(val_loader, sampler,
-                                         model, cache, device, total_num_iters)
-
-            total_num_iters += 1
+                if i % args.save_node_embeddings_frequency == 0 or \
+                        i == (times + args.save_node_embeddings_num_last_iter):
+                    # ugly
+                    cur_ts = float(ts[-1])
+                    save_node_embeddings(np.array(list(training_nodes)), cur_ts, sampler,
+                                         model, cache, device, e, i)
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
