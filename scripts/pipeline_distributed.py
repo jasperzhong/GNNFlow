@@ -1,9 +1,47 @@
 
+from queue import Queue
 import torch
 import logging
 from typing import Iterable
 from dgl.heterograph import DGLBlock
+from gnnflow.distributed.dist_sampler import DistributedTemporalSampler
+from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import mfgs_to_cuda
+
+
+def local_sample(train_loader, sampler: DistributedTemporalSampler, queue_out: Queue):
+    # logging.info('Sample Started')
+    sample_time_sum = 0
+    # For TGN
+    layer = 0
+    snapshot = 0
+    for i, (target_nodes, ts, eid) in enumerate(train_loader):
+        futures, masks = sampler.sample_layer_first(
+            target_nodes, ts, layer, snapshot)
+        queue_out.put((futures, masks, target_nodes, ts, eid))
+        # mfgs.share_memory()
+        # logging.info('Sample done and send to feature fetching')
+    # add signal that we are done
+    queue_out.put(None)
+    # logging.info('Sample in one epoch done')
+
+
+def collect_sample_results(sampler: DistributedTemporalSampler, queue_in: Queue, queue_out: Queue):
+    layer = 0
+    while True:
+        # retrive from queue
+        item = queue_in.get()
+        # check for stop
+        if item is None:
+            queue_out.put(item)
+            break
+        mfgs = []
+        mfgs.append([])
+        futures, masks, target_nodes, ts, eids = item
+        mfgs[layer].append(sampler.sample_layer_collect(
+            futures, masks, target_nodes, ts, layer))
+        mfgs.reverse()
+        queue_out.put((mfgs, eids))
 
 
 def sample(train_loader, sampler, queue_out):
@@ -37,6 +75,38 @@ def feature_fetching(cache, device, queue_in, queue_out):
         queue_out.put(mfgs)
     #     logging.info('fetch feature done')
     # logging.info('feature fetching done')
+
+
+def feature_fetching_local(cache, device, queue_in, queue_out):
+    while True:
+        # retrive from queue
+        item = queue_in.get()
+        # check for stop
+        if item is None:
+            queue_out.put(item)
+            break
+        mfgs, eid = item
+        # logging.info('feature mfgs {}'.format(mfgs))
+        mfgs_to_cuda(mfgs, device)
+        # logging.info('move to cuda done')
+        futures = cache.fetch_feature_local(
+            mfgs, eid, target_edge_features=True)  # because all use memory
+        queue_out.put((mfgs, eid, futures))
+
+
+def feature_fetching_collect(cache, device, queue_in, queue_out):
+    while True:
+        # retrive from queue
+        item = queue_in.get()
+        # check for stop
+        if item is None:
+            queue_out.put(item)
+            break
+        mfgs, eid, futures = item
+        # logging.info('move to cuda done')
+        mfgs = cache.fetch_feature_collect(
+            *futures, mfgs, eid, target_edge_features=True)
+        queue_out.put(mfgs)
 
 
 def memory_fetching(model, distributed, queue_in, queue_out):

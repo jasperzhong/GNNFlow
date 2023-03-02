@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 from queue import Queue
-from typing import List
+from typing import List, Tuple
 
 import dgl
 import numpy as np
@@ -126,6 +126,36 @@ class DistributedTemporalSampler:
 
         return all_sampling_time
 
+    def sample_pipeline(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
+        """
+        Sample k-hop neighbors of given vertices.
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+
+        Returns:
+            list of message flow graphs (# of graphs = # of snapshots) for
+            each layer.
+        """
+        futures = []
+        for layer in range(self._num_layers):
+            mfgs.append([])
+            if layer == 0:
+                for snapshot in range(self._num_snapshots):
+                    mfgs[layer].append(self.sample_layer_global(
+                        target_vertices, timestamps, layer, snapshot))
+            else:
+                for snapshot in range(self._num_snapshots):
+                    prev_mfg = mfgs[layer - 1][snapshot]
+                    all_vertices = prev_mfg.srcdata['ID'].numpy()
+                    all_timestamps = prev_mfg.srcdata['ts'].numpy()
+                    mfgs[layer].append(self.sample_layer_global(
+                        all_vertices, all_timestamps, layer, snapshot))
+
+        mfgs.reverse()
+        return mfgs
+
     def sample(self, target_vertices: np.ndarray, timestamps: np.ndarray) -> List[List[DGLBlock]]:
         """
         Sample k-hop neighbors of given vertices.
@@ -155,6 +185,111 @@ class DistributedTemporalSampler:
 
         mfgs.reverse()
         return mfgs
+
+    def sample_layer_first(self, target_vertices: np.ndarray, timestamps: np.ndarray,
+                           layer: int, snapshot: int):
+        """
+        Sample neighbors of given vertices in a specific layer and snapshot.
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+            layer: layer to sample.
+            snapshot: snapshot to sample.
+
+        Returns:
+            message flow graph for the specific layer and snapshot.
+        """
+        # dispatch target vertices and timestamps to different partitions
+        partition_table = self._partition_table
+        partition_ids = partition_table[target_vertices]
+
+        futures = []
+        masks = []
+        for partition_id in range(self._num_partitions):
+            partition_mask = partition_ids == partition_id
+            if partition_mask.sum() == 0:
+                continue
+            partition_vertices = torch.from_numpy(
+                target_vertices[partition_mask]).contiguous()
+            partition_timestamps = torch.from_numpy(
+                timestamps[partition_mask]).contiguous()
+
+            if self._partition_id == partition_id:
+                logging.debug(
+                    "worker %d call local sample_layer_local", self._rank)
+                futures.append(graph_services.sample_layer_local(partition_vertices, partition_timestamps,
+                                                                 layer, snapshot))
+            else:
+                if not self._dynamic_scheduling:
+                    # static scheduling
+                    worker_rank = partition_id * self._local_world_size + self._local_rank
+                    logging.debug(
+                        "worker %d call remote sample_layer_local on worker %d", self._rank, worker_rank)
+
+                    futures.append(rpc.rpc_async(
+                        'worker{}'.format(worker_rank),
+                        graph_services.sample_layer_local,
+                        args=(partition_vertices, partition_timestamps, layer, snapshot)))
+                else:
+                    # dynamic scheduling
+                    worker_rank = partition_id * self._local_world_size
+                    futures.append(rpc.rpc_async(
+                        'worker{}'.format(worker_rank),
+                        graph_services.sample_layer_local_proxy,
+                        args=(partition_vertices, partition_timestamps, layer, snapshot)))
+
+            masks.append(partition_mask)
+
+        return futures, masks
+
+    def sample_layer_collect(self, futures, masks, target_vertices: np.ndarray, timestamps: np.ndarray,
+                             layer: int) -> DGLBlock:
+        """
+        Sample neighbors of given vertices in a specific layer and snapshot.
+
+        Args:
+            target_vertices: root vertices to sample. CPU tensor.
+            timestamps: timestamps of target vertices in the graph. CPU tensor.
+            layer: layer to sample.
+            snapshot: snapshot to sample.
+
+        Returns:
+            message flow graph for the specific layer and snapshot.
+        """
+        # dispatch target vertices and timestamps to different partitions
+        partition_table = self._partition_table
+        partition_ids = partition_table[target_vertices]
+
+        # collect sampling results
+        sampling_results = []
+        for future in futures:
+            if isinstance(future, SamplingResultTorch):
+                sampling_results.append(future)
+            else:
+                sampling_results.append(future.wait())
+
+        # deal with non-partitioned nodes
+        non_partition_mask = partition_ids == -1
+        if non_partition_mask.sum() > 0:
+            masks.append(non_partition_mask)
+            result = SamplingResultTorch()
+            result.row = torch.tensor([])
+            result.num_dst_nodes = int(non_partition_mask.sum())
+            result.num_src_nodes = result.num_dst_nodes
+            result.all_nodes = torch.from_numpy(
+                target_vertices[non_partition_mask]).contiguous()
+            result.all_timestamps = torch.from_numpy(
+                timestamps[non_partition_mask]).contiguous()
+            result.delta_timestamps = torch.tensor([])
+            result.eids = torch.tensor([])
+            sampling_results.append(result)
+
+        # merge sampling results
+        mfg = self._merge_sampling_results(sampling_results, masks)
+        assert mfg.num_dst_nodes() == len(
+            target_vertices), 'Layer {}\tError: Number of destination nodes does not match'.format(layer)
+        return mfg
 
     def sample_layer_global(self, target_vertices: np.ndarray, timestamps: np.ndarray,
                             layer: int, snapshot: int) -> DGLBlock:

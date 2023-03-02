@@ -419,3 +419,266 @@ class Cache:
                     self.target_edge_features.put(self.edge_feats[eid])
 
         return mfgs
+
+    def fetch_feature_local(self, mfgs: List[List[DGLBlock]],
+                            eid: Optional[np.ndarray] = None, update_cache: bool = True,
+                            target_edge_features: bool = True):
+        """Fetching the node/edge features of input_node_ids
+
+        Args:
+            mfgs: message-passing flow graphs
+            eid: target edge ids
+            update_cache: whether to update the cache
+            target_edge_features: whether to fetch target edge features for TGN
+
+        Returns:
+            mfgs: message-passing flow graphs with node/edge features
+        """
+        node_futures = []
+        if self.dim_node_feat != 0:
+            i = 0
+            hit_ratio_sum = 0
+            for b in mfgs[0]:
+                nodes = b.srcdata['ID']
+                assert isinstance(nodes, torch.Tensor)
+                cache_mask = self.cache_node_flag[nodes]
+
+                hit_ratio = torch.sum(cache_mask) / len(nodes)
+                hit_ratio_sum += hit_ratio
+
+                node_feature = torch.zeros(
+                    len(nodes), self.dim_node_feat, dtype=torch.float32, device=self.device)
+
+                # fetch the cached features
+                cached_node_index = self.cache_node_map[nodes[cache_mask]]
+                node_feature[cache_mask] = self.cache_node_buffer[cached_node_index]
+                # fetch the uncached features
+                uncached_mask = ~cache_mask
+                if uncached_mask.sum() > 0:
+                    uncached_node_id = nodes[uncached_mask]
+                    uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
+                        uncached_node_id, return_inverse=True)
+
+                    if self.distributed:
+                        future = self.kvstore_client.pull_local(
+                            uncached_node_id_unique.cpu(), mode='node')
+                        node_futures.append(future)
+
+        # Edge feature
+        edge_futures = []
+        if self.dim_edge_feat != 0:
+            i = 0
+            hit_ratio_sum = 0
+            for mfg in mfgs:
+                for b in mfg:
+                    edges = b.edata['ID']
+                    assert isinstance(edges, torch.Tensor)
+                    if len(edges) == 0:
+                        continue
+
+                    cache_mask = self.cache_edge_flag[edges]
+                    hit_ratio = torch.sum(cache_mask) / len(edges)
+                    hit_ratio_sum += hit_ratio
+
+                    edge_feature = torch.zeros(len(edges), self.dim_edge_feat,
+                                               dtype=torch.float32, device=self.device)
+
+                    # fetch the cached features
+                    cached_edge_index = self.cache_edge_map[edges[cache_mask]]
+                    edge_feature[cache_mask] = self.cache_edge_buffer[cached_edge_index]
+                    # fetch the uncached features
+                    uncached_mask = ~cache_mask
+                    uncached_edge_id = edges[uncached_mask]
+
+                    if len(uncached_edge_id) > 0:
+                        if self.distributed:
+                            # edge_features need to convert to nid first.
+                            # get the first_indices of the origin tensor in unique
+                            # pytorch should have this option like numpy !!
+                            uncached_edge_id_unique, uncached_edge_id_unique_index, counts = torch.unique(
+                                uncached_edge_id, return_inverse=True, return_counts=True)
+                            _, ind_sorted = torch.sort(
+                                uncached_edge_id_unique_index, stable=True)
+                            cum_sum = counts.cumsum(0)
+                            cum_sum = torch.cat(
+                                (torch.tensor([0]).cuda(), cum_sum[:-1]))
+                            first_indicies = ind_sorted[cum_sum]
+
+                            src_nid = b.srcdata['ID'][b.edges()[1]]
+                            uncached_eid_to_nid = src_nid[uncached_mask]
+                            # use the same indices as eid when unique
+                            uncached_eid_to_nid_unique = uncached_eid_to_nid[first_indicies].cpu(
+                            )
+
+                            future = self.kvstore_client.pull_local(
+                                uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
+                            edge_futures.append(future)
+
+            target_edge_futures = None
+            if target_edge_features:
+                if self.distributed:
+                    num_edges = mfgs[-1][0].num_dst_nodes() // (
+                        self.neg_sample_ratio + 2)
+                    nid = mfgs[-1][0].srcdata['ID'][:num_edges]
+                    target_edge_futures = self.kvstore_client.pull_local(
+                        torch.from_numpy(eid), mode='edge', nid=nid)
+
+        return node_futures, edge_futures, target_edge_futures
+
+    def fetch_feature_collect(self, node_futures, edge_futures, target_egde_futures, mfgs: List[List[DGLBlock]],
+                              eid: Optional[np.ndarray] = None, update_cache: bool = True,
+                              target_edge_features: bool = True):
+        """Fetching the node/edge features of input_node_ids
+
+        Args:
+            mfgs: message-passing flow graphs
+            eid: target edge ids
+            update_cache: whether to update the cache
+            target_edge_features: whether to fetch target edge features for TGN
+
+        Returns:
+            mfgs: message-passing flow graphs with node/edge features
+        """
+
+        if self.dim_node_feat != 0:
+            i = 0
+            hit_ratio_sum = 0
+            for b, (futures, masks) in zip(mfgs[0], node_futures):
+                nodes = b.srcdata['ID']
+                assert isinstance(nodes, torch.Tensor)
+                cache_mask = self.cache_node_flag[nodes]
+
+                hit_ratio = torch.sum(cache_mask) / len(nodes)
+                hit_ratio_sum += hit_ratio
+
+                node_feature = torch.zeros(
+                    len(nodes), self.dim_node_feat, dtype=torch.float32, device=self.device)
+
+                # fetch the cached features
+                cached_node_index = self.cache_node_map[nodes[cache_mask]]
+                node_feature[cache_mask] = self.cache_node_buffer[cached_node_index]
+                # fetch the uncached features
+                uncached_mask = ~cache_mask
+                if uncached_mask.sum() > 0:
+                    uncached_node_id = nodes[uncached_mask]
+                    uncached_node_id_unique, uncached_node_id_unique_index = torch.unique(
+                        uncached_node_id, return_inverse=True)
+
+                    if self.distributed:
+
+                        node_feat = self.kvstore_client.pull_collect(
+                            futures, masks, 'node')
+
+                        if self.pinned_nfeat_buffs is not None:
+                            # TODO: maybe fetch local and remote features separately
+                            self.pinned_nfeat_buffs[
+                                i][:uncached_node_id_unique.shape[0]] = node_feat
+                            uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                                self.device, non_blocking=True).float()
+                        else:
+                            uncached_node_feature = node_feat.to(
+                                self.device).float()
+                    else:
+                        if self.pinned_nfeat_buffs is not None:
+                            torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
+                                               out=self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]])
+                            uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
+                                self.device, non_blocking=True)
+                        else:
+                            uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
+                                self.device, non_blocking=True)
+                    node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
+
+                i += 1
+                b.srcdata['h'] = node_feature
+
+                if update_cache and uncached_mask.sum() > 0:
+                    self.update_node_cache(cached_node_index=cached_node_index,
+                                           uncached_node_id=uncached_node_id_unique,
+                                           uncached_node_feature=uncached_node_feature)
+
+            self.cache_node_ratio = hit_ratio_sum / i if i > 0 else 0
+
+        # Edge feature
+        if self.dim_edge_feat != 0:
+            i = 0
+            hit_ratio_sum = 0
+            for mfg in mfgs:
+                for b, (futures, masks) in zip(mfg, edge_futures):  # only have one layer
+                    edges = b.edata['ID']
+                    assert isinstance(edges, torch.Tensor)
+                    if len(edges) == 0:
+                        continue
+
+                    cache_mask = self.cache_edge_flag[edges]
+                    hit_ratio = torch.sum(cache_mask) / len(edges)
+                    hit_ratio_sum += hit_ratio
+
+                    edge_feature = torch.zeros(len(edges), self.dim_edge_feat,
+                                               dtype=torch.float32, device=self.device)
+
+                    # fetch the cached features
+                    cached_edge_index = self.cache_edge_map[edges[cache_mask]]
+                    edge_feature[cache_mask] = self.cache_edge_buffer[cached_edge_index]
+                    # fetch the uncached features
+                    uncached_mask = ~cache_mask
+                    uncached_edge_id = edges[uncached_mask]
+
+                    if len(uncached_edge_id) > 0:
+                        if self.distributed:
+                            # edge_features need to convert to nid first.
+                            # get the first_indices of the origin tensor in unique
+                            # pytorch should have this option like numpy !!
+                            uncached_edge_id_unique, uncached_edge_id_unique_index, counts = torch.unique(
+                                uncached_edge_id, return_inverse=True, return_counts=True)
+
+                            edge_feat = self.kvstore_client.pull_collect(
+                                futures, masks, 'edge')
+
+                            if self.pinned_efeat_buffs is not None:
+                                self.pinned_efeat_buffs[
+                                    i][:uncached_edge_id_unique.shape[0]] = edge_feat
+                                uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
+                                    self.device, non_blocking=True).float()
+                            else:
+                                uncached_edge_feature = edge_feat.to(
+                                    self.device).float()
+                        else:
+                            uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
+                                uncached_edge_id, return_inverse=True)
+                            if self.pinned_efeat_buffs is not None:
+                                torch.index_select(self.edge_feats, 0, uncached_edge_id_unique.to('cpu'),
+                                                   out=self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]])
+                                uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
+                                    self.device, non_blocking=True)
+                            else:
+                                uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
+                                    self.device, non_blocking=True)
+
+                        edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
+
+                    i += 1
+                    b.edata['f'] = edge_feature
+
+                    if update_cache and len(uncached_edge_id) > 0:
+                        self.update_edge_cache(cached_edge_index=cached_edge_index,
+                                               uncached_edge_id=uncached_edge_id_unique,
+                                               uncached_edge_feature=uncached_edge_feature)
+
+            self.cache_edge_ratio = hit_ratio_sum / i if i > 0 else 0
+
+            if target_edge_features:
+                if self.distributed:
+
+                    futures, masks = target_egde_futures
+                    target_edge_feat = self.kvstore_client.pull_collect(
+                        futures, masks, 'edge')
+
+                    self.target_edge_features.put(target_edge_feat.float())
+                    # self.target_edge_features = self.kvstore_client.pull(
+                    #     torch.from_numpy(eid), mode='edge', nid=nid).float()
+                else:
+                    # self.target_edge_features = self.edge_feats[eid]
+                    self.target_edge_features.put(self.edge_feats[eid])
+
+        return mfgs

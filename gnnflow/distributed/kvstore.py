@@ -282,6 +282,68 @@ class KVStoreClient:
             rpc.rpc_async('worker{}'.format(worker_rank),
                           graph_services.push_tensors, args=(partition_keys, partition_tensors, mode))
 
+    def pull_local(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
+        """
+        Pull tensors from the corresponding KVStore servers according to the partition table.
+
+        Args:
+            keys (torch.Tensor): The keys.
+            mode (bool): Decide to fetch node/edge features or memory.
+            nid (Optional[torch.Tensor]): If fetch edge features,
+                use nid to get the partition ids
+
+        Returns:
+            torch.Tensor: The tensors.
+        """
+        # dispatch different keys to different partitions
+        partition_table = self._partition_table
+        if mode == 'edge':
+            if nid is None:
+                raise ValueError(
+                    'Nid is None when fetching edge features'
+                )
+            # get the partition_ids using nid
+            partition_ids = partition_table[nid]
+        else:
+            partition_ids = partition_table[keys]
+
+        futures = []
+        masks = []
+        for partition_id in range(self._num_partitions):
+            partition_mask = partition_ids == partition_id
+            if partition_mask.sum() == 0:
+                continue
+            # nid and keys are in the same positions
+            partition_keys = keys[partition_mask].clone()
+
+            # local rank 0 in those partitions
+            worker_rank = partition_id * self._num_workers_per_machine
+            futures.append(rpc.rpc_async('worker{}'.format(worker_rank),
+                                         graph_services.pull_tensors, args=(partition_keys, mode)))
+            masks.append(partition_mask)
+
+        return futures, masks
+
+    def pull_collect(self, futures, masks, mode):
+        """
+        Pull tensors from the corresponding KVStore servers according to the partition table.
+
+        Args:
+            keys (torch.Tensor): The keys.
+            mode (bool): Decide to fetch node/edge features or memory.
+            nid (Optional[torch.Tensor]): If fetch edge features,
+                use nid to get the partition ids
+
+        Returns:
+            torch.Tensor: The tensors.
+        """
+        # collect pull results
+        pull_results = []
+        for future in futures:
+            pull_results.append(future.wait())
+
+        return self._merge_pull_results(pull_results, masks, mode)
+
     def pull(self, keys: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Pull tensors from the corresponding KVStore servers according to the partition table.

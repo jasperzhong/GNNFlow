@@ -31,7 +31,7 @@ from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, build_dynamic_graph, get_batch,
                            get_pinned_buffers, get_project_root_dir, load_feat,
                            load_partitioned_dataset, mfgs_to_cuda)
-from scripts.pipeline_distributed import feature_fetching, gnn_training, memory_fetching, memory_update, sample
+from scripts.pipeline_distributed import collect_sample_results, feature_fetching, feature_fetching_collect, feature_fetching_local, gnn_training, local_sample, memory_fetching, memory_update, sample
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -372,6 +372,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
     early_stopper = EarlyStopMonitor()
 
     sample_feature_queue = Queue()
+    # feature_collect_queue = Queue()
+    # collect_feature_queue = Queue()
     feature_memory_queue = Queue()
     memory_gnn_queue = Queue()
     gnn_update_queue = Queue()
@@ -399,6 +401,14 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                                  args.num_chunks, train_rand_sampler, args.world_size)
         sampler_thread = Thread(target=sample, args=(
             train_loader, sampler, sample_feature_queue), name='Sample')
+        # feature_local_thread = Thread(target=feature_fetching_local, args=(
+        #     cache, device, sample_feature_queue, feature_collect_queue), name='Feature')
+        # feature_collect_thread = Thread(target=feature_fetching_collect, args=(
+        #     cache, device, feature_collect_queue, feature_memory_queue), name='Feature_Collect')
+        # sampler_local_thread = Thread(target=local_sample, args=(
+        #     train_loader, sampler, local_collect_queue), name='Sample')
+        # sampler_collect_thread = Thread(target=collect_sample_results, args=(
+        #     sampler, local_collect_queue, collect_feature_queue), name='Sample')
         feature_thread = Thread(target=feature_fetching, args=(
             cache, device, sample_feature_queue, feature_memory_queue), name='Feature')
         memory_thread = Thread(target=memory_fetching, args=(
@@ -408,14 +418,22 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         memory_update_thread = Thread(target=memory_update, args=(
             model, args.distributed, cache, gnn_update_queue), name='update')
 
+        # sampler_thread.start()
         sampler_thread.start()
+        # sampler_collect_thread.start()
         feature_thread.start()
+        # feature_local_thread.start()
+        # feature_collect_thread.start()
         memory_thread.start()
         gnn_thread.start()
         memory_update_thread.start()
 
+        # sampler_thread.join()
         sampler_thread.join()
         feature_thread.join()
+        # sampler_collect_thread.join()
+        # feature_local_thread.join()
+        # feature_collect_thread.join()
         memory_thread.join()
         gnn_thread.join()
         memory_update_thread.join()

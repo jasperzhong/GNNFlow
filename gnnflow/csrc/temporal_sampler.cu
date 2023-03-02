@@ -102,6 +102,7 @@ SamplingResult TemporalSampler::SampleLayer(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps, uint32_t layer,
     uint32_t snapshot) {
+  py::gil_scoped_release release;  // release GIL
   // NB: it seems to be necessary to set the device again.
   CUDA_CALL(cudaSetDevice(device_));
 
@@ -260,7 +261,7 @@ SamplingResult TemporalSampler::SampleLayer(
     std::fill_n(sampling_result.row.begin() + row_offsets[i], num_sampled[i],
                 i);
   }
-
+  py::gil_scoped_acquire acquire;  // Recover GIL
   return sampling_result;
 }
 

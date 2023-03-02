@@ -178,8 +178,10 @@ def load_partitioned_dataset(dataset: str, data_dir: Optional[str] = None, rank:
         train_data = pd.read_csv(train_path)
         assert isinstance(train_data, pd.DataFrame)
     val_data = pd.read_csv(val_path)
+    val_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
     assert isinstance(val_data, pd.DataFrame)
     test_data = pd.read_csv(test_path)
+    test_data.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
     assert isinstance(test_data, pd.DataFrame)
 
     return train_data, val_data, test_data
