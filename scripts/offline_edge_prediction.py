@@ -5,6 +5,7 @@ import os
 import random
 import threading
 import time
+from collections import OrderedDict
 
 import GPUtil
 import numpy as np
@@ -57,6 +58,8 @@ parser.add_argument("--save-node-embeddings-frequency", type=int, default=100,
                     help="save node embedding frequency")
 parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
                     help="save node embedding num last iter")
+parser.add_argument("--max-staleness", type=int, default=3600,
+                    help="max staleness for node embedding cache")
 
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
@@ -77,6 +80,40 @@ checkpoint_path = os.path.join(get_project_root_dir(),
                                '{}.pt'.format(args.model))
 
 training_nodes = set()
+
+
+class TimeBoundedLRU:
+    "LRU Cache that invalidates and refreshes old entries."
+
+    def __init__(self, max_size, max_staleness):
+        self.cache = OrderedDict()      # { node: (timestamp, result)}
+        self.max_size = max_size
+        self.max_staleness = max_staleness
+        logging.debug("node embedding cache size: {}".format(max_size))
+
+    def get(self, nodes, tss):
+        mask, embeds = np.zeros(len(nodes), dtype=np.bool_), []
+        for i, node, ts in enumerate(zip(nodes, tss)):
+            if node in self.cache:
+                self.cache.move_to_end(args)
+                prev_ts, result = self.cache[args]
+                if ts - prev_ts <= self.max_staleness:
+                    mask[i] = True
+                    embeds.append(result)
+                    continue
+            mask[i] = False
+        logging.debug("node embedding cache hit rate: {}".format(
+            np.sum(mask) / len(nodes)))
+        return mask, np.stack(embeds) 
+
+    def update(self, nodes, tss, embeds):
+        for node, ts, embed in zip(nodes, tss, embeds):
+            self.cache[node] = (ts, embed)
+            if len(self.cache) > self.max_size:
+                self.cache.popitem(last=False)
+
+    def clear(self):
+        self.cache.clear()
 
 
 def set_seed(seed):
@@ -341,6 +378,9 @@ def main():
     else:
         cache.init_cache()
 
+    node_embed_cache = TimeBoundedLRU(max_size=int(
+        args.node_cache_ratio*num_nodes), max_staleness=args.max_staleness)
+
     logging.info("cache mem size: {:.2f} MB".format(
         cache.get_mem_size() / 1000 / 1000))
 
@@ -348,7 +388,7 @@ def main():
     criterion = torch.nn.BCEWithLogitsLoss()
 
     best_e = train(train_loader, val_loader, sampler,
-                   model, optimizer, criterion, cache, device)
+                   model, optimizer, criterion, cache, node_embed_cache, device)
 
     logging.info('Loading model at epoch {}...'.format(best_e))
     ckpt = torch.load(checkpoint_path)
@@ -377,7 +417,7 @@ def main():
 
 
 def train(train_loader, val_loader, sampler, model, optimizer, criterion,
-          cache, device):
+          cache, node_embed_cache, device):
     global training
     best_ap = 0
     best_e = 0
@@ -409,18 +449,22 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_model_train_time = 0
         total_samples = 0
 
+        node_embed_cache.clear()
+
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
+            mask, cache_embeds = node_embed_cache.get(target_nodes, ts)
+
             # Sample
             sample_start_time = time.time()
-            mfgs = sampler.sample(target_nodes, ts)
+            mfgs = sampler.sample(target_nodes[~mask], ts[~mask])
             total_sampling_time += time.time() - sample_start_time
 
             # Feature
             mfgs_to_cuda(mfgs, device)
             feature_start_time = time.time()
             mfgs = cache.fetch_feature(
-                mfgs, eid)
+                mfgs, eid[~mask])
             total_feature_fetch_time += time.time() - feature_start_time
 
             if args.use_memory:
@@ -445,7 +489,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # Train
             model_train_start_time = time.time()
             optimizer.zero_grad()
-            pred_pos, pred_neg = model(mfgs)
+            # ugly
+            embeds = model(mfgs, return_embed=True)
+            embeds = torch.cat([cache_embeds, embeds], dim=0)
+            pred_pos, pred_neg = model.edge_predictor(embeds)
+
             total_model_train_time += time.time() - model_train_start_time
 
             if args.use_memory:
@@ -475,24 +523,24 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
 
-            if args.rank == 0:
-                times = i // args.save_node_embeddings_frequency * \
-                    args.save_node_embeddings_frequency
-                if i % args.save_node_embeddings_frequency == 0 or \
-                        i == (times + args.save_node_embeddings_num_last_iter):
-                    # ugly
-                    cur_ts = float(ts[-1])
-                    save_node_embeddings(np.array(list(training_nodes)), cur_ts, sampler,
-                                         model, cache, device, e, i)
+            # if args.rank == 0:
+            #     times = i // args.save_node_embeddings_frequency * \
+            #         args.save_node_embeddings_frequency
+            #     if i % args.save_node_embeddings_frequency == 0 or \
+            #             i == (times + args.save_node_embeddings_num_last_iter):
+            #         # ugly
+            #         cur_ts = float(ts[-1])
+            #         save_node_embeddings(np.array(list(training_nodes)), cur_ts, sampler,
+            #                              model, cache, device, e, i)
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                            cache_node_ratio_sum, total_samples,
-                                            total_sampling_time, total_feature_fetch_time,
-                                            total_memory_update_time,
-                                            total_memory_write_back_time,
-                                            total_model_train_time
+                                           cache_node_ratio_sum, total_samples,
+                                           total_sampling_time, total_feature_fetch_time,
+                                           total_memory_update_time,
+                                           total_memory_write_back_time,
+                                           total_model_train_time
                                             ]).to(device)
                     torch.distributed.all_reduce(metrics)
                     metrics /= args.world_size
@@ -524,17 +572,17 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         if args.distributed:
             metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples,
-                                    total_sampling_time, total_feature_fetch_time,
-                                    total_memory_update_time,
-                                    total_memory_write_back_time,
-                                    total_model_train_time]).to(device)
+                                   cache_node_ratio_sum, total_samples,
+                                   total_sampling_time, total_feature_fetch_time,
+                                   total_memory_update_time,
+                                   total_memory_write_back_time,
+                                   total_model_train_time]).to(device)
             torch.distributed.all_reduce(metrics)
             metrics /= args.world_size
-            val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples, total_sampling_time, total_feature_fetch_time, \
-                total_memory_update_time, total_memory_write_back_time, \
-                total_model_train_time = metrics.tolist()
+            val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum,
+            total_samples, total_sampling_time, total_feature_fetch_time,
+            total_memory_update_time, total_memory_write_back_time,
+            total_model_train_time = metrics.tolist()
 
         if args.rank == 0:
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s".format(
