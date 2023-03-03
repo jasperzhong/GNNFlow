@@ -7,9 +7,9 @@ import torch
 model = 'TGN'
 dataset = 'GDELT'
 layer = 1
-epoch = 1
+epoch = 0
 
-plt.rcParams.update({'font.size': 10, 'font.family': 'Myriad Pro'})
+# plt.rcParams.update({'font.size': 10, 'font.family': 'Myriad Pro'})
 
 
 def pairwise(iterable):
@@ -72,7 +72,7 @@ def load_node_memory():
     num_first_time_update_list = []
     for i, (x, y) in enumerate(pairwise(files[:])):
         # plot interval
-        if i % 2 == 1:
+        if i % 20 != 0:
             continue
         x = 'memory/' + x
         y = 'memory/' + y
@@ -116,61 +116,61 @@ if __name__ == '__main__':
         all_nodes = len(cos_sim)
         cos_sim = cos_sim[cos_sim != 0]
         cos_sim = cos_sim[cos_sim < 0.99]
-        updated_nodes = len(cos_sim)
-        all_updated_nodes = updated_nodes + num_first_time_update
-        all_updated_nodes_list.append(all_updated_nodes)
+        # updated_nodes = len(cos_sim)
+        # all_updated_nodes = updated_nodes + num_first_time_update
+        # all_updated_nodes_list.append(all_updated_nodes)
 
-        # >0.75 <0.95
-        cos_sim = cos_sim[cos_sim < 0.99]
-        cos_sim = cos_sim[cos_sim > 0.75]
-        update_percent = len(cos_sim) / all_updated_nodes
-        update_percent_list.append(update_percent)
-        all_percent = len(cos_sim) / all_nodes
-        all_percent_list.append(all_percent)
-        # ax.plot(np.arange(len(cos_sim)), cos_sim,
-        #         label='iter {}'.format(epoch_iter[1]))
+        # # >0.75 <0.95
+        # cos_sim = cos_sim[cos_sim < 0.99]
+        # cos_sim = cos_sim[cos_sim > 0.75]
+        # update_percent = len(cos_sim) / all_updated_nodes
+        # update_percent_list.append(update_percent)
+        # all_percent = len(cos_sim) / all_nodes
+        # all_percent_list.append(all_percent)
+        ax.plot(np.arange(len(cos_sim)), cos_sim,
+                label='iter {}'.format(epoch_iter[1]))
     # ax.plot(np.arange(0, 8100, 400),
     #         all_updated_nodes_list, label='all updated nodes num')
     # ax.plot(np.arange(0, 8100, 400),
     #         num_first_time_update_list, label='first updated nodes num')
 
-    ax.plot(np.arange(0, 8100, 400),
-            update_percent_list, label='percent of cos >0.75 <0.95 in updated nodes')
-    ax.plot(np.arange(0, 8100, 400),
-            all_percent_list, label='percent of cos >0.75 <0.95 in all nodes')
+    # ax.plot(np.arange(0, 8100, 400),
+    #         update_percent_list, label='percent of cos >0.75 <0.95 in updated nodes')
+    # ax.plot(np.arange(0, 8100, 400),
+    #         all_percent_list, label='percent of cos >0.75 <0.95 in all nodes')
 
-    print('all noeds: {}'.format(all_nodes))
-    print('all updated nodes: {}'.format(all_updated_nodes_list))
-    print('all updated nodes percent: {}'.format(
-        np.array(all_updated_nodes_list) / all_nodes))
-    print('>0.75 <0.95 in updated nodes percent: {}'.format(update_percent_list))
-    print('>0.75 <0.95 in all nodes percent: {}'.format(all_percent_list))
+    # print('all noeds: {}'.format(all_nodes))
+    # print('all updated nodes: {}'.format(all_updated_nodes_list))
+    # print('all updated nodes percent: {}'.format(
+    #     np.array(all_updated_nodes_list) / all_nodes))
+    # print('>0.75 <0.95 in updated nodes percent: {}'.format(update_percent_list))
+    # print('>0.75 <0.95 in all nodes percent: {}'.format(all_percent_list))
 
-    ax.set_xlabel('iteration')
-    ax.set_ylabel('Num nodes')
-    print('len{}'.format(len(all_updated_nodes_list)))
-    ax.legend(ncol=4)
-    # ax.set_xlim((0, len(all_percent_list)))
-    # print(len(np.arange(0, 8100, 400)))
-    ax.set_xticks(np.arange(0, 8100, 400))
-    # ax.set_ylim((-1, 1))
-    ax.grid(True, color='gray', linestyle='--')
-    # ax.set_title("Cos similarities of node memory of {} on {} (epoch {})".format(
-    #     model, dataset, epoch))
-    # plt.savefig('nid_cos_sim_{}_{}_epoch{}.png'.format(
-    #     model, dataset, epoch), dpi=400, bbox_inches='tight')
-    plt.savefig('percent_{}_{}_epoch{}.png'.format(
-        model, dataset, epoch), dpi=400, bbox_inches='tight')
-
-    # ax.set_xlabel('Rank')
-    # ax.set_ylabel('Cosine Similarity')
+    # ax.set_xlabel('iteration')
+    # ax.set_ylabel('Num nodes')
+    # print('len{}'.format(len(all_updated_nodes_list)))
     # ax.legend(ncol=4)
-    # ax.set_xlim((0, len(cos_sim)))
-    # ax.set_ylim((-1, 1))
+    # # ax.set_xlim((0, len(all_percent_list)))
+    # # print(len(np.arange(0, 8100, 400)))
+    # ax.set_xticks(np.arange(0, 8100, 400))
+    # # ax.set_ylim((-1, 1))
     # ax.grid(True, color='gray', linestyle='--')
-    # ax.set_title("Cos similarities of node memory of {} on {} (epoch {})".format(
-    #     model, dataset, epoch))
+    # # ax.set_title("Cos similarities of node memory of {} on {} (epoch {})".format(
+    # #     model, dataset, epoch))
     # # plt.savefig('nid_cos_sim_{}_{}_epoch{}.png'.format(
     # #     model, dataset, epoch), dpi=400, bbox_inches='tight')
-    # plt.savefig('target_cos_sim_{}_{}_epoch{}.png'.format(
+    # plt.savefig('percent_{}_{}_epoch{}.png'.format(
     #     model, dataset, epoch), dpi=400, bbox_inches='tight')
+
+    ax.set_xlabel('Rank')
+    ax.set_ylabel('Cosine Similarity')
+    ax.legend(ncol=4)
+    ax.set_xlim((0, len(cos_sim)))
+    ax.set_ylim((-1, 1))
+    ax.grid(True, color='gray', linestyle='--')
+    ax.set_title("Cos similarities of node memory of {} on {} (epoch {})".format(
+        model, dataset, epoch))
+    # plt.savefig('nid_cos_sim_{}_{}_epoch{}.png'.format(
+    #     model, dataset, epoch), dpi=400, bbox_inches='tight')
+    plt.savefig('target_cos_sim_{}_{}_epoch{}_all.png'.format(
+        model, dataset, epoch), dpi=400, bbox_inches='tight')

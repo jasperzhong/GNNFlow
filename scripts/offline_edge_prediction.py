@@ -54,7 +54,7 @@ parser.add_argument("--print-freq", help="print frequency",
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--ingestion-batch-size", type=int, default=1000,
                     help="ingestion batch size")
-parser.add_argument("--save-node-embeddings-frequency", type=int, default=500,
+parser.add_argument("--save-node-embeddings-frequency", type=int, default=400,
                     help="save node embedding frequency")
 parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
                     help="save node embedding num last iter")
