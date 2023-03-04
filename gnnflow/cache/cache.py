@@ -104,7 +104,7 @@ class Cache:
         self.distributed = distributed
         # self.target_edge_features = None
         # TODO: use queue
-        self.target_edge_features = Queue(maxsize=10)
+        self.target_edge_features = Queue(maxsize=20)
 
         # used to extract src_node id of input eid
         self.neg_sample_ratio = neg_sample_ratio

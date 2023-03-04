@@ -46,8 +46,7 @@ PYBIND11_MODULE(libgnnflow, m) {
            py::arg("blocks_to_preallocate"), py::arg("insertion_policy"),
            py::arg("device"), py::arg("adaptive_block_size"))
       .def("add_edges", &DynamicGraph::AddEdges, py::arg("source_vertices"),
-           py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"),
-           py::call_guard<py::gil_scoped_release>())
+           py::arg("target_vertices"), py::arg("timestamps"), py::arg("eids"))
       .def("offload_old_blocks", &DynamicGraph::OffloadOldBlocks,
            py::arg("timestamp"), py::arg("to_file") = false)
       .def("num_vertices", &DynamicGraph::num_nodes)
@@ -114,10 +113,8 @@ PYBIND11_MODULE(libgnnflow, m) {
            py::arg("dgraph"), py::arg("fanouts"), py::arg("sampling_policy"),
            py::arg("num_snapshots"), py::arg("snapshot_time_window"),
            py::arg("prop_time"), py::arg("seed"))
-      .def("sample", &TemporalSampler::Sample,
-           py::call_guard<py::gil_scoped_release>())
-      .def("sample_layer", &TemporalSampler::SampleLayer,
-           py::call_guard<py::gil_scoped_release>());
+      .def("sample", &TemporalSampler::Sample)
+      .def("sample_layer", &TemporalSampler::SampleLayer);
 
   py::class_<KVStore>(m, "KVStore")
       .def(py::init<>())

@@ -261,13 +261,14 @@ SamplingResult TemporalSampler::SampleLayer(
     std::fill_n(sampling_result.row.begin() + row_offsets[i], num_sampled[i],
                 i);
   }
-  py::gil_scoped_acquire acquire;  // Recover GIL
+  // py::gil_scoped_acquire acquire;  // Recover GIL
   return sampling_result;
 }
 
 std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
     const std::vector<NIDType>& dst_nodes,
     const std::vector<TimestampType>& dst_timestamps) {
+  py::gil_scoped_release release;  // release GIL
   CHECK_EQ(dst_nodes.size(), dst_timestamps.size());
   std::vector<std::vector<SamplingResult>> results;
 
@@ -290,6 +291,7 @@ std::vector<std::vector<SamplingResult>> TemporalSampler::Sample(
       results.push_back(layer_results);
     }
   }
+  py::gil_scoped_acquire acquire;  // Recover GIL
   return results;
 }
 
