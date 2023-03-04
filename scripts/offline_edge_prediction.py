@@ -168,7 +168,11 @@ def main():
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
     model_config, data_config = get_default_config(args.model, args.data)
-    model_config["snapshot_time_window"] = args.snapshot_time_window
+    if model_config["snapshot_time_window"] > 0 and args.data == "GDELT":
+        model_config["snapshot_time_window"] = 25
+    else:
+        model_config["snapshot_time_window"] = args.snapshot_time_window
+    logging.info("snapshot_time_window's value is {}".format(model_config["snapshot_time_window"]))
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
@@ -227,7 +231,8 @@ def main():
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank)
 
-    torch.distributed.barrier()
+    if args.distributed:
+        torch.distributed.barrier()
     # insert in batch
     for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
         batch = full_data[i:i + args.ingestion_batch_size]
@@ -237,7 +242,8 @@ def main():
         eids = batch["eid"].values.astype(np.int64)
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
                          eids, add_reverse=False)
-        torch.distributed.barrier()
+        if args.distributed:
+            torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
@@ -344,6 +350,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         gpu_load_thread.start()
 
     logging.info('Start training...')
+    if args.distributed:
+        torch.distributed.barrier()
+
     for e in range(args.epoch):
         model.train()
         cache.reset()
