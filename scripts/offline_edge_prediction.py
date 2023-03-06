@@ -43,7 +43,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=50)
+                    type=int, default=10)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -58,8 +58,6 @@ parser.add_argument("--save-node-embeddings-frequency", type=int, default=100,
                     help="save node embedding frequency")
 parser.add_argument("--save-node-embeddings-num-last-iter", type=int, default=20,
                     help="save node embedding num last iter")
-parser.add_argument("--max-staleness", type=int, default=3600,
-                    help="max staleness for node embedding cache")
 
 # optimization
 parser.add_argument("--cache", choices=cache_names, help="feature cache:" +
@@ -70,6 +68,14 @@ parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="cache ratio for node feature cache")
 parser.add_argument("--snapshot-time-window", type=float, default=0,
                     help="time window for sampling")
+parser.add_argument("--node-embed-cache-ratio", type=float, default=0,
+                    help="cache ratio for node embedding cache")
+parser.add_argument("--max-staleness", type=int, default=0,
+                    help="max staleness for node embedding cache")
+parser.add_argument("--cache-delay-epoch", type=int, default=0,
+                    help="delay epoch for cache")
+parser.add_argument("--cache-delay-iter", type=int, default=0,
+                    help="delay iter for cache")
 
 args = parser.parse_args()
 
@@ -81,32 +87,40 @@ checkpoint_path = os.path.join(get_project_root_dir(),
 
 training_nodes = set()
 
-
 class TimeBoundedLRU:
     "LRU Cache that invalidates and refreshes old entries."
 
-    def __init__(self, max_size, max_staleness):
+    def __init__(self, max_size, max_staleness, profile=False):
         self.cache = OrderedDict()      # { node: (timestamp, result)}
         self.max_size = max_size
         self.max_staleness = max_staleness
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.profile = profile
         logging.debug("node embedding cache size: {}".format(max_size))
 
     def get(self, nodes, tss):
         mask, embeds = np.zeros(len(nodes), dtype=np.bool_), []
-        for i, node, ts in enumerate(zip(nodes, tss)):
+        for i, (node, ts) in enumerate(zip(nodes, tss)):
             if node in self.cache:
-                self.cache.move_to_end(args)
-                prev_ts, result = self.cache[args]
+                self.cache.move_to_end(node)
+                prev_ts, result = self.cache[node]
                 if ts - prev_ts <= self.max_staleness:
                     mask[i] = True
                     embeds.append(result)
                     continue
             mask[i] = False
-        logging.debug("node embedding cache hit rate: {}".format(
-            np.sum(mask) / len(nodes)))
-        return mask, np.stack(embeds) 
 
-    def update(self, nodes, tss, embeds):
+        self.cache_hits += np.sum(mask)
+        self.cache_misses += np.sum(~mask)
+        return mask, torch.stack(embeds) if embeds else None
+
+    def put(self, nodes, tss, embeds):
+        embeds = embeds.detach().clone()
+        if self.profile:
+            logging.debug("unique nodes={} / total_nodes={}".format(len(set(nodes)), len(nodes)))
+        nodes = nodes.tolist()
+        tss = tss.tolist()
         for node, ts, embed in zip(nodes, tss, embeds):
             self.cache[node] = (ts, embed)
             if len(self.cache) > self.max_size:
@@ -114,6 +128,9 @@ class TimeBoundedLRU:
 
     def clear(self):
         self.cache.clear()
+
+    def hit_rate(self):
+        return self.cache_hits / (self.cache_hits + self.cache_misses)
 
 
 def set_seed(seed):
@@ -378,8 +395,11 @@ def main():
     else:
         cache.init_cache()
 
-    node_embed_cache = TimeBoundedLRU(max_size=int(
-        args.node_cache_ratio*num_nodes), max_staleness=args.max_staleness)
+    if args.node_embed_cache_ratio > 0:
+        node_embed_cache = TimeBoundedLRU(max_size=int(
+            args.node_embed_cache_ratio*num_nodes), max_staleness=args.max_staleness)
+    else:
+        node_embed_cache = None
 
     logging.info("cache mem size: {:.2f} MB".format(
         cache.get_mem_size() / 1000 / 1000))
@@ -428,6 +448,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         gpu_load_thread = threading.Thread(target=gpu_load)
         gpu_load_thread.start()
 
+    throughput_list = []
+    val_ap_list = []
+
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
@@ -449,11 +472,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_model_train_time = 0
         total_samples = 0
 
-        node_embed_cache.clear()
-
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
-            mask, cache_embeds = node_embed_cache.get(target_nodes, ts)
+            if e >= args.cache_delay_epoch and node_embed_cache is not None:
+                mask, cache_embeds = node_embed_cache.get(target_nodes, ts)
+            else:
+                mask = np.zeros_like(target_nodes, dtype=np.bool_)
 
             # Sample
             sample_start_time = time.time()
@@ -464,7 +488,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             mfgs_to_cuda(mfgs, device)
             feature_start_time = time.time()
             mfgs = cache.fetch_feature(
-                mfgs, eid[~mask])
+                mfgs, eid[~mask[:len(eid)]])
             total_feature_fetch_time += time.time() - feature_start_time
 
             if args.use_memory:
@@ -490,8 +514,19 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             model_train_start_time = time.time()
             optimizer.zero_grad()
             # ugly
-            embeds = model(mfgs, return_embed=True)
-            embeds = torch.cat([cache_embeds, embeds], dim=0)
+            uncached_embeds = model(mfgs, return_embed=True)[-1]
+            if e >= args.cache_delay_epoch and node_embed_cache is not None and cache_embeds is not None:
+                embeds = torch.zeros((len(target_nodes), uncached_embeds.shape[1]),
+                                     device=device)
+                embeds[mask] = cache_embeds
+                embeds[~mask] = uncached_embeds
+
+            else:
+                embeds = uncached_embeds
+
+            if e >= args.cache_delay_epoch and node_embed_cache is not None and i >= args.cache_delay_iter:
+                node_embed_cache.put(target_nodes[~mask], ts[~mask], uncached_embeds)
+
             pred_pos, pred_neg = model.edge_predictor(embeds)
 
             total_model_train_time += time.time() - model_train_start_time
@@ -579,10 +614,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                                    total_model_train_time]).to(device)
             torch.distributed.all_reduce(metrics)
             metrics /= args.world_size
-            val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum,
-            total_samples, total_sampling_time, total_feature_fetch_time,
-            total_memory_update_time, total_memory_write_back_time,
-            total_model_train_time = metrics.tolist()
+            val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
+                total_samples, total_sampling_time, total_feature_fetch_time, \
+                total_memory_update_time, total_memory_write_back_time, \
+                total_model_train_time = metrics.tolist()
+
+        throughput_list.append(total_samples * args.world_size / epoch_time)
+        val_ap_list.append(val_ap)
 
         if args.rank == 0:
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s".format(
@@ -616,6 +654,24 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.local_rank == 0:
         training = False
         gpu_load_thread.join()
+
+    if args.rank == 0:
+        throughput_list = np.array(throughput_list)
+        val_ap_list = np.array(val_ap_list)
+        out_dir = "tmp_res/yczhong_delay_fix/"
+        os.makedirs(out_dir, exist_ok=True)
+
+        logging.debug('Throughput list: {}'.format(throughput_list))
+        logging.debug('Val AP list: {}'.format(val_ap_list))
+        postfix = '||model{}||dataset{}||cache_ratio{}||max_staleness{}||delay_epoch{}||delay_iter{}.npy'.format(
+            args.model, args.data, args.node_embed_cache_ratio, args.max_staleness, args.cache_delay_epoch, args.cache_delay_iter)
+        np.save(out_dir+'throughput'+postfix, throughput_list)
+        np.save(out_dir+'val_ap'+postfix, val_ap_list)
+
+        if node_embed_cache is not None:
+            hit_rate = node_embed_cache.hit_rate()
+            logging.info("Node embedding cache hit rate: {}".format(hit_rate))
+            np.save(out_dir+'node_embed_cache_hit_rate'+postfix, hit_rate)
 
     return best_e
 
