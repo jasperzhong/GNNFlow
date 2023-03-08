@@ -69,8 +69,6 @@ parser.add_argument("--snapshot-time-window", type=float, default=0,
                     help="time window for sampling")
 parser.add_argument("--node-embed-cache-ratio", type=float, default=0,
                     help="cache ratio for node embedding cache")
-parser.add_argument("--max-staleness", type=int, default=0,
-                    help="max staleness for node embedding cache")
 parser.add_argument("--cache-delay-epoch", type=int, default=0,
                     help="delay epoch for cache")
 parser.add_argument("--cache-delay-iter", type=int, default=0,
@@ -351,7 +349,7 @@ def main():
 
     if args.node_embed_cache_ratio > 0:
         node_embed_cache = caches.NodeEmbedCache(
-            args.node_embed_cache_ratio, num_nodes, device, dim_node)
+            args.node_embed_cache_ratio, num_nodes, device, model_config['dim_embed'])
     else:
         node_embed_cache = None
 
@@ -425,6 +423,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_memory_write_back_time = 0
         total_model_train_time = 0
         total_samples = 0
+
+        if args.model == 'TGN' and node_embed_cache is not None:
+            node_embed_cache.reset()
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
@@ -611,13 +612,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         throughput_list = np.array(throughput_list)
         val_ap_list = np.array(val_ap_list)
-        out_dir = "tmp_res/yczhong_delay_fix3/"
+        out_dir = "tmp_res/yczhong_delay_bench/"
         os.makedirs(out_dir, exist_ok=True)
 
         logging.debug('Throughput list: {}'.format(throughput_list))
         logging.debug('Val AP list: {}'.format(val_ap_list))
-        postfix = '||model{}||dataset{}||cache_ratio{}||max_staleness{}||delay_epoch{}||delay_iter{}.npy'.format(
-            args.model, args.data, args.node_embed_cache_ratio, args.max_staleness, args.cache_delay_epoch, args.cache_delay_iter)
+        postfix = '||model{}||dataset{}||cache_ratio{}||delay_epoch{}||delay_iter{}.npy'.format(
+            args.model, args.data, args.node_embed_cache_ratio, args.cache_delay_epoch, args.cache_delay_iter)
         np.save(out_dir+'throughput'+postfix, throughput_list)
         np.save(out_dir+'val_ap'+postfix, val_ap_list)
 

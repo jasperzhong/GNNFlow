@@ -33,6 +33,15 @@ class NodeEmbedCache:
         self.hit_count = 0
         self.miss_count = 0
 
+    def reset(self):
+        """
+        Reset cache
+        """
+        self.cache_node_flag.fill_(False)
+        self.cache_node_map.fill_(-1)
+        self.cache_index_to_node_id.fill_(-1)
+        self.cache_node_count.fill_(0)
+
     def get(self, nodes: np.ndarray) -> Tuple[Optional[torch.Tensor], np.ndarray]:
         """
         Get node embeddings from cache
@@ -44,6 +53,7 @@ class NodeEmbedCache:
             node_embeds: Node embeddings
             uncached_mask: Mask of uncached nodes
         """
+        nodes = torch.from_numpy(nodes).to(self.device)
         cache_mask = self.cache_node_flag[nodes]
 
         self.hit_count += cache_mask.sum().item()
@@ -78,8 +88,10 @@ class NodeEmbedCache:
         else:
             num_node_to_cache = len(uncached_nodes)
 
-        node_id_to_cache = uncached_nodes[:num_node_to_cache]
-        node_embed_to_cache = uncached_node_embeds[:num_node_to_cache]
+        node_id_to_cache = torch.from_numpy(uncached_nodes[:num_node_to_cache]).to(
+            self.device)
+        node_embed_to_cache = uncached_node_embeds[:num_node_to_cache].detach(
+        ).clone()
 
         # update cache
         removing_cache_index = torch.topk(
