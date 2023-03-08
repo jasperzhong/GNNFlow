@@ -351,8 +351,8 @@ def main():
         cache.init_cache()
 
     if args.node_embed_cache_ratio > 0:
-        node_embed_cache = TimeBoundedLRU(max_size=int(
-            args.node_embed_cache_ratio*num_nodes), max_staleness=args.max_staleness)
+        node_embed_cache = caches.NodeEmbedCache(
+            args.node_embed_cache_ratio, num_nodes, device, dim_node)
     else:
         node_embed_cache = None
 
@@ -430,20 +430,22 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(train_loader):
             if e >= args.cache_delay_epoch and node_embed_cache is not None:
-                mask, cache_embeds = node_embed_cache.get(target_nodes, ts)
+                node_embeds, uncached_mask = node_embed_cache.get(target_nodes)
             else:
-                mask = np.zeros_like(target_nodes, dtype=np.bool_)
+                node_embeds = None
+                uncached_mask = np.ones_like(target_nodes, dtype=np.bool_)
 
             # Sample
             sample_start_time = time.time()
-            mfgs = sampler.sample(target_nodes[~mask], ts[~mask])
+            mfgs = sampler.sample(
+                target_nodes[uncached_mask], ts[uncached_mask])
             total_sampling_time += time.time() - sample_start_time
 
             # Feature
             mfgs_to_cuda(mfgs, device)
             feature_start_time = time.time()
             mfgs = cache.fetch_feature(
-                mfgs, eid[~mask[:len(eid)]])
+                mfgs, eid[uncached_mask[:len(eid)]])
             total_feature_fetch_time += time.time() - feature_start_time
 
             if args.use_memory:
@@ -470,19 +472,16 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             optimizer.zero_grad()
             # ugly
             uncached_embeds = model(mfgs, return_embed=True)[-1]
-            if e >= args.cache_delay_epoch and node_embed_cache is not None and cache_embeds is not None:
-                embeds = torch.zeros((len(target_nodes), uncached_embeds.shape[1]),
-                                     device=device)
-                embeds[mask] = cache_embeds
-                embeds[~mask] = uncached_embeds
-
+            if e >= args.cache_delay_epoch and node_embed_cache is not None and node_embeds is not None:
+                node_embeds[uncached_mask] = uncached_embeds
             else:
-                embeds = uncached_embeds
+                node_embeds = uncached_embeds
 
             if e >= args.cache_delay_epoch and node_embed_cache is not None and i >= args.cache_delay_iter:
-                node_embed_cache.put(target_nodes[~mask], ts[~mask], uncached_embeds)
+                node_embed_cache.put(
+                    target_nodes[uncached_mask], uncached_embeds)
 
-            pred_pos, pred_neg = model.edge_predictor(embeds)
+            pred_pos, pred_neg = model.edge_predictor(node_embeds)
 
             total_model_train_time += time.time() - model_train_start_time
 
@@ -613,7 +612,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         throughput_list = np.array(throughput_list)
         val_ap_list = np.array(val_ap_list)
-        out_dir = "tmp_res/yczhong_delay_fix2/"
+        out_dir = "tmp_res/yczhong_delay_fix3/"
         os.makedirs(out_dir, exist_ok=True)
 
         logging.debug('Throughput list: {}'.format(throughput_list))
