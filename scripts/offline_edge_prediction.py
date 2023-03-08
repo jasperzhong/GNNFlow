@@ -5,7 +5,6 @@ import os
 import random
 import threading
 import time
-from collections import OrderedDict
 
 import GPUtil
 import numpy as np

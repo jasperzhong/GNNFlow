@@ -13,7 +13,7 @@ for param in param_space:
     print(param)
     os.system("python3 offline_edge_prediction.py --model TGAT --data REDDIT --cache LRUCache --ingestion-batch-size 10000000  --node-embed-cache-ratio {} --max-staleness {} --cache-delay-epoch {} --cache-delay-iter {}".format(*param))
 
-# os.system("python3 offline_edge_prediction.py --model TGAT --data REDDIT --cache LRUCache --ingestion-batch-size 10000000  --node-embed-cache-ratio 0")
+os.system("python3 offline_edge_prediction.py --model TGAT --data REDDIT --cache LRUCache --ingestion-batch-size 10000000  --node-embed-cache-ratio 0")
 """
 1. cache hit rate
 2. val ap/auc 
