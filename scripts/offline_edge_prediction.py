@@ -87,51 +87,6 @@ checkpoint_path = os.path.join(get_project_root_dir(),
 
 training_nodes = set()
 
-class TimeBoundedLRU:
-    "LRU Cache that invalidates and refreshes old entries."
-
-    def __init__(self, max_size, max_staleness, profile=False):
-        self.cache = OrderedDict()      # { node: (timestamp, result)}
-        self.max_size = max_size
-        self.max_staleness = max_staleness
-        self.cache_hits = 0
-        self.cache_misses = 0
-        self.profile = profile
-        logging.debug("node embedding cache size: {}".format(max_size))
-
-    def get(self, nodes, tss):
-        mask, embeds = np.zeros(len(nodes), dtype=np.bool_), []
-        for i, (node, ts) in enumerate(zip(nodes, tss)):
-            if node in self.cache:
-                self.cache.move_to_end(node)
-                prev_ts, result = self.cache[node]
-                if ts - prev_ts <= self.max_staleness:
-                    mask[i] = True
-                    embeds.append(result)
-                    continue
-            mask[i] = False
-
-        self.cache_hits += np.sum(mask)
-        self.cache_misses += np.sum(~mask)
-        return mask, torch.stack(embeds) if embeds else None
-
-    def put(self, nodes, tss, embeds):
-        embeds = embeds.detach().clone()
-        if self.profile:
-            logging.debug("unique nodes={} / total_nodes={}".format(len(set(nodes)), len(nodes)))
-        nodes = nodes.tolist()
-        tss = tss.tolist()
-        for node, ts, embed in zip(nodes, tss, embeds):
-            self.cache[node] = (ts, embed)
-            if len(self.cache) > self.max_size:
-                self.cache.popitem(last=False)
-
-    def clear(self):
-        self.cache.clear()
-
-    def hit_rate(self):
-        return self.cache_hits / (self.cache_hits + self.cache_misses)
-
 
 def set_seed(seed):
     random.seed(seed)
@@ -658,7 +613,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         throughput_list = np.array(throughput_list)
         val_ap_list = np.array(val_ap_list)
-        out_dir = "tmp_res/yczhong_delay_fix/"
+        out_dir = "tmp_res/yczhong_delay_fix2/"
         os.makedirs(out_dir, exist_ok=True)
 
         logging.debug('Throughput list: {}'.format(throughput_list))
