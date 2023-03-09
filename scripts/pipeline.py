@@ -19,10 +19,40 @@ def sample(train_loader, sampler, queue_out):
     # logging.info('Sample in one epoch done')
 
 
-global mfgs
+def left_training(mfgs, eid, model, device, cache, distributed, optimizer, criterion):
+    mfgs_to_cuda(mfgs, device)
+    # logging.info('move to cuda done')
+    mfgs = cache.fetch_feature(
+        mfgs, eid, target_edge_features=True)  # because all use memory
+    b = mfgs[0][0]  # type: DGLBlock
+    if distributed:
+        model.module.memory.prepare_input(b)
+        # model.module.last_updated = model.module.memory_updater(b)
+    else:
+        model.memory.prepare_input(b)
+        # model.last_updated = model.memory_updater(b)
+    last_updated = model.module.memory_updater(mfgs[0][0])
+    # logging.info('gnn mfgs {}'.format(mfgs))
+    optimizer.zero_grad()
+    pred_pos, pred_neg = model(mfgs)
+    loss = criterion(pred_pos, torch.ones_like(pred_pos))
+    loss += criterion(pred_neg, torch.zeros_like(pred_neg))
+    # total_loss += float(loss) * num_target_nodes
+    loss.backward()
+    optimizer.step()
+    with torch.no_grad():
+        # use one function
+        if distributed:
+            model.module.memory.update_mem_mail(
+                **last_updated, edge_feats=cache.target_edge_features.get(),
+                neg_sample_ratio=1)
+        else:
+            model.memory.update_mem_mail(
+                **last_updated, edge_feats=cache.target_edge_features.get(),
+                neg_sample_ratio=1)
 
 
-def feature_fetching(cache, device, queue_in, queue_out):
+def feature_fetching(cache, device, queue_in, queue_out, stream):
     # logging.info('feature fetching start')
     while True:
         # retrive from queue
@@ -34,6 +64,7 @@ def feature_fetching(cache, device, queue_in, queue_out):
         global mfgs
         mfgs, eid = item
         # logging.info('feature mfgs {}'.format(mfgs))
+        # with torch.cuda.stream(stream):
         mfgs_to_cuda(mfgs, device)
         # logging.info('move to cuda done')
         mfgs = cache.fetch_feature(
@@ -43,7 +74,7 @@ def feature_fetching(cache, device, queue_in, queue_out):
     # logging.info('feature fetching done')
 
 
-def memory_fetching(model, distributed, queue_in, queue_out):
+def memory_fetching(model, distributed, queue_in, queue_out, stream):
     logging.info('memory fetching start')
     while True:
         # retrive from queue
@@ -54,6 +85,7 @@ def memory_fetching(model, distributed, queue_in, queue_out):
             break
         mfgs = item
         # logging.info('memory mfgs {}'.format(mfgs))
+        # with torch.cuda.stream(stream):
         b = mfgs[0][0]  # type: DGLBlock
         if distributed:
             model.module.memory.prepare_input(b)
@@ -67,7 +99,7 @@ def memory_fetching(model, distributed, queue_in, queue_out):
 # TODO: first test GNN first and Memory Last
 
 
-def gnn_training(model, optimizer, criterion, num_target_nodes, queue_in, queue_out):
+def gnn_training(model, optimizer, criterion, num_target_nodes, queue_in, queue_out, stream):
     # logging.info('gnn training start')
     neg_sample_ratio = 1
     while True:
@@ -78,6 +110,7 @@ def gnn_training(model, optimizer, criterion, num_target_nodes, queue_in, queue_
             queue_out.put(item)
             break
         mfgs = item
+        # with torch.cuda.stream(stream):
         last_updated = model.module.memory_updater(mfgs[0][0])
         # logging.info('gnn mfgs {}'.format(mfgs))
         optimizer.zero_grad()
@@ -90,7 +123,7 @@ def gnn_training(model, optimizer, criterion, num_target_nodes, queue_in, queue_
         queue_out.put(last_updated)  # TODO: may not need?
 
 
-def memory_update(model, distributed, cache, queue_in):
+def memory_update(model, distributed, cache, queue_in, stream):
     # logging.info('memory update start')
     while True:
         # retrive from queue
@@ -100,6 +133,7 @@ def memory_update(model, distributed, cache, queue_in):
             break
         last_updated = item
         # NB: no need to do backward here
+        # with torch.cuda.stream(stream):
         with torch.no_grad():
             # use one function
             if distributed:

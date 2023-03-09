@@ -356,6 +356,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     memory_gnn_queue = Queue()
     gnn_update_queue = Queue()
 
+    feat_stream = torch.cuda.Stream(device=device)
+    mem_stream = torch.cuda.Stream(device=device)
+    gnn_stream = torch.cuda.Stream(device=device)
+    update_stream = torch.cuda.Stream(device=device)
+
     feature_fetch_sum = 0
     memory_fetch_sum = 0
     memory_update_sum = 0
@@ -404,13 +409,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         sampler_thread = Thread(target=sample, args=(
             train_loader, sampler, sample_feature_queue), name='Sample')
         feature_thread = Thread(target=feature_fetching, args=(
-            cache, device, sample_feature_queue, feature_memory_queue), name='Feature')
+            cache, device, sample_feature_queue, feature_memory_queue, feat_stream), name='Feature')
         memory_thread = Thread(target=memory_fetching, args=(
-            model, args.distributed, feature_memory_queue, memory_gnn_queue), name='Memory')
+            model, args.distributed, feature_memory_queue, memory_gnn_queue, mem_stream), name='Memory')
         gnn_thread = Thread(target=gnn_training, args=(
-            model, optimizer, criterion, num_target_nodes, memory_gnn_queue, gnn_update_queue), name='gnn')
+            model, optimizer, criterion, num_target_nodes, memory_gnn_queue, gnn_update_queue, gnn_stream), name='gnn')
         memory_update_thread = Thread(target=memory_update, args=(
-            model, args.distributed, cache, gnn_update_queue), name='update')
+            model, args.distributed, cache, gnn_update_queue, update_stream), name='update')
 
         sampler_thread.start()
         feature_thread.start()

@@ -4,6 +4,9 @@ This code is based on the implementation of TGL's memory module.
 Implementation at:
     https://github.com/amazon-research/tgl/blob/main/memorys.py
 """
+import logging
+import os
+from threading import Lock
 from typing import Dict, Optional, Union
 
 import torch
@@ -46,6 +49,9 @@ class Memory:
 
         self.kvstore_client = kvstore_client
         self.partition = self.kvstore_client != None
+
+        self.lock = Lock()
+        self.i = 0
 
         # if not partition, not need to use kvstore_client
         if not self.partition:
@@ -170,6 +176,7 @@ class Memory:
         all_nodes_unique, inv = torch.unique(
             all_nodes.cpu(), return_inverse=True)
 
+        # with self.lock:
         if self.partition:
             # unique all nodes
             pulled_memory = self.kvstore_client.pull(
@@ -188,6 +195,12 @@ class Memory:
         b.srcdata['mem_ts'] = mem_ts[inv]
         b.srcdata['mail_ts'] = mail_ts[inv]
         b.srcdata['mem_input'] = mail[inv]
+        # if int(os.environ['LOCAL_RANK']) == 0:
+        # logging.info('fetch {}th mem at iter: {}'.format(self.i, i))
+        # if int(os.environ['LOCAL_RANK']) == 0:
+        # logging.info(
+        #     'fetch b.srcdata[mem]: {}'.format(b.srcdata['mem']))
+        # logging.info('b.srcdata[mem_input]'.format(b.srcdata['mem_input']))
 
     def update_mem_mail(self, last_updated_nid: torch.Tensor,
                         last_updated_memory: torch.Tensor,
@@ -207,6 +220,8 @@ class Memory:
         last_updated_nid = last_updated_nid.to(self.device)
         last_updated_memory = last_updated_memory.to(self.device)
         last_updated_ts = last_updated_ts.to(self.device)
+        # logging.info('update last updated memory: {}'.format(
+        #     last_updated_memory))
 
         # genereate mail
         split_chunks = 2 + neg_sample_ratio
@@ -261,8 +276,15 @@ class Memory:
             self.kvstore_client.push(nid, all_mem, mode='memory')
         else:
             # update mailbox first
-            self.mailbox[nid] = mail
-            self.mailbox_ts[nid] = mail_ts
-            # update mem
-            self.node_memory[nid] = mem
-            self.node_memory_ts[nid] = mem_ts
+            with self.lock:
+                self.mailbox[nid] = mail
+                self.mailbox_ts[nid] = mail_ts
+                # update mem
+                self.node_memory[nid] = mem
+                self.node_memory_ts[nid] = mem_ts
+                # self.i = i
+                # if int(os.environ['LOCAL_RANK']) == 0:
+                # logging.info('update mem at iter: {}'.format(self.i))
+                # if int(os.environ['LOCAL_RANK']) == 0:
+                #     logging.info('fetch self.node_memory_nid {}'.format(
+                #         self.node_memory[nid]))

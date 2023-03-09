@@ -2,10 +2,11 @@ import argparse
 import datetime
 import logging
 import math
+from multiprocessing.pool import ThreadPool
 import os
 from queue import Queue
 import random
-from threading import Thread
+from threading import Lock
 import time
 
 import numpy as np
@@ -31,7 +32,7 @@ from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (EarlyStopMonitor, build_dynamic_graph, get_batch,
                            get_pinned_buffers, get_project_root_dir, load_feat,
                            load_partitioned_dataset, mfgs_to_cuda)
-from scripts.pipeline_distributed import collect_sample_results, feature_fetching, feature_fetching_collect, feature_fetching_local, gnn_training, local_sample, memory_fetching, memory_update, sample
+from scripts.train import training_batch
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -128,7 +129,7 @@ def evaluate(data, sampler, model, criterion, cache, device, rand_sampler):
                 # NB: no need to do backward here
                 # use one function
                 model.module.memory.update_mem_mail(
-                    **model.module.last_updated, edge_feats=cache.target_edge_features.get(),
+                    **model.module.last_updated, edge_feats=cache.target_edge_features,
                     neg_sample_ratio=1)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -370,17 +371,18 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
     epoch_time_sum = 0
     all_total_samples = 0
     early_stopper = EarlyStopMonitor()
-
-    sample_feature_queue = Queue()
-    local_collect_queue = Queue()
-    feature_collect_queue = Queue()
-    # collect_feature_queue = Queue()
-    feature_memory_queue = Queue()
-    memory_gnn_queue = Queue()
-    gnn_update_queue = Queue()
-
     logging.info('Start training... distributed: {}'.format(args.distributed))
+
+    # create threadpool
+    num_process = 10
+    pool = ThreadPool(processes=num_process)
+    stream_pool = [torch.cuda.Stream(device=device, priority=0)
+                   for _ in range(num_process)]
+    signal_queue = Queue()
+    signal_queue.put(1)
+    model_lock = Lock()
     torch.distributed.barrier()
+
     for e in range(args.epoch):
         model.train()
         cache.reset()
@@ -398,69 +400,36 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
 
-        train_loader = get_batch(train_data, args.batch_size,
-                                 args.num_chunks, train_rand_sampler, args.world_size)
-        sampler_thread = Thread(target=sample, args=(
-            train_loader, sampler, sample_feature_queue), name='Sample')
-        # sampler_local_thread = Thread(target=local_sample, args=(
-        #     train_loader, sampler, local_collect_queue), name='Sample')
-        # sampler_collect_thread = Thread(target=collect_sample_results, args=(
-        #     sampler, local_collect_queue, sample_feature_queue), name='Sample')
-        feature_local_thread = Thread(target=feature_fetching_local, args=(
-            cache, device, sample_feature_queue, feature_collect_queue), name='Feature')
-        feature_collect_thread = Thread(target=feature_fetching_collect, args=(
-            cache, device, feature_collect_queue, feature_memory_queue), name='Feature_Collect')
-        # sampler_local_thread = Thread(target=local_sample, args=(
-        #     train_loader, sampler, local_collect_queue), name='Sample')
-        # sampler_collect_thread = Thread(target=collect_sample_results, args=(
-        #     sampler, local_collect_queue, collect_feature_queue), name='Sample')
-        # feature_thread = Thread(target=feature_fetching, args=(
-        #     cache, device, sample_feature_queue, feature_memory_queue), name='Feature')
-        memory_thread = Thread(target=memory_fetching, args=(
-            model, args.distributed, feature_memory_queue, memory_gnn_queue), name='Memory')
-        gnn_thread = Thread(target=gnn_training, args=(
-            model, optimizer, criterion, memory_gnn_queue, gnn_update_queue), name='gnn')
-        memory_update_thread = Thread(target=memory_update, args=(
-            model, args.distributed, cache, gnn_update_queue), name='update')
+        train_iter = enumerate(get_batch(train_data, args.batch_size,
+                                         args.num_chunks, train_rand_sampler, args.world_size))
 
-        # sampler_thread.start()
-        sampler_thread.start()
-        # sampler_local_thread.start()
-        # sampler_collect_thread.start()
-        # feature_thread.start()
-        feature_local_thread.start()
-        feature_collect_thread.start()
-        memory_thread.start()
-        gnn_thread.start()
-        memory_update_thread.start()
+        with pool:
+            while True:
+                try:
+                    i, (target_nodes, ts, eid) = next(train_iter)
+                except StopIteration:
+                    break
+                if signal_queue.get() == 1:
+                    pool.apply_async(training_batch, args=(model, sampler, cache, target_nodes,
+                                                           ts, eid, device, args.distributed, optimizer, criterion, stream_pool[i % num_process], signal_queue, model_lock))
 
-        # sampler_thread.join()
-        sampler_thread.join()
-        # feature_thread.join()
-        # sampler_local_thread.join()
-        # sampler_collect_thread.join()
-        feature_local_thread.join()
-        feature_collect_thread.join()
-        memory_thread.join()
-        gnn_thread.join()
-        memory_update_thread.join()
-
+        
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
-        # if args.distributed:
-        #     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-        #                             cache_node_ratio_sum, total_samples, total_sampling_time],
-        #                            device=device)
-        #     torch.distributed.all_reduce(metrics)
-        #     metrics /= args.world_size
-        #     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-        #         total_samples, total_sampling_time = metrics.tolist()
+        if args.distributed:
+            metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
+                                    cache_node_ratio_sum, total_samples, total_sampling_time],
+                                   device=device)
+            torch.distributed.all_reduce(metrics)
+            metrics /= args.world_size
+            total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
+                total_samples, total_sampling_time = metrics.tolist()
 
-        #     all_sampling_time = sampler.get_sampling_time()
-        #     std = all_sampling_time.std(dim=1).mean()
-        #     mean = all_sampling_time.mean(dim=1).mean()
-        #     cv_sampling_time += std / mean
+            all_sampling_time = sampler.get_sampling_time()
+            std = all_sampling_time.std(dim=1).mean()
+            mean = all_sampling_time.mean(dim=1).mean()
+            cv_sampling_time += std / mean
 
         # Validation
         val_start = time.time()
@@ -495,10 +464,8 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         all_total_samples += total_samples
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s |".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time))
-            # logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
-            #     e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
 
         if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1

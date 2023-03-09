@@ -4,6 +4,8 @@ This code is based on the implementation of TGL's memory module.
 Implementation at:
     https://github.com/amazon-research/tgl/blob/main/memorys.py
 """
+import logging
+import os
 import torch
 from dgl.heterograph import DGLBlock
 
@@ -66,6 +68,13 @@ class GRUMemeoryUpdater(torch.nn.Module):
 
         updated_memory = self.updater(
             b.srcdata['mem_input'], b.srcdata['mem'])
+
+        # if int(os.environ['LOCAL_RANK']) == 0:
+        #     logging.info('mem input: {}'.format(b.srcdata['mem_input']))
+        #     logging.info('mem : {}'.format(b.srcdata['mem']))
+        #     logging.info('updated_memory: {}'.format(updated_memory))
+        #     for name, param in self.updater.named_parameters():
+        #         logging.info("name: {} param: {}".format(name, param[0]))
 
         num_dst_nodes = b.num_dst_nodes()
         last_updated_nid = b.srcdata['ID'][:num_dst_nodes].clone(
