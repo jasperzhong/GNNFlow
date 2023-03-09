@@ -14,7 +14,7 @@ epoch = 0
 
 def pairwise(iterable):
     a = iter(iterable)
-    return zip(a, a)
+    return zip(a, a, a, a)
 
 # def pairwise(iterable):
 #     # pairwise('ABCDEFG') --> AB BC CD DE EF FG
@@ -29,9 +29,9 @@ def load_node_embeds():
         'node_embeddings_{}_{}_layer{}'.format(model, dataset, layer))]
     files = sorted(files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
     cos_sim_list = []
-    for x, y in pairwise(files[:20]):
+    for x, y, z, k in pairwise(files[:40]):
         node_embed_1 = torch.from_numpy(np.load(x)).cuda()
-        node_embed_2 = torch.from_numpy(np.load(y)).cuda()
+        node_embed_2 = torch.from_numpy(np.load(z)).cuda()
 
         # compute cosine similarity
         cos_sim = torch.nn.functional.cosine_similarity(
@@ -70,14 +70,14 @@ def load_node_memory():
     ep_it_list = []
     ep_it_list2 = []
     num_first_time_update_list = []
-    for i, (x, y) in enumerate(pairwise(files[:])):
+    for i, (x, y, z, k) in enumerate(pairwise(files[:])):
         # plot interval
-        if i % 20 != 0:
+        if i % 10 != 0:
             continue
         x = 'memory/' + x
-        y = 'memory/' + y
+        z = 'memory/' + z
         node_embed_1 = torch.from_numpy(np.load(x)).cuda()
-        node_embed_2 = torch.from_numpy(np.load(y)).cuda()
+        node_embed_2 = torch.from_numpy(np.load(z)).cuda()
 
         num_first_time_update = abs(count_zeros(
             node_embed_1) - count_zeros(node_embed_2))
@@ -93,7 +93,7 @@ def load_node_memory():
 
         cos_sim_list.append(cos_sim)
         ep_it_list.append(extract_epoch_iter(x))
-        ep_it_list2.append(extract_epoch_iter(y))
+        ep_it_list2.append(extract_epoch_iter(z))
 
     print(ep_it_list)
     print(ep_it_list2)
@@ -168,9 +168,9 @@ if __name__ == '__main__':
     ax.set_xlim((0, len(cos_sim)))
     ax.set_ylim((-1, 1))
     ax.grid(True, color='gray', linestyle='--')
-    ax.set_title("Cos similarities of node memory of {} on {} (epoch {})".format(
-        model, dataset, epoch))
+    ax.set_title("Cos similarities of node memory of {} on {} (epoch {}, diff {} iters)".format(
+        model, dataset, epoch, 200))
     # plt.savefig('nid_cos_sim_{}_{}_epoch{}.png'.format(
     #     model, dataset, epoch), dpi=400, bbox_inches='tight')
-    plt.savefig('target_cos_sim_{}_{}_epoch{}_all.png'.format(
+    plt.savefig('difference_cos_sim_{}_{}_epoch{}_all.png'.format(
         model, dataset, epoch), dpi=400, bbox_inches='tight')
