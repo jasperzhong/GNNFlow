@@ -198,3 +198,4 @@ partition_table.txt
 # MacOS
 .DS_Store
 
+*.npy
