@@ -375,12 +375,12 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
     # create threadpool
     num_process = 10
-    pool = ThreadPool(processes=num_process)
     stream_pool = [torch.cuda.Stream(device=device, priority=0)
                    for _ in range(num_process)]
-    signal_queue = Queue()
-    signal_queue.put(1)
-    model_lock = Lock()
+
+    lock_pool = [Lock() for _ in range(5)]  # 5 stages
+    signal_queue = Queue(maxsize=num_process)
+
     torch.distributed.barrier()
 
     for e in range(args.epoch):
@@ -398,22 +398,22 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         total_memory_update_time = 0
         cv_sampling_time = 0
 
+        pool = ThreadPool(processes=num_process)
         epoch_time_start = time.time()
 
         train_iter = enumerate(get_batch(train_data, args.batch_size,
                                          args.num_chunks, train_rand_sampler, args.world_size))
 
-        with pool:
-            while True:
-                try:
-                    i, (target_nodes, ts, eid) = next(train_iter)
-                except StopIteration:
-                    break
-                if signal_queue.get() == 1:
-                    pool.apply_async(training_batch, args=(model, sampler, cache, target_nodes,
-                                                           ts, eid, device, args.distributed, optimizer, criterion, stream_pool[i % num_process], signal_queue, model_lock))
+        # with pool:
+        while True:
+            try:
+                i, (target_nodes, ts, eid) = next(train_iter)
+            except StopIteration:
+                break
 
-        
+            pool.apply_async(training_batch, args=(model, sampler, cache, target_nodes,
+                                                   ts, eid, device, args.distributed, optimizer, criterion, stream_pool[i % num_process], signal_queue, lock_pool, i, args.rank))
+
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
