@@ -71,8 +71,8 @@ parser.add_argument("--node-embed-cache-ratio", type=float, default=0,
                     help="cache ratio for node embedding cache")
 parser.add_argument("--cache-delay-epoch", type=int, default=0,
                     help="delay epoch for cache")
-parser.add_argument("--cache-delay-iter", type=int, default=0,
-                    help="delay iter for cache")
+parser.add_argument("--cache-min-neighbor", type=int, default=0,
+                    help="the minimum number of neighbors to cache node embeddings")
 
 args = parser.parse_args()
 
@@ -477,9 +477,19 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             else:
                 node_embeds = uncached_embeds
 
-            if e >= args.cache_delay_epoch and node_embed_cache is not None and i >= args.cache_delay_iter:
-                node_embed_cache.put(
-                    target_nodes[uncached_mask], uncached_embeds)
+            if e >= args.cache_delay_epoch and node_embed_cache is not None:
+                # if dst node has less than N neighbors in the batch, we don't cache it
+                uncached_nodes = torch.from_numpy(
+                        target_nodes[uncached_mask]).to(device)
+                if args.cache_min_neighbor > 0:
+                    b = mfgs[-1][0]
+                    indices, counts = torch.unique(b.edges()[1], return_counts=True)
+                    mask = indices[counts >= args.cache_min_neighbor]
+                    
+                    node_embed_cache.put(
+                        uncached_nodes[mask], uncached_embeds[mask])
+                else:
+                    node_embed_cache.put(uncached_nodes, uncached_embeds)
 
             pred_pos, pred_neg = model.edge_predictor(node_embeds)
 
@@ -612,13 +622,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         throughput_list = np.array(throughput_list)
         val_ap_list = np.array(val_ap_list)
-        out_dir = "tmp_res/yczhong_delay_bench/"
+        out_dir = "tmp_res/yczhong_delay_lru_recent/"
         os.makedirs(out_dir, exist_ok=True)
 
         logging.debug('Throughput list: {}'.format(throughput_list))
         logging.debug('Val AP list: {}'.format(val_ap_list))
-        postfix = '||model{}||dataset{}||cache_ratio{}||delay_epoch{}||delay_iter{}.npy'.format(
-            args.model, args.data, args.node_embed_cache_ratio, args.cache_delay_epoch, args.cache_delay_iter)
+        postfix = '||model{}||dataset{}||cache_ratio{}||delay_epoch{}||cache_min_neighbor{}.npy'.format(
+                args.model, args.data, args.node_embed_cache_ratio, args.cache_delay_epoch, args.cache_min_neighbor)
         np.save(out_dir+'throughput'+postfix, throughput_list)
         np.save(out_dir+'val_ap'+postfix, val_ap_list)
 

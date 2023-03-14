@@ -27,11 +27,15 @@ class NodeEmbedCache:
         self.cache_index_to_node_id = torch.zeros(
             self.node_capacity, dtype=torch.int64, device=self.device) - 1
 
-        self.cache_node_count = torch.zeros(
-            self.node_capacity, dtype=torch.int32, device=self.device)
+        # self.cache_node_count = torch.zeros(
+        #     self.node_capacity, dtype=torch.int32, device=self.device)
+
+        # pointer to the last entry for the recent cached nodes
+        self.cache_node_pointer = 0
+        self.cache_edge_pointer = 0
 
         self.hit_count = 0
-        self.miss_count = 0
+        self.total_count = 0
 
     def reset(self):
         """
@@ -40,7 +44,7 @@ class NodeEmbedCache:
         self.cache_node_flag.fill_(False)
         self.cache_node_map.fill_(-1)
         self.cache_index_to_node_id.fill_(-1)
-        self.cache_node_count.fill_(0)
+        # self.cache_node_count.fill_(0)
 
     def get(self, nodes: np.ndarray) -> Tuple[Optional[torch.Tensor], np.ndarray]:
         """
@@ -56,10 +60,11 @@ class NodeEmbedCache:
         nodes = torch.from_numpy(nodes).to(self.device)
         cache_mask = self.cache_node_flag[nodes]
 
-        self.hit_count += cache_mask.sum().item()
-        self.miss_count += (~cache_mask).sum().item()
+        hit_count = cache_mask.sum().item()
+        self.hit_count += hit_count
+        self.total_count += len(cache_mask)
 
-        if cache_mask.sum() == 0:
+        if hit_count == 0:
             return None, np.ones(len(nodes), dtype=np.bool_)
 
         node_embeds = torch.zeros(
@@ -69,13 +74,13 @@ class NodeEmbedCache:
         node_embeds[cache_mask] = self.cache_node_buffer[cache_node_index]
         uncached_mask = ~cache_mask
 
-        # update
-        self.cache_node_count -= 1
-        self.cache_node_count[cache_node_index] = 0
+        # # update
+        # self.cache_node_count -= 1
+        # self.cache_node_count[cache_node_index] = 0
 
         return node_embeds, uncached_mask.cpu().numpy()
 
-    def put(self, uncached_nodes: np.ndarray, uncached_node_embeds: torch.Tensor):
+    def put(self, uncached_nodes: torch.Tensor, uncached_node_embeds: torch.Tensor):
         """
         Put node embeddings into cache
 
@@ -88,18 +93,30 @@ class NodeEmbedCache:
         else:
             num_node_to_cache = len(uncached_nodes)
 
-        node_id_to_cache = torch.from_numpy(uncached_nodes[:num_node_to_cache]).to(
-            self.device)
-        node_embed_to_cache = uncached_node_embeds[:num_node_to_cache].detach(
-        ).clone()
+        node_id_to_cache = uncached_nodes[:num_node_to_cache]
+        node_embed_to_cache = uncached_node_embeds[:num_node_to_cache].detach()
 
-        # update cache
-        removing_cache_index = torch.topk(
-            self.cache_node_count, k=num_node_to_cache, largest=False).indices
+        # # update cache
+        # removing_cache_index = torch.topk(
+        #     self.cache_node_count, k=num_node_to_cache, largest=False).indices
+        # removing_node_id = self.cache_index_to_node_id[removing_cache_index]
+
+        if self.cache_node_pointer + num_node_to_cache < self.node_capacity:
+            removing_cache_index = torch.arange(
+                self.cache_node_pointer + 1, self.cache_node_pointer + num_node_to_cache + 1)
+            self.cache_node_pointer = self.cache_node_pointer + num_node_to_cache
+        else:
+            removing_cache_index = torch.cat([torch.arange(num_node_to_cache - (self.node_capacity - 1 - self.cache_node_pointer)),
+                                             torch.arange(self.cache_node_pointer + 1, self.node_capacity)])
+            self.cache_node_pointer = num_node_to_cache - \
+                (self.node_capacity - 1 - self.cache_node_pointer) - 1
+
+        removing_cache_index = removing_cache_index.to(
+            device=self.device, non_blocking=True)
         removing_node_id = self.cache_index_to_node_id[removing_cache_index]
 
         self.cache_node_buffer[removing_cache_index] = node_embed_to_cache
-        self.cache_node_count[removing_cache_index] = 0
+        # self.cache_node_count[removing_cache_index] = 0
         self.cache_node_flag[removing_node_id] = False
         self.cache_node_flag[node_id_to_cache] = True
         self.cache_node_map[removing_node_id] = -1
@@ -110,4 +127,4 @@ class NodeEmbedCache:
         """
         Get hit rate of cache
         """
-        return self.hit_count / (self.hit_count + self.miss_count)
+        return self.hit_count / self.total_count

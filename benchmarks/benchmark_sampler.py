@@ -34,8 +34,6 @@ def set_seed(seed):
 
 set_seed(args.seed)
 
-args.model = args.model.lower()
-
 
 class NegLinkSampler:
 
@@ -55,23 +53,24 @@ def main():
         **dataset_config, dataset_df=df)
 
     # Create a temporal sampler
-    if args.model == "tgn":
+    if args.model == "TGN":
         sampler = TemporalSampler(
-            dgraph, fanouts=[10], strategy="recent")
-    elif args.model == "tgat":
+            dgraph, fanouts=[10], sample_strategy="recent")
+    elif args.model == "TGAT":
         sampler = TemporalSampler(
-            dgraph, fanouts=[10, 10], strategy="uniform", seed=args.seed)
-    elif args.model == "dysat":
+            dgraph, fanouts=[10, 10], sample_strategy="uniform", seed=args.seed)
+    elif args.model == "DySAT":
         sampler = TemporalSampler(
             dgraph, fanouts=[10, 10], num_snapshots=3,
             snapshot_time_window=10000, prop_time=True,
-            strategy="uniform", seed=args.seed)
+            sample_strategy="uniform", seed=args.seed)
     else:
         raise ValueError("Unknown model: {}".format(args.model))
 
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
     total_sampled_nodes = 0
+    cnt = {0:0}
     for _, rows in tqdm(df.groupby(df.index // args.batch_size)):
         # Sample a batch of data
         root_nodes = np.concatenate(
@@ -83,14 +82,47 @@ def main():
 
         if args.stat:
             blocks = sampler.sample(root_nodes, ts)
-            for block in blocks:
-                for b in block:
-                    total_sampled_nodes += b.num_src_nodes() - b.num_dst_nodes()
+            b = blocks[-1][0]
+            indices, counts = torch.unique(b.edges()[1], return_counts=True)
+            counts = counts.tolist()
+            for count in counts:
+                if count not in cnt:
+                    cnt[count] = 0
+                cnt[count] += 1
+            
+            cnt[0] += b.num_dst_nodes() - len(indices)
+            # for block in blocks:
+            #     for b in block:
+            #         total_sampled_nodes += b.num_src_nodes() - b.num_dst_nodes()
         else:
             sampler._sampler.sample(root_nodes, ts)
 
     if args.stat:
-        print("Total sampled nodes: {}".format(total_sampled_nodes))
+        # print("Total sampled nodes: {}".format(total_sampled_nodes))
+
+        
+        import matplotlib.pyplot as plt
+
+        print(len(cnt))
+
+        # extract keys and values
+        keys = list(cnt.keys())
+        values = list(cnt.values())
+
+        # plot the bar chart
+        plt.bar(keys, values)
+
+        # add labels and title
+        plt.xlabel('Number of sampled neighbors')
+        plt.ylabel('Occurance')
+        plt.xticks(keys)
+        plt.title('Distribution of number of sampled neighbors')
+
+        # show the plot
+        # plt.show()
+        plt.savefig("distribution_of_number_of_sampled_neighbors.png", dpi=400)
+
+        
 
 
 if __name__ == "__main__":
