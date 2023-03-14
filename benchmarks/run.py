@@ -1,8 +1,8 @@
 import itertools
 import os
 
-models = ['TGN']
-datasets = ['MOOC']
+models = ['TGN', 'TGAT', 'GRAPHSAGE']
+datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
 
 param_space = itertools.product(
     models, datasets)

@@ -42,8 +42,8 @@ def main():
         args.model, args.dataset)
     dataset_config["mem_resource_type"] = args.mem_resource_type
     dgraph = build_dynamic_graph(
-        **dataset_config, dataset_df=df, undirected=True)
-    
+        **dataset_config, dataset_df=df)
+
     sampler = TemporalSampler(dgraph, **model_config)
 
     node_to_cnt = {}
@@ -60,7 +60,7 @@ def main():
             blocks = sampler.sample(root_nodes, ts)
             for block in blocks:
                 for b in block:
-                    all_nodes = b.srcdata['ID'][b.num_dst_nodes():].tolist()
+                    all_nodes = b.srcdata['ID'].tolist()
                     for node in all_nodes:
                         if node not in node_to_cnt:
                             node_to_cnt[node] = 0

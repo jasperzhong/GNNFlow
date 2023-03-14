@@ -125,7 +125,7 @@ _reddit_default_config = {
     "minimum_block_size": 62,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-    "undirected": False,
+    "undirected": True,
     "node_feature": True,
     "edge_feature": True,
 }
@@ -137,7 +137,7 @@ _mooc_default_config = {
     "minimum_block_size": 59,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-    "undirected": False,
+    "undirected": True,
     "node_feature": False,
     "edge_feature": True,
 }
@@ -149,7 +149,7 @@ _lastfm_default_config = {
     "minimum_block_size": 650,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-    "undirected": False,
+    "undirected": True,
     "node_feature": False,
     "edge_feature": True,
 }
