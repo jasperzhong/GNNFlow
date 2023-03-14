@@ -196,6 +196,7 @@ partition_table.txt
 *.png
 *.npy
 tmp_res/
+*.pickle
 
 # MacOS
 .DS_Store
