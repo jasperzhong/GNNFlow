@@ -42,11 +42,10 @@ def main():
         args.model, args.dataset)
     dataset_config["mem_resource_type"] = args.mem_resource_type
     dgraph = build_dynamic_graph(
-        **dataset_config, dataset_df=df)
-
+        **dataset_config, dataset_df=df, undirected=True)
+    
     sampler = TemporalSampler(dgraph, **model_config)
 
-    total_sampled_nodes = 0
     node_to_cnt = {}
     edge_to_cnt = {}
     for _, rows in tqdm(df.groupby(df.index // args.batch_size)):

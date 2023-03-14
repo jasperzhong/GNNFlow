@@ -1,8 +1,8 @@
 import itertools
 import os
 
-models = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
-datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
+models = ['TGN']
+datasets = ['MOOC']
 
 param_space = itertools.product(
     models, datasets)
@@ -10,4 +10,4 @@ param_space = itertools.product(
 for param in param_space:
     print(param)
     os.system(
-        "python3 sampling_freq.py --model {} --dataset REDDIT  --stat".format(*param))
+        "python3 sampling_freq.py --model {} --dataset {} --stat".format(*param))
