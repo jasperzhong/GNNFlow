@@ -2,7 +2,7 @@ import itertools
 import os
 
 models = ['TGN', 'TGAT', 'GRAPHSAGE']
-datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
+datasets = ['WIKI', 'MOOC', 'LASTFM']
 
 param_space = itertools.product(
     models, datasets)

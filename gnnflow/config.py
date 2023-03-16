@@ -125,7 +125,7 @@ _reddit_default_config = {
     "minimum_block_size": 62,
     "blocks_to_preallocate": 1024,
     "insertion_policy": "insert",
-    "undirected": True,
+    "undirected": False,
     "node_feature": True,
     "edge_feature": True,
 }
@@ -157,7 +157,7 @@ _lastfm_default_config = {
 _gdelt_default_config = {
     "initial_pool_size": 10*GiB,
     "maximum_pool_size": 20*GiB,
-    "mem_resource_type": "unified",
+    "mem_resource_type": "pinned",
     "minimum_block_size": 123,
     "blocks_to_preallocate": 8196,
     "insertion_policy": "insert",

@@ -6,7 +6,7 @@ import torch
 from tqdm import tqdm
 
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import build_dynamic_graph, load_dataset
+from gnnflow.utils import build_dynamic_graph, load_dataset, mfgs_to_cuda
 from gnnflow.config import get_default_config
 
 parser = argparse.ArgumentParser()
@@ -46,8 +46,9 @@ def main():
 
     sampler = TemporalSampler(dgraph, **model_config)
 
-    node_to_cnt = {}
-    edge_to_cnt = {}
+    node_to_cnt = torch.zeros(dgraph.max_vertex_id()+1,
+                              dtype=torch.int64).cuda()
+    edge_to_cnt = torch.zeros(dgraph.num_edges()+1, dtype=torch.int64).cuda()
     for _, rows in tqdm(df.groupby(df.index // args.batch_size)):
         # Sample a batch of data
         root_nodes = np.concatenate(
@@ -58,31 +59,25 @@ def main():
 
         if args.stat:
             blocks = sampler.sample(root_nodes, ts)
+            blocks = mfgs_to_cuda(blocks, 'cuda')
             for block in blocks:
                 for b in block:
-                    all_nodes = b.srcdata['ID'].tolist()
-                    for node in all_nodes:
-                        if node not in node_to_cnt:
-                            node_to_cnt[node] = 0
-                        node_to_cnt[node] += 1
+                    all_nodes = b.srcdata['ID']
+                    all_edges = b.edata['ID']
 
-                    all_edges = b.edata['ID'].tolist()
-                    for edge in all_edges:
-                        if edge not in edge_to_cnt:
-                            edge_to_cnt[edge] = 0
-                        edge_to_cnt[edge] += 1
+                    unique_nodes, cnt = torch.unique(all_nodes, return_counts=True)
+                    node_to_cnt[unique_nodes] += cnt
+
+                    unique_edges, cnt = torch.unique(all_edges, return_counts=True)
+                    edge_to_cnt[unique_edges] += cnt
         else:
             sampler._sampler.sample(root_nodes, ts)
 
     if args.stat:
-        # print("Total sampled nodes: {}".format(total_sampled_nodes))
-        import pickle
-
-        with open("{}_{}_node_to_cnt.pickle".format(args.model, args.dataset), 'wb') as f:
-            pickle.dump(node_to_cnt, f)
-        with open("{}_{}_edge_to_cnt.pickle".format(args.model, args.dataset), 'wb') as f:
-            pickle.dump(edge_to_cnt, f)
-
+        torch.save(node_to_cnt, "{}_{}_node_to_cnt.pt".format(
+            args.model, args.dataset))
+        torch.save(edge_to_cnt, "{}_{}_edge_to_cnt.pt".format(
+            args.model, args.dataset))
 
 if __name__ == "__main__":
     main()
