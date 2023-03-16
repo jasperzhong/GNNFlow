@@ -424,7 +424,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         total_model_train_time = 0
         total_samples = 0
 
-        if args.model == 'TGN' and node_embed_cache is not None:
+        if e >= args.cache_delay_epoch and args.model == 'TGN' and node_embed_cache is not None:
             node_embed_cache.reset()
 
         epoch_time_start = time.time()
@@ -437,15 +437,25 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
             # Sample
             sample_start_time = time.time()
-            mfgs = sampler.sample(
-                target_nodes[uncached_mask], ts[uncached_mask])
+            if e >= args.cache_delay_epoch and node_embed_cache is not None:
+                tmp = target_nodes[~uncached_mask].copy()
+                target_nodes[~uncached_mask] = -1
+                mfgs = sampler.sample(
+                    target_nodes, ts)
+                target_nodes[~uncached_mask] = tmp
+                b = mfgs[0][0]
+                b.srcdata['ID'][:b.num_dst_nodes()] = torch.from_numpy(
+                    target_nodes)
+            else:
+                mfgs = sampler.sample(
+                    target_nodes, ts)
             total_sampling_time += time.time() - sample_start_time
 
             # Feature
             mfgs_to_cuda(mfgs, device)
             feature_start_time = time.time()
             mfgs = cache.fetch_feature(
-                mfgs, eid[uncached_mask[:len(eid)]])
+                mfgs, eid)
             total_feature_fetch_time += time.time() - feature_start_time
 
             if args.use_memory:
@@ -473,19 +483,21 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             # ugly
             uncached_embeds = model(mfgs, return_embed=True)[-1]
             if e >= args.cache_delay_epoch and node_embed_cache is not None and node_embeds is not None:
-                node_embeds[uncached_mask] = uncached_embeds
+                # print(node_embeds[uncached_mask].shape, uncached_embeds.shape)
+                node_embeds[uncached_mask] = uncached_embeds[uncached_mask]
             else:
                 node_embeds = uncached_embeds
 
             if e >= args.cache_delay_epoch and node_embed_cache is not None:
                 # if dst node has less than N neighbors in the batch, we don't cache it
                 uncached_nodes = torch.from_numpy(
-                        target_nodes[uncached_mask]).to(device)
+                    target_nodes[uncached_mask]).to(device)
                 if args.cache_min_neighbor > 0:
                     b = mfgs[-1][0]
-                    indices, counts = torch.unique(b.edges()[1], return_counts=True)
+                    indices, counts = torch.unique(
+                        b.edges()[1], return_counts=True)
                     mask = indices[counts >= args.cache_min_neighbor]
-                    
+
                     node_embed_cache.put(
                         uncached_nodes[mask], uncached_embeds[mask])
                 else:
@@ -622,13 +634,13 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     if args.rank == 0:
         throughput_list = np.array(throughput_list)
         val_ap_list = np.array(val_ap_list)
-        out_dir = "tmp_res/yczhong_delay_lru_recent/"
+        out_dir = "tmp_res/yczhong_delay_tgn/"
         os.makedirs(out_dir, exist_ok=True)
 
         logging.debug('Throughput list: {}'.format(throughput_list))
         logging.debug('Val AP list: {}'.format(val_ap_list))
         postfix = '||model{}||dataset{}||cache_ratio{}||delay_epoch{}||cache_min_neighbor{}.npy'.format(
-                args.model, args.data, args.node_embed_cache_ratio, args.cache_delay_epoch, args.cache_min_neighbor)
+            args.model, args.data, args.node_embed_cache_ratio, args.cache_delay_epoch, args.cache_min_neighbor)
         np.save(out_dir+'throughput'+postfix, throughput_list)
         np.save(out_dir+'val_ap'+postfix, val_ap_list)
 
