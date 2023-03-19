@@ -1,7 +1,7 @@
 import itertools
 import os
 
-models = ['TGN', 'TGAT', 'GRAPHSAGE']
+models = ['GRAPHSAGE']
 datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
 cache = ['LRUCache', 'LFUCache', 'FIFOCache', 'GNNLabStaticCache']
 param_space = itertools.product(

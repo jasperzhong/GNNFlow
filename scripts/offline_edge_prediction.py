@@ -247,11 +247,15 @@ def main():
             torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
+
     num_edges = dgraph.num_edges()
     # put the features in shared memory when using distributed training
     node_feats, edge_feats = load_feat(
         args.data, shared_memory=args.distributed,
         local_rank=args.local_rank, local_world_size=args.local_world_size)
+
+    if node_feats is None:
+        node_feats = torch.randn(num_nodes, 128)
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
@@ -539,9 +543,11 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
         avg_throughput = total_samples_sum * args.world_size / epoch_time_sum
 
+        subdir = 'edge_cache/'
+        os.makedirs(subdir, exist_ok=True)
         prefix = "_{}_{}_{}.npy".format(args.model, args.data, args.cache)
-        np.save("throughput" + prefix, np.array(avg_throughput))
-        np.save("edge_cache_hit_rate"+prefix,
+        np.save(subdir + "throughput" + prefix, np.array(avg_throughput))
+        np.save(subdir + "edge_cache_hit_rate"+prefix,
                 np.array(cache_edge_ratio_sum.item()/(i+1)))
 
     if args.distributed:
