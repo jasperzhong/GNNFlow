@@ -172,7 +172,8 @@ def main():
         model_config["snapshot_time_window"] = 25
     else:
         model_config["snapshot_time_window"] = args.snapshot_time_window
-    logging.info("snapshot_time_window's value is {}".format(model_config["snapshot_time_window"]))
+    logging.info("snapshot_time_window's value is {}".format(
+        model_config["snapshot_time_window"]))
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
@@ -336,6 +337,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    total_samples_sum = 0
     early_stopper = EarlyStopMonitor()
 
     next_data = None
@@ -480,6 +482,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
+        total_samples_sum += total_samples
 
         # Validation
         val_start = time.time()
@@ -534,6 +537,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+        avg_throughput = total_samples_sum * args.world_size / epoch_time_sum
+
+        prefix = "_{}_{}_{}.npy".format(args.model, args.data, args.cache)
+        np.save("throughput" + prefix, np.array(avg_throughput))
+        np.save("edge_cache_hit_rate"+prefix,
+                np.array(cache_edge_ratio_sum.item()/(i+1)))
 
     if args.distributed:
         torch.distributed.barrier()
