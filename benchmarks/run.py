@@ -2,7 +2,7 @@ import itertools
 import os
 
 models = ['TGN', 'TGAT', 'GRAPHSAGE']
-datasets = ['WIKI', 'MOOC', 'LASTFM']
+datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
 
 param_space = itertools.product(
     models, datasets)
@@ -10,4 +10,4 @@ param_space = itertools.product(
 for param in param_space:
     print(param)
     os.system(
-        "python3 sampling_freq.py --model {} --dataset {} --stat".format(*param))
+        "python3 sampling_freq2.py --model {} --dataset {} --stat".format(*param))

@@ -196,6 +196,7 @@ partition_table.txt
 *.png
 *.pickle
 tmp_res/
+tmp_res
 *.npy
 
 # MacOS
