@@ -191,6 +191,8 @@ def main():
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
+    test_batch_size = batch_size // args.world_size
+    logging.info("test batch size: {}".format(test_batch_size))
 
     if args.distributed:
         train_sampler = DistributedBatchSampler(
@@ -203,7 +205,7 @@ def main():
             world_size=args.world_size)
         test_sampler = DistributedBatchSampler(
             SequentialSampler(test_ds),
-            batch_size=batch_size, drop_last=False, rank=args.rank,
+            batch_size=test_batch_size, drop_last=False, rank=args.rank,
             world_size=args.world_size)
     else:
         train_sampler = RandomStartBatchSampler(
@@ -323,6 +325,8 @@ def main():
         ap, auc = metrics.tolist()
         if args.rank == 0:
             logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+    else:
+        logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
     if args.distributed:
         torch.distributed.barrier()
@@ -334,6 +338,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
     best_ap = 0
     best_e = 0
     epoch_time_sum = 0
+    sampling_time_sum = 0
+    feature_fetch_time_sum = 0
+    memory_fetch_time_sum = 0
+    memory_update_time_sum = 0
+    memory_write_back_time_sum = 0
+    model_train_time_sum = 0
     early_stopper = EarlyStopMonitor()
 
     if args.local_rank == 0:
@@ -450,6 +460,12 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             total_print_time += print_end - print_start
         epoch_time = time.time() - epoch_time_start - total_print_time
         epoch_time_sum += epoch_time
+        sampling_time_sum += total_sampling_time
+        feature_fetch_time_sum += total_feature_fetch_time
+        memory_fetch_time_sum += total_memory_fetch_time
+        memory_update_time_sum += total_memory_update_time
+        memory_write_back_time_sum += total_memory_write_back_time
+        model_train_time_sum += total_model_train_time
 
         # Validation
         val_start = time.time()
@@ -504,6 +520,18 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))
+        logging.info('Avg sample time: {}'.format(
+            sampling_time_sum / args.epoch))
+        logging.info('Avg feature fetch time: {}'.format(
+            feature_fetch_time_sum / args.epoch))
+        logging.info('Avg memory fetch time: {}'.format(
+            memory_fetch_time_sum / args.epoch))
+        logging.info('Avg memory update time: {}'.format(
+            memory_update_time_sum / args.epoch))
+        logging.info('Avg gnn train time: {}'.format(
+            model_train_time_sum / args.epoch))
+        logging.info('Avg memory write back time: {}'.format(
+            memory_write_back_time_sum / args.epoch))
 
     if args.distributed:
         torch.distributed.barrier()
