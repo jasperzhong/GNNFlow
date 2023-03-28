@@ -351,7 +351,7 @@ class DstRandEdgeSampler:
     def __init__(self, dst_list, seed=None):
         self.seed = None
         self.dst_list = np.unique(dst_list)
-
+        logging.info("dst list: {}".format(self.dst_list))
         if seed is not None:
             self.seed = seed
             self.random_state = np.random.RandomState(self.seed)
@@ -501,6 +501,15 @@ def get_pinned_buffers(
                 (limit, dim_node), pin_memory=True))
 
     return pinned_nfeat_buffs, pinned_efeat_buffs
+
+
+class NegLinkSampler:
+
+    def __init__(self, num_nodes):
+        self.num_nodes = num_nodes
+
+    def sample(self, n):
+        return np.random.randint(self.num_nodes, size=n)
 
 
 class RandEdgeSampler:

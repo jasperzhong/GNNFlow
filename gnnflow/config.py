@@ -26,9 +26,9 @@ def get_default_config(model: str, dataset: str):
 
 
 _tgn_default_config = {
-    "dropout": 0.2,
+    "dropout": 0.1,
     "att_head": 2,
-    "att_dropout": 0.2,
+    "att_dropout": 0.1,
     "num_layers": 1,
     "fanouts": [10],
     "sample_strategy": "recent",
@@ -38,8 +38,8 @@ _tgn_default_config = {
     "use_memory": True,
     "dim_time": 100,
     "dim_embed": 100,
-    "dim_memory": 100,
-    "batch_size": 600
+    "dim_memory": 172,
+    "batch_size": 4000
 }
 
 _tgat_default_config = {

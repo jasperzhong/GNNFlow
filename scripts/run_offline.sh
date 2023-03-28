@@ -24,4 +24,4 @@ else
 fi
 
 echo $cmd
-OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${TIME_WINDOW}_baseline_memory_sync_600.log 2>&1
+OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${TIME_WINDOW}_baseline_memory_sync_4000.log 2>&1

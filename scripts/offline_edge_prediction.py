@@ -25,7 +25,7 @@ from gnnflow.models.dgnn import DGNN
 from gnnflow.models.gat import GAT
 from gnnflow.models.graphsage import SAGE
 from gnnflow.temporal_sampler import TemporalSampler
-from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
+from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor, NegLinkSampler,
                            build_dynamic_graph, get_pinned_buffers,
                            get_project_root_dir, load_dataset, load_feat,
                            mfgs_to_cuda)
@@ -42,7 +42,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=50)
+                    type=int, default=5)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -176,12 +176,30 @@ def main():
         data_config["mem_resource_type"] = "shared"
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
+    train_num_nodes = len(np.unique(np.concatenate(
+        (train_data['src'], train_data['dst']))))
+    full_num_nodes = len(np.unique(np.concatenate(
+        (full_data['src'], full_data['dst']))))
+    logging.info("train_num_nodes: {} full_num_nodes: {}".format(
+        train_num_nodes, full_num_nodes))
+    # train_rand_sampler = NegLinkSampler(train_num_nodes)
+    # val_rand_sampler = NegLinkSampler(full_num_nodes)
+    # test_rand_sampler = NegLinkSampler(full_num_nodes)
+    # train_rand_sampler = DstRandEdgeSampler(
+    #     train_data['dst'].to_numpy(dtype=np.int32))
+    # val_rand_sampler = DstRandEdgeSampler(
+    #     full_data['dst'].to_numpy(dtype=np.int32))
+    # test_rand_sampler = DstRandEdgeSampler(
+    #     full_data['dst'].to_numpy(dtype=np.int32))
     train_rand_sampler = DstRandEdgeSampler(
-        train_data['dst'].to_numpy(dtype=np.int32))
+        np.concatenate((train_data['src'].to_numpy(dtype=np.int32),
+                        train_data['dst'].to_numpy(dtype=np.int32))))
     val_rand_sampler = DstRandEdgeSampler(
-        full_data['dst'].to_numpy(dtype=np.int32))
+        np.concatenate((full_data['src'].to_numpy(dtype=np.int32),
+                        full_data['dst'].to_numpy(dtype=np.int32))))
     test_rand_sampler = DstRandEdgeSampler(
-        full_data['dst'].to_numpy(dtype=np.int32))
+        np.concatenate((full_data['src'].to_numpy(dtype=np.int32),
+                        full_data['dst'].to_numpy(dtype=np.int32))))
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
@@ -302,7 +320,7 @@ def main():
     criterion = torch.nn.BCEWithLogitsLoss()
 
     best_e = train(train_loader, val_loader, sampler,
-                   model, optimizer, criterion, cache, device)
+                   model, optimizer, criterion, cache, device, test_loader)
 
     logging.info('Loading model at epoch {}...'.format(best_e))
     ckpt = torch.load(checkpoint_path)
@@ -333,7 +351,7 @@ def main():
 
 
 def train(train_loader, val_loader, sampler, model, optimizer, criterion,
-          cache, device):
+          cache, device, test_loader):
     global training
     best_ap = 0
     best_e = 0
@@ -472,6 +490,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         val_ap, val_auc = evaluate(
             val_loader, sampler, model, criterion, cache, device)
 
+        ap, auc = evaluate(test_loader, sampler, model,
+                           criterion, cache, device)
+
         if args.distributed:
             val_res = torch.tensor([val_ap, val_auc]).to(device)
             torch.distributed.all_reduce(val_res)
@@ -499,6 +520,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
             logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s".format(
 
                 e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time))
+            logging.info('Test ap:{:4f}  test auc:{:4f}'.format(ap, auc))
 
         if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1

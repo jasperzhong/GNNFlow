@@ -313,7 +313,7 @@ class Cache:
                             uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
                                 self.device, non_blocking=True)
                         else:
-                            uncached_node_feature = self.node_feats[uncached_node_id_unique].to(
+                            uncached_node_feature = self.node_feats[uncached_node_id_unique.cpu()].to(
                                 self.device, non_blocking=True)
                     node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
 
@@ -389,7 +389,8 @@ class Cache:
                                 uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
                                     self.device, non_blocking=True)
                             else:
-                                uncached_edge_feature = self.edge_feats[uncached_edge_id_unique].to(
+
+                                uncached_edge_feature = self.edge_feats[uncached_edge_id_unique.cpu()].to(
                                     self.device, non_blocking=True)
 
                         edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
