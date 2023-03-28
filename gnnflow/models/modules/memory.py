@@ -49,6 +49,7 @@ class Memory:
 
         self.kvstore_client = kvstore_client
         self.partition = self.kvstore_client != None
+        self.distributed = shared_memory
 
         self.lock = Lock()
         self.i = 0
@@ -270,25 +271,28 @@ class Memory:
 
         # find the global recent
         # Use all_gather to gather the tensors from all the processes
-        nid_mails = self.sync(nid_mail)
-        mails = self.sync(mail)
-        mail_tss = self.sync(mail_ts)
-        uni, inv = torch.unique(nid_mails, return_inverse=True)
-        perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
-        perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-        nid_mail = nid_mails[perm]
-        mail = mails[perm]
-        mail_ts = mail_tss[perm]
+        if self.distributed:
+            nid_mails = self.sync(nid_mail)
+            mails = self.sync(mail)
+            mail_tss = self.sync(mail_ts)
+            uni, inv = torch.unique(nid_mails, return_inverse=True)
+            perm = torch.arange(
+                inv.size(0), dtype=inv.dtype, device=inv.device)
+            perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
+            nid_mail = nid_mails[perm]
+            mail = mails[perm]
+            mail_ts = mail_tss[perm]
 
-        nids = self.sync(nid)
-        mems = self.sync(mem)
-        mem_tss = self.sync(mem_ts)
-        uni, inv = torch.unique(nids, return_inverse=True)
-        perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
-        perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-        nid = nids[perm]
-        mem = mems[perm]
-        mem_ts = mem_tss[perm]
+            nids = self.sync(nid)
+            mems = self.sync(mem)
+            mem_tss = self.sync(mem_ts)
+            uni, inv = torch.unique(nids, return_inverse=True)
+            perm = torch.arange(
+                inv.size(0), dtype=inv.dtype, device=inv.device)
+            perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
+            nid = nids[perm]
+            mem = mems[perm]
+            mem_ts = mem_tss[perm]
 
         if self.partition:
             # cat the memory first
@@ -301,7 +305,7 @@ class Memory:
             self.kvstore_client.push(nid, all_mem, mode='memory')
         else:
             # update mailbox first
-            if torch.distributed.get_rank() == 0:
+            if not self.distributed or torch.distributed.get_rank() == 0:
                 with self.lock:
                     self.mailbox[nid_mail] = mail
                     self.mailbox_ts[nid_mail] = mail_ts
