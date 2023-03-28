@@ -244,11 +244,12 @@ class Memory:
             [src.unsqueeze(1), dst.unsqueeze(1)], dim=1).reshape(-1)
         mail_ts = last_updated_ts[:len(nid)]
 
+        # nid, mail, mail_ts = self.sync_all_mail(nid, mail, mail_ts)
         # find unique nid to update mailbox
         uni, inv = torch.unique(nid, return_inverse=True)
         perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
         perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
-        nid = nid[perm]
+        nid_mail = nid[perm]
         mail = mail[perm]
         mail_ts = mail_ts[perm]
 
@@ -257,6 +258,7 @@ class Memory:
         nid = last_updated_nid[:num_true_src_dst].to(self.device)
         memory = last_updated_memory[:num_true_src_dst].to(self.device)
         ts = last_updated_ts[:num_true_src_dst].to(self.device)
+        # nid, memory, ts = self.sync_all_mail(nid, memory, ts)
         # the nid of mem and mail is different
         # after unique they are the same but perm is still different
         uni, inv = torch.unique(nid, return_inverse=True)
@@ -266,6 +268,28 @@ class Memory:
         mem = memory[perm]
         mem_ts = ts[perm]
 
+        # find the global recent
+        # Use all_gather to gather the tensors from all the processes
+        nid_mails = self.sync(nid_mail)
+        mails = self.sync(mail)
+        mail_tss = self.sync(mail_ts)
+        uni, inv = torch.unique(nid_mails, return_inverse=True)
+        perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
+        perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
+        nid_mail = nid_mails[perm]
+        mail = mails[perm]
+        mail_ts = mail_tss[perm]
+
+        nids = self.sync(nid)
+        mems = self.sync(mem)
+        mem_tss = self.sync(mem_ts)
+        uni, inv = torch.unique(nids, return_inverse=True)
+        perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
+        perm = inv.new_empty(uni.size(0)).scatter_(0, inv, perm)
+        nid = nids[perm]
+        mem = mems[perm]
+        mem_ts = mem_tss[perm]
+
         if self.partition:
             # cat the memory first
             all_mem = torch.cat((mem,
@@ -273,18 +297,59 @@ class Memory:
                                  mail,
                                  mail_ts.unsqueeze(dim=1)),
                                 dim=1)
+            # TODO: mailbox nid is different
             self.kvstore_client.push(nid, all_mem, mode='memory')
         else:
             # update mailbox first
-            with self.lock:
-                self.mailbox[nid] = mail
-                self.mailbox_ts[nid] = mail_ts
-                # update mem
-                self.node_memory[nid] = mem
-                self.node_memory_ts[nid] = mem_ts
-                # self.i = i
-                # if int(os.environ['LOCAL_RANK']) == 0:
-                # logging.info('update mem at iter: {}'.format(self.i))
-                # if int(os.environ['LOCAL_RANK']) == 0:
-                #     logging.info('fetch self.node_memory_nid {}'.format(
-                #         self.node_memory[nid]))
+            if torch.distributed.get_rank() == 0:
+                with self.lock:
+                    self.mailbox[nid_mail] = mail
+                    self.mailbox_ts[nid_mail] = mail_ts
+                    # update mem
+                    self.node_memory[nid] = mem
+                    self.node_memory_ts[nid] = mem_ts
+                    # self.i = i
+                    # if int(os.environ['LOCAL_RANK']) == 0:
+                    # logging.info('update mem at iter: {}'.format(self.i))
+                    # if int(os.environ['LOCAL_RANK']) == 0:
+                    #     logging.info('fetch self.node_memory_nid {}'.format(
+                    #         self.node_memory[nid]))
+
+    def sync(self, tensor: torch.Tensor) -> torch.Tensor:
+        world_size = torch.distributed.get_world_size()
+
+        gather_list = [None for _ in range(world_size)]
+        torch.distributed.all_gather_object(
+            gather_list, tensor)
+        output_tensor = torch.cat(gather_list, dim=0)
+        return output_tensor
+
+    def sync_all_mail(self, nid, mail, mail_ts):
+        world_size = torch.distributed.get_world_size()
+
+        gather_list = [None for _ in range(world_size)]
+
+        mails = [nid, mail, mail_ts]
+        torch.distributed.all_gather_object(
+            gather_list, mails)
+        nids = torch.cat([gather_list[i][0] for i in range(world_size)], dim=0)
+        mails = torch.cat([gather_list[i][1]
+                          for i in range(world_size)], dim=0)
+        mail_tss = torch.cat([gather_list[i][2]
+                             for i in range(world_size)], dim=0)
+        # nid_gather_list = [torch.zeros(nid.shape).to(rank)
+        #                    for _ in range(world_size)]
+        # torch.distributed.all_gather(nid_gather_list, nid)
+        # nids = torch.cat(nid_gather_list, dim=0)
+
+        # mail_gather_list = [torch.zeros(mail.shape).to(rank)
+        #                     for _ in range(world_size)]
+        # torch.distributed.all_gather(mail_gather_list, mail)
+        # mails = torch.cat(mail_gather_list, dim=0)
+
+        # mail_ts_gather_list = [torch.zeros(mail_ts.shape).to(rank)
+        #                        for _ in range(world_size)]
+        # torch.distributed.all_gather(mail_ts_gather_list, mail)
+        # mail_tss = torch.cat(mail_gather_list, dim=0)
+
+        return nids, mails, mail_tss
