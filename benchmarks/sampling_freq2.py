@@ -39,12 +39,15 @@ def main():
     # Create a dynamic graph
     _, _, _, df = load_dataset(args.dataset)
     model_config,  dataset_config = get_default_config(
-        args.model, args.dataset)
+        args.model[len("shuffle_"):], args.dataset)
     dataset_config["mem_resource_type"] = args.mem_resource_type
     dgraph = build_dynamic_graph(
         **dataset_config, dataset_df=df)
 
     sampler = TemporalSampler(dgraph, **model_config)
+    if args.model.startswith("shuffle_"):
+        print("Shuffle the dataset")
+        df = df.sample(frac=1).reset_index(drop=True)
 
     node_sequence = []
     edge_sequence = []

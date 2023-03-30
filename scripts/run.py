@@ -1,8 +1,8 @@
 import itertools
 import os
 
-models = ['TGN', 'TGAT', 'GRAPHSAGE']
-datasets = ['MOOC', 'LASTFM']
+models = ['shuffle_TGAT', 'shuffle_DySAT', 'shuffle_GRAPHSAGE']
+datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
 cache = ['LRUCache', 'LFUCache', 'FIFOCache', 'GNNLabStaticCache']
 param_space = itertools.product(
     models, datasets, cache)

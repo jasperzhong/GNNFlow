@@ -1,7 +1,7 @@
 import itertools
 import os
 
-models = ['TGN', 'TGAT', 'GRAPHSAGE']
+models = ['shuffle_TGAT']
 datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
 
 param_space = itertools.product(

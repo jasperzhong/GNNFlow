@@ -37,7 +37,7 @@ cache_names = sorted(name for name in caches.__dict__
                      and callable(caches.__dict__[name]))
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", choices=model_names, required=True,
+parser.add_argument("--model", required=True,
                     help="model architecture" + '|'.join(model_names))
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
@@ -167,7 +167,8 @@ def main():
 
     logging.info("rank: {}, world_size: {}".format(args.rank, args.world_size))
 
-    model_config, data_config = get_default_config(args.model, args.data)
+    model_config, data_config = get_default_config(
+        args.model[len("shuffle_"):], args.data)
     if model_config["snapshot_time_window"] > 0 and args.data == "GDELT":
         model_config["snapshot_time_window"] = 25
     else:
@@ -187,6 +188,10 @@ def main():
         full_data['dst'].to_numpy(dtype=np.int32))
     test_rand_sampler = DstRandEdgeSampler(
         full_data['dst'].to_numpy(dtype=np.int32))
+
+    if args.model.startswith("shuffle_"):
+        logging.info("shuffle train data")
+        train_data = train_data.sample(frac=1).reset_index(drop=True)
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
@@ -263,9 +268,9 @@ def main():
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
 
-    if args.model == "GRAPHSAGE":
+    if args.model[len("shuffle_"):] == "GRAPHSAGE":
         model = SAGE(dim_node, model_config['dim_embed'])
-    elif args.model == 'GAT':
+    elif args.model[len("shuffle_"):] == 'GAT':
         model = DGNN(dim_node, dim_edge, **model_config, num_nodes=num_nodes,
                      memory_device=device, memory_shared=args.distributed)
     else:
