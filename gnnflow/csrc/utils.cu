@@ -93,8 +93,8 @@ __global__ void InitCuRandStates(curandState_t* states,
   }
 }
 
-__host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
-                                    TimestampType timestamp, int* idx) {
+__device__ void LowerBound(TimestampType* timestamps, int num_edges,
+                           TimestampType timestamp, int* res) {
   int left = 0;
   int right = num_edges;
   while (left < right) {
@@ -105,7 +105,7 @@ __host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
       right = mid;
     }
   }
-  *idx = left;
+  *res = left;
 }
 
 template <typename T>

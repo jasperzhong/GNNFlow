@@ -10,11 +10,11 @@ namespace gnnflow {
 
 __global__ void SampleLayerRecentKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
-    const NIDType* root_nodes, const TimestampType* root_timestamps,
-    uint32_t snapshot_idx, uint32_t num_snapshots,
-    TimestampType snapshot_time_window, uint32_t maximum_sampled_nodes,
-    uint32_t fanout, NIDType* src_nodes, EIDType* eids,
-    TimestampType* timestamps, TimestampType* delta_timestamps,
+    uint32_t offset_per_thread, const NIDType* root_nodes,
+    const TimestampType* root_timestamps, uint32_t snapshot_idx,
+    uint32_t num_snapshots, TimestampType snapshot_time_window,
+    uint32_t maximum_sampled_nodes, uint32_t fanout, NIDType* src_nodes,
+    EIDType* eids, TimestampType* timestamps, TimestampType* delta_timestamps,
     uint32_t* num_sampled) {
   uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= maximum_sampled_nodes) {
@@ -44,53 +44,60 @@ __global__ void SampleLayerRecentKernel(
   uint32_t offset = nid_index * fanout;
   int start_idx, end_idx;
   int index = sample_index;
-  while (curr != nullptr && curr->capacity > 0) {
-    if (end_timestamp < curr->start_timestamp) {
-      // search in the previous block
-      curr = curr->prev;
+  while (curr != nullptr) {
+    auto curr_block = *curr;
+    if (curr_block.capacity == 0) {
+      // the block is empty
+      curr = curr_block.prev;
       continue;
     }
 
-    if (start_timestamp > curr->end_timestamp) {
-      // no need to search in the previous block
-      break;
+    if (end_timestamp < curr_block.start_timestamp) {
+      // search in the previous block
+      curr = curr_block.prev;
+      continue;
     }
 
+    if (start_timestamp > curr_block.end_timestamp) {
+      // no need to search in the previous block
+      break;
+    }    
+
     // search in the current block
-    if (start_timestamp >= curr->start_timestamp &&
-        end_timestamp <= curr->end_timestamp) {
+    if (start_timestamp >= curr_block.start_timestamp &&
+        end_timestamp <= curr_block.end_timestamp) {
       // all edges in the current block
-      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp < curr->start_timestamp &&
-               end_timestamp <= curr->end_timestamp) {
+      LowerBound(curr_block.timestamps, curr_block.size, start_timestamp, &start_idx);
+      LowerBound(curr_block.timestamps, curr_block.size, end_timestamp, &end_idx);
+    } else if (start_timestamp < curr_block.start_timestamp &&
+               end_timestamp <= curr_block.end_timestamp) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
-      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp > curr->start_timestamp &&
-               end_timestamp > curr->end_timestamp) {
+      LowerBound(curr_block.timestamps, curr_block.size, end_timestamp, &end_idx);
+    } else if (start_timestamp > curr_block.start_timestamp &&
+               end_timestamp > curr_block.end_timestamp) {
       // only the edges after start_timestamp are in the current block
-      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-      end_idx = curr->size;
+      LowerBound(curr_block.timestamps, curr_block.size, start_timestamp, &start_idx);
+      end_idx = curr_block.size;
     } else {
       // the whole block is in the range
       start_idx = 0;
-      end_idx = curr->size;
+      end_idx = curr_block.size;
     }
 
     int32_t i = end_idx - 1 - index;
     if (i < start_idx) {
       index -= end_idx - start_idx;
-      curr = curr->prev;
+      curr = curr_block.prev;
       continue;
     } else {
       // copy the edges to the output
-      src_nodes[offset + sample_index] = curr->dst_nodes[i];
-      eids[offset + sample_index] = curr->eids[i];
+      src_nodes[offset + sample_index] = curr_block.dst_nodes[i];
+      eids[offset + sample_index] = curr_block.eids[i];
+      auto timestamp = curr_block.timestamps[i];
       timestamps[offset + sample_index] =
-          prop_time ? root_timestamp : curr->timestamps[i];
-      delta_timestamps[offset + sample_index] =
-          root_timestamp - curr->timestamps[i];
+          prop_time ? root_timestamp : timestamp;
+      delta_timestamps[offset + sample_index] = root_timestamp - timestamp;
       atomicAdd(&num_sampled[nid_index], 1u);
       return;
     }
@@ -141,39 +148,45 @@ __global__ void SampleLayerUniformKernel(
   int start_idx, end_idx;
   int curr_idx = 0;
   const int offset_by_thread = offset_per_thread * threadIdx.x;
-  while (curr != nullptr && curr->capacity > 0) {
-    if (end_timestamp < curr->start_timestamp) {
+  while (curr != nullptr) {
+    auto curr_block = *curr;
+    if (curr_block.capacity == 0) {
+      // the block is empty
+      curr = curr_block.prev;
+      continue;
+    }
+    if (end_timestamp < curr_block.start_timestamp) {
       // search in the prev block
-      curr = curr->prev;
+      curr = curr_block.prev;
       curr_idx += 1;
       continue;
     }
 
-    if (start_timestamp > curr->end_timestamp) {
+    if (start_timestamp > curr_block.end_timestamp) {
       // no need to search in the prev block
       break;
     }
 
     // search in the current block
-    if (start_timestamp >= curr->start_timestamp &&
-        end_timestamp <= curr->end_timestamp) {
+    if (start_timestamp >= curr_block.start_timestamp &&
+        end_timestamp <= curr_block.end_timestamp) {
       // all edges in the current block
-      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp < curr->start_timestamp &&
-               end_timestamp <= curr->end_timestamp) {
+      LowerBound(curr_block.timestamps, curr_block.size, start_timestamp, &start_idx);
+      LowerBound(curr_block.timestamps, curr_block.size, end_timestamp, &end_idx);
+    } else if (start_timestamp < curr_block.start_timestamp &&
+               end_timestamp <= curr_block.end_timestamp) {
       // only the edges before end_timestamp are in the current block
       start_idx = 0;
-      LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-    } else if (start_timestamp > curr->start_timestamp &&
-               end_timestamp > curr->end_timestamp) {
+      LowerBound(curr_block.timestamps, curr_block.size, end_timestamp, &end_idx);
+    } else if (start_timestamp > curr_block.start_timestamp &&
+               end_timestamp > curr_block.end_timestamp) {
       // only the edges after start_timestamp are in the current block
-      LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-      end_idx = curr->size;
+      LowerBound(curr_block.timestamps, curr_block.size, start_timestamp, &start_idx);
+      end_idx = curr_block.size;
     } else {
       // the whole block is in the range
       start_idx = 0;
-      end_idx = curr->size;
+      end_idx = curr_block.size;
     }
 
     if (curr_idx < offset_per_thread) {
@@ -182,7 +195,7 @@ __global__ void SampleLayerUniformKernel(
     }
 
     num_candidates += end_idx - start_idx;
-    curr = curr->prev;
+    curr = curr_block.prev;
     curr_idx += 1;
   }
 
@@ -191,15 +204,21 @@ __global__ void SampleLayerUniformKernel(
 
   curr = list.tail;
   curr_idx = 0;
-  while (curr != nullptr && curr->capacity > 0) {
-    if (end_timestamp < curr->start_timestamp) {
+  while (curr != nullptr) {
+    auto curr_block = *curr;
+    if (curr_block.capacity == 0) {
+      // the block is empty
+      curr = curr_block.prev;
+      continue;
+    }
+    if (end_timestamp < curr_block.start_timestamp) {
       // search in the prev block
-      curr = curr->prev;
+      curr = curr_block.prev;
       curr_idx += 1;
       continue;
     }
 
-    if (start_timestamp > curr->end_timestamp) {
+    if (start_timestamp > curr_block.end_timestamp) {
       // no need to search in the prev block
       break;
     }
@@ -209,42 +228,42 @@ __global__ void SampleLayerUniformKernel(
       end_idx = ranges[offset_by_thread + curr_idx].end_idx;
     } else {
       // search in the current block
-      if (start_timestamp >= curr->start_timestamp &&
-          end_timestamp <= curr->end_timestamp) {
+      if (start_timestamp >= curr_block.start_timestamp &&
+          end_timestamp <= curr_block.end_timestamp) {
         // all edges in the current block
-        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-      } else if (start_timestamp < curr->start_timestamp &&
-                 end_timestamp <= curr->end_timestamp) {
+        LowerBound(curr_block.timestamps, curr_block.size, start_timestamp, &start_idx);
+        LowerBound(curr_block.timestamps, curr_block.size, end_timestamp, &end_idx);
+      } else if (start_timestamp < curr_block.start_timestamp &&
+                 end_timestamp <= curr_block.end_timestamp) {
         // only the edges before end_timestamp are in the current block
         start_idx = 0;
-        LowerBound(curr->timestamps, curr->size, end_timestamp, &end_idx);
-      } else if (start_timestamp > curr->start_timestamp &&
-                 end_timestamp > curr->end_timestamp) {
+        LowerBound(curr_block.timestamps, curr_block.size, end_timestamp, &end_idx);
+      } else if (start_timestamp > curr_block.start_timestamp &&
+                 end_timestamp > curr_block.end_timestamp) {
         // only the edges after start_timestamp are in the current block
-        LowerBound(curr->timestamps, curr->size, start_timestamp, &start_idx);
-        end_idx = curr->size;
+        LowerBound(curr_block.timestamps, curr_block.size, start_timestamp, &start_idx);
+        end_idx = curr_block.size;
       } else {
         // the whole block is in the range
         start_idx = 0;
-        end_idx = curr->size;
+        end_idx = curr_block.size;
       }
     }
 
     int32_t i = end_idx - 1 - index;
     if (i < start_idx) {
       index -= end_idx - start_idx;
-      curr = curr->prev;
+      curr = curr_block.prev;
       curr_idx += 1;
       continue;
     } else {
       // copy the edges to the output
-      src_nodes[offset + sample_index] = curr->dst_nodes[i];
-      eids[offset + sample_index] = curr->eids[i];
+      src_nodes[offset + sample_index] = curr_block.dst_nodes[i];
+      eids[offset + sample_index] = curr_block.eids[i];
+      auto timestamp = curr_block.timestamps[i];
       timestamps[offset + sample_index] =
-          prop_time ? root_timestamp : curr->timestamps[i];
-      delta_timestamps[offset + sample_index] =
-          root_timestamp - curr->timestamps[i];
+          prop_time ? root_timestamp : timestamp;
+      delta_timestamps[offset + sample_index] = root_timestamp - timestamp;
       atomicAdd(&num_sampled[nid_index], 1u);
       return;
     }

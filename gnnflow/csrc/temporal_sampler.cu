@@ -160,12 +160,18 @@ SamplingResult TemporalSampler::SampleLayer(
                             stream_holders_[snapshot]));
 
   if (sampling_policy_ == SamplingPolicy::kSamplingPolicyRecent) {
-    SampleLayerRecentKernel<<<num_blocks, num_threads_per_block, 0,
+    int offset_per_thread =
+        shared_memory_size_ / sizeof(TimestampType) / num_threads_per_block;
+
+    SampleLayerRecentKernel<<<num_blocks, num_threads_per_block,
+                              offset_per_thread * num_threads_per_block *
+                                  sizeof(TimestampType),
                               stream_holders_[snapshot]>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        d_root_nodes, d_root_timestamps, snapshot, num_snapshots_,
-        snapshot_time_window_, maximum_sampled_nodes, fanouts_[layer],
-        d_src_nodes, d_eids, d_timestamps, d_delta_timestamps, d_num_sampled);
+        offset_per_thread, d_root_nodes, d_root_timestamps, snapshot,
+        num_snapshots_, snapshot_time_window_, maximum_sampled_nodes,
+        fanouts_[layer], d_src_nodes, d_eids, d_timestamps, d_delta_timestamps,
+        d_num_sampled);
   } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
     int offset_per_thread =
         shared_memory_size_ / sizeof(SamplingRange) / num_threads_per_block;

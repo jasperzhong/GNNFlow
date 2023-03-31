@@ -91,7 +91,7 @@ def main():
             throughput_list), np.std(throughput_list),
         np.std(throughput_list) / np.mean(throughput_list)))
 
-    subdir = "tmp_res/sampling_nextdoor_test_{}/".format(
+    subdir = "tmp_res/sampling_nextdoor_test_{}_cache/".format(
         "sorted" if args.sort else "unsorted")
     os.makedirs(subdir, exist_ok=True)
     np.save(os.path.join(subdir, "sampling_throughput_{}_{}.npy".format(

@@ -9,10 +9,10 @@ namespace gnnflow {
 
 __global__ void SampleLayerRecentKernel(
     const DoublyLinkedList* node_table, std::size_t num_nodes, bool prop_time,
-    const NIDType* root_nodes, const TimestampType* root_timestamps,
-    uint32_t snapshot_idx, uint32_t num_snapshots,
-    TimestampType snapshot_time_window, uint32_t num_root_nodes,
-    uint32_t fanout, NIDType* src_nodes, EIDType* eid,
+    uint32_t offset_per_thread, const NIDType* root_nodes,
+    const TimestampType* root_timestamps, uint32_t snapshot_idx,
+    uint32_t num_snapshots, TimestampType snapshot_time_window,
+    uint32_t num_root_nodes, uint32_t fanout, NIDType* src_nodes, EIDType* eid,
     TimestampType* timestamps, TimestampType* delta_timestamps,
     uint32_t* num_sampled);
 
