@@ -81,7 +81,7 @@ void Copy(void* dst, const void* src, std::size_t size);
 __global__ void InitCuRandStates(curandState_t* state, std::size_t num_elements,
                                  uint64_t seed);
 
-__host__ __device__ void LowerBound(TimestampType* timestamps, int num_edges,
+__device__ void LowerBound(TimestampType* timestamps, int num_edges,
                                     TimestampType timestamp, int* idx);
 
 __host__ __device__ void QuickSort(uint32_t* indices, int lo, int hi);

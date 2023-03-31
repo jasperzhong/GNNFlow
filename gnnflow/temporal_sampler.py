@@ -1,4 +1,5 @@
 from typing import List, Union
+import time
 
 import dgl
 import numpy as np
@@ -77,6 +78,52 @@ class TemporalSampler:
             sampling_results = self._sampler.sample(
                 target_vertices, timestamps)
         return self._to_dgl_block(sampling_results)
+
+    def _sample(self, target_vertices: np.ndarray, timestamps: np.ndarray, sort: bool = False):
+        """
+        debug only
+        """
+        if self._is_static:
+            sampling_results, sort_time = self._sample_impl(
+                target_vertices,
+                np.full(target_vertices.shape,
+                        np.finfo(np.float32).max), sort)
+        else:
+            sampling_results, sort_time = self._sample_impl(
+                target_vertices, timestamps, sort)
+
+        return sampling_results, sort_time
+
+    def _sample_impl(self, target_vertices: np.ndarray, timestamps: np.ndarray, sort: bool = False):
+        sampling_results = []
+        sort_time = 0
+        for layer in range(self._num_layers):
+            layer_results = []
+            for snapshot in range(self._num_snapshots):
+                if layer == 0:
+                    input_nodes = target_vertices
+                    input_ts = timestamps
+                else:
+                    input_nodes = sampling_results[layer -
+                                                   1][snapshot].all_nodes()
+                    input_ts = sampling_results[layer -
+                                                1][snapshot].all_timestamps()
+
+                if sort:
+                    sort_start = time.time()
+                    # sort by input_nodes
+                    idx = np.argsort(input_nodes)
+                    input_nodes = input_nodes[idx]
+                    input_ts = input_ts[idx]
+                    sort_time += time.time() - sort_start
+
+                sampling_result = self._sampler.sample_layer(
+                    input_nodes, input_ts, layer, snapshot)
+                layer_results.append(sampling_result)
+
+            sampling_results.append(layer_results)
+
+        return sampling_results, sort_time
 
     def sample_layer(self, target_vertices:  np.ndarray, timestamps: np.ndarray,
                      layer: int, snapshot: int, to_dgl_block: bool = True) \

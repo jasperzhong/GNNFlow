@@ -91,7 +91,7 @@ class TestTemporalSampler(unittest.TestCase):
                          timestamps, add_reverse=False)
 
         # sample 1-hop neighbors
-        sampler = TemporalSampler(dgraph, [2], strategy='uniform')
+        sampler = TemporalSampler(dgraph, [2], sample_strategy='uniform')
         target_vertices = np.array([0, 1, 2])
         blocks = sampler.sample(target_vertices,
                                 np.array([3, 3, 3]))

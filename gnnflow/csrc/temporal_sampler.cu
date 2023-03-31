@@ -61,15 +61,15 @@ void TemporalSampler::InitBufferIfNeeded(std::size_t num_root_nodes,
         new PinMemoryBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
     gpu_output_buffer_.reset(
         new GPUBuffer(maximum_sampled_nodes * kPerNodeOutputBufferSize));
+    if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
+      rand_states_.reset(new CuRandStateHolder(maximum_sampled_nodes, seed_));
+    }
   }
 
   if (num_root_nodes > maximum_num_root_nodes_) {
     maximum_num_root_nodes_ = num_root_nodes;
     gpu_input_buffer_.reset(
         new GPUBuffer(num_root_nodes * kPerNodeInputBufferSize));
-    if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
-      rand_states_.reset(new CuRandStateHolder(num_root_nodes, seed_));
-    }
   }
 }
 
@@ -145,17 +145,33 @@ SamplingResult TemporalSampler::SampleLayer(
       GetOutputBufferTuple(*gpu_output_buffer_, num_root_nodes,
                            maximum_sampled_nodes);
 
-  uint32_t num_threads_per_block = 256;
-  uint32_t num_blocks =
-      (num_root_nodes + num_threads_per_block - 1) / num_threads_per_block;
+  // read from env
+  char* value = std::getenv("NUM_THREADS_PER_BLOCK");
+  uint32_t num_threads_per_block;
+  if (value == nullptr) {
+    num_threads_per_block = 256;
+  } else {
+    num_threads_per_block = std::stoi(value);
+  }
+  uint32_t num_blocks = (maximum_sampled_nodes + num_threads_per_block - 1) /
+                        num_threads_per_block;
+
+  CUDA_CALL(cudaMemsetAsync(d_num_sampled, 0, num_root_nodes * sizeof(uint32_t),
+                            stream_holders_[snapshot]));
 
   if (sampling_policy_ == SamplingPolicy::kSamplingPolicyRecent) {
-    SampleLayerRecentKernel<<<num_blocks, num_threads_per_block, 0,
+    int offset_per_thread =
+        shared_memory_size_ / sizeof(TimestampType) / num_threads_per_block;
+
+    SampleLayerRecentKernel<<<num_blocks, num_threads_per_block,
+                              offset_per_thread * num_threads_per_block *
+                                  sizeof(TimestampType),
                               stream_holders_[snapshot]>>>(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
-        d_root_nodes, d_root_timestamps, snapshot, num_snapshots_,
-        snapshot_time_window_, num_root_nodes, fanouts_[layer], d_src_nodes,
-        d_eids, d_timestamps, d_delta_timestamps, d_num_sampled);
+        offset_per_thread, d_root_nodes, d_root_timestamps, snapshot,
+        num_snapshots_, snapshot_time_window_, maximum_sampled_nodes,
+        fanouts_[layer], d_src_nodes, d_eids, d_timestamps, d_delta_timestamps,
+        d_num_sampled);
   } else if (sampling_policy_ == SamplingPolicy::kSamplingPolicyUniform) {
     int offset_per_thread =
         shared_memory_size_ / sizeof(SamplingRange) / num_threads_per_block;
@@ -167,8 +183,8 @@ SamplingResult TemporalSampler::SampleLayer(
         graph_.get_device_node_table(), graph_.num_nodes(), prop_time_,
         *rand_states_, seed_, offset_per_thread, d_root_nodes,
         d_root_timestamps, snapshot, num_snapshots_, snapshot_time_window_,
-        num_root_nodes, fanouts_[layer], d_src_nodes, d_eids, d_timestamps,
-        d_delta_timestamps, d_num_sampled);
+        maximum_sampled_nodes, fanouts_[layer], d_src_nodes, d_eids,
+        d_timestamps, d_delta_timestamps, d_num_sampled);
   }
 
   // combine
