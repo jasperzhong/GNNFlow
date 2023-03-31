@@ -80,6 +80,9 @@ class TemporalSampler:
         return self._to_dgl_block(sampling_results)
 
     def _sample(self, target_vertices: np.ndarray, timestamps: np.ndarray, sort: bool = False):
+        """
+        debug only
+        """
         if self._is_static:
             sampling_results, sort_time = self._sample_impl(
                 target_vertices,
