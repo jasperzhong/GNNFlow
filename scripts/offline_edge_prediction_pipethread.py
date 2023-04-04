@@ -170,7 +170,7 @@ def main():
         args.local_rank = int(os.environ['LOCAL_RANK'])
         args.local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group('nccl')
+        torch.distributed.init_process_group('gloo')
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
     else:
@@ -278,6 +278,9 @@ def main():
                      memory_device=device, memory_shared=args.distributed)
     model.to(device)
 
+    # sampler = []
+    # for _ in range(10):
+    #     sampler.append(TemporalSampler(dgraph, **model_config))
     sampler = TemporalSampler(dgraph, **model_config)
 
     if args.distributed:

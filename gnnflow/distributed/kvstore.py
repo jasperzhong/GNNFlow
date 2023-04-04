@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -248,6 +249,8 @@ class KVStoreClient:
         self._dim_memory = dim_memory
         self._dim_mail = dim_memory * 2 + self._dim_edge_feat
 
+        self.comm_time = 0
+
     def push(self, keys: torch.Tensor, tensors: torch.Tensor, mode: str, nid: Optional[torch.Tensor] = None):
         """
         Push tensors to the corresponding KVStore servers according to the partition table.
@@ -387,7 +390,10 @@ class KVStoreClient:
         # collect pull results
         pull_results = []
         for future in futures:
+            start = time.time()
             pull_results.append(future.wait())
+            end = time.time()
+            self.comm_time += end - start
 
         return self._merge_pull_results(pull_results, masks, mode)
 

@@ -151,6 +151,9 @@ def main():
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(
             'gloo', timeout=datetime.timedelta(seconds=36000))
+        # ddp_pg = torch.distributed.new_group(
+        #     ranks=np.arange(int(os.environ.get('WORLD_SIZE', 0))).tolist(),
+        #     backend='nccl', timeout=datetime.timedelta(seconds=36000))
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
         args.num_nodes = args.world_size // args.local_world_size
@@ -382,6 +385,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         total_feature_fetch_time = 0
         total_memory_fetch_time = 0
         total_memory_update_time = 0
+        total_model_train_time = 0
         cv_sampling_time = 0
 
         epoch_time_start = time.time()
@@ -419,6 +423,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                     total_memory_update_time += time.time() - memory_update_start_time
 
             # Train
+            model_start = time.time()
             optimizer.zero_grad()
             pred_pos, pred_neg = model(mfgs)
 
@@ -436,6 +441,9 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             loss.backward()
             optimizer.step()
 
+            model_end = time.time()
+            total_model_train_time += model_end - model_start
+
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += len(target_nodes)
@@ -444,11 +452,11 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                 if args.distributed:
                     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
                                             cache_node_ratio_sum, total_samples, total_sampling_time,
-                                            total_feature_fetch_time, total_memory_fetch_time], device=device)
+                                            total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_model_train_time], device=device)
                     torch.distributed.all_reduce(metrics)
                     metrics /= args.world_size
                     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                        total_samples, total_sampling_time, total_feature_fetch_time, total_memory_fetch_time = metrics.tolist()
+                        total_samples, total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_model_train_time = metrics.tolist()
 
                     all_sampling_time = sampler.get_sampling_time()
                     std = all_sampling_time.std(dim=1).mean()
@@ -456,9 +464,10 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
                     cv_sampling_time += std / mean
 
                 if args.rank == 0:
-                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Total feature fetch time: {:.2f}s | Total memory fetch time: {:.2f}s | Total memory fetch time: {:.2f}s |Total time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
-                        train_data)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, time.time() - epoch_time_start))
-
+                    logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | avg sampling time CV {:.4f} | Total sampling time: {:.2f}s | Total feature fetch time: {:.2f}s | Total memory fetch time: {:.2f}s | Total memory fetch time: {:.2f}s | Total model train time: {:.2f}s |Total time: {:.2f}s'.format(e + 1, args.epoch, i + 1, math.ceil(len(
+                        train_data)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_model_train_time, time.time() - epoch_time_start))
+                    logging.info('Fetching Communication time: {:.3f}'.format(
+                        cache.kvstore_client.comm_time))
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
@@ -509,9 +518,10 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
         all_total_samples += total_samples
 
         if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time))
-
+            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | sampling time CV {:.4f} | Total sampling time {:.2f}s | Total feature fetching time {:.2f}s Total memory fetch time: {:.2f}s | Total memory update time: {:.2f}s | Total model train time: {:.2f}s".format(
+                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), cv_sampling_time / ((i+1)/args.print_freq), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_model_train_time))
+            logging.info('Fetching Communication time: {:.3f}'.format(
+                cache.kvstore_client.comm_time))
         if args.rank == 0 and val_ap > best_ap:
             best_e = e + 1
             best_ap = val_ap

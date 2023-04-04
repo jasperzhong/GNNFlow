@@ -30,7 +30,7 @@ cmd="torchrun \
     --rdzv_id=1234 --rdzv_backend=c10d \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
     --rdzv_conf is_host=$IS_HOST \
-    offline_edge_prediction_multi_node_kvstore_pipeline.py --model $MODEL --data $DATA \
+    offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
     --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO\
     --partition --ingestion-batch-size 10000000 \
     --initial-ingestion-batch-size 10000000 \
@@ -38,6 +38,6 @@ cmd="torchrun \
     --epoch 5 --lr 0.0001 --snapshot-time-window $TIME_WINDOW"
 
 echo $cmd
-LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd 2>&1 | tee ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${PARTITION_STRATEGY}_${TIME_WINDOW}_dist_1_batchsize600.log
+LOGLEVEL=INFO OMP_NUM_THREADS=8 exec $cmd 2>&1 | tee ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${PARTITION_STRATEGY}_${TIME_WINDOW}_profile_comm_600.log
 
 

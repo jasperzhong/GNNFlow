@@ -129,7 +129,7 @@ def evaluate(data, sampler, model, criterion, cache, device, rand_sampler):
                 # NB: no need to do backward here
                 # use one function
                 model.module.memory.update_mem_mail(
-                    **model.module.last_updated, edge_feats=cache.target_edge_features,
+                    **model.module.last_updated, edge_feats=cache.target_edge_features.get(),
                     neg_sample_ratio=1)
             total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
@@ -374,7 +374,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
     logging.info('Start training... distributed: {}'.format(args.distributed))
 
     # create threadpool
-    num_process = 10
+    num_process = 5
     stream_pool = [torch.cuda.Stream(device=device, priority=0)
                    for _ in range(num_process)]
 
@@ -414,22 +414,25 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
             pool.apply_async(training_batch, args=(model, sampler, cache, target_nodes,
                                                    ts, eid, device, args.distributed, optimizer, criterion, stream_pool[i % num_process], signal_queue, lock_pool, i, args.rank))
 
+        pool.close()
+        pool.join()
+
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
-        if args.distributed:
-            metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples, total_sampling_time],
-                                   device=device)
-            torch.distributed.all_reduce(metrics)
-            metrics /= args.world_size
-            total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples, total_sampling_time = metrics.tolist()
+        # if args.distributed:
+        #     metrics = torch.tensor([total_loss, cache_edge_ratio_sum,
+        #                             cache_node_ratio_sum, total_samples, total_sampling_time],
+        #                            device=device)
+        #     torch.distributed.all_reduce(metrics)
+        #     metrics /= args.world_size
+        #     total_loss, cache_edge_ratio_sum, cache_node_ratio_sum, \
+        #         total_samples, total_sampling_time = metrics.tolist()
 
-            all_sampling_time = sampler.get_sampling_time()
-            std = all_sampling_time.std(dim=1).mean()
-            mean = all_sampling_time.mean(dim=1).mean()
-            cv_sampling_time += std / mean
+        #     all_sampling_time = sampler.get_sampling_time()
+        #     std = all_sampling_time.std(dim=1).mean()
+        #     mean = all_sampling_time.mean(dim=1).mean()
+        #     cv_sampling_time += std / mean
 
         # Validation
         val_start = time.time()

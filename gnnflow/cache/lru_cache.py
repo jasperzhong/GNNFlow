@@ -75,6 +75,8 @@ class LRUCache(Cache):
         """
         Reset the cache
         """
+        if self.kvstore_client is not None:
+            self.kvstore_client.comm_time = 0
         # NB: only edge cache is reset
         if self.distributed:
             if self.dim_edge_feat != 0 and self.edge_capacity > 0:
