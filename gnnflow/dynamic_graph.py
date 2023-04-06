@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from libgnnflow import InsertionPolicy, MemoryResourceType, _DynamicGraph
+from libgnnflow import InsertionPolicy, MemoryResourceType, _DynamicGraph, AdaptiveBlockSizeStrategy
 
 
 class DynamicGraph:
@@ -27,7 +27,7 @@ class DynamicGraph:
             eids: Optional[np.ndarray] = None,
             add_reverse: bool = False,
             device: int = 0,
-            adaptive_block_size: bool = True):
+            adaptive_block_size_strategy: str = "naive"):
         """
         The graph is initially empty and can be optionaly initialized with
         a list of edges.
@@ -47,7 +47,7 @@ class DynamicGraph:
             eids: optional, 1D tensor, the edge ids of the edges.
             add_reverse: optional, bool, whether to add reverse edges.
             device: optional, int, the device to use.
-            adaptive_block_size: optional, bool, whether to use adaptive block size.
+            adaptive_block_size_strategy: optional, str, the adaptive block size policy.
         """
         mem_resource_type = mem_resource_type.lower()
         if mem_resource_type == "cuda":
@@ -71,10 +71,25 @@ class DynamicGraph:
             raise ValueError("Invalid insertion policy: {}".format(
                 insertion_policy))
 
+        adaptive_block_size_strategy = adaptive_block_size_strategy.lower()
+        if adaptive_block_size_strategy == "naive":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.NAIVE
+        elif adaptive_block_size_strategy == "linearadt":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARADT
+        elif adaptive_block_size_strategy == "linearroundadt":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARROUNDADT
+        elif adaptive_block_size_strategy == "lineardeg":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARDEG
+        elif adaptive_block_size_strategy == "logdeg":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LOGDEG
+        else:
+            raise ValueError("Invalid adaptive block size strategy: {}".format(
+                adaptive_block_size_strategy))
+
         self._dgraph = _DynamicGraph(
             initial_pool_size, maximum_pool_size, mem_resource_type,
             minimum_block_size, blocks_to_preallocate, insertion_policy,
-            device, adaptive_block_size)
+            device, adaptive_block_size_strategy)
 
         # initialize the graph with edges
         if source_vertices is not None and target_vertices is not None \

@@ -4,6 +4,7 @@
 #include <thrust/device_new.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <rmm/detail/error.hpp>
@@ -21,19 +22,17 @@
 
 namespace gnnflow {
 
-DynamicGraph::DynamicGraph(std::size_t initial_pool_size,
-                           std::size_t maximum_pool_size,
-                           MemoryResourceType mem_resource_type,
-                           std::size_t minium_block_size,
-                           std::size_t blocks_to_preallocate,
-                           InsertionPolicy insertion_policy, int device,
-                           bool adaptive_block_size)
+DynamicGraph::DynamicGraph(
+    std::size_t initial_pool_size, std::size_t maximum_pool_size,
+    MemoryResourceType mem_resource_type, std::size_t minium_block_size,
+    std::size_t blocks_to_preallocate, InsertionPolicy insertion_policy,
+    int device, AdaptiveBlockSizeStrategy adaptive_block_size_strategy)
     : allocator_(initial_pool_size, maximum_pool_size, minium_block_size,
                  mem_resource_type, device),
       insertion_policy_(insertion_policy),
       max_node_id_(0),
       device_(device),
-      adaptive_block_size_(adaptive_block_size) {
+      adaptive_block_size_strategy_(adaptive_block_size_strategy) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
     cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -248,12 +247,24 @@ void DynamicGraph::AddEdgesForOneNode(
       }
 
       std::size_t new_block_size;
-      if (adaptive_block_size_) {
+      if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kNaive) {
+        new_block_size = num_edges;
+      } else if (adaptive_block_size_strategy_ ==
+                 AdaptiveBlockSizeStrategy::kLinearAdaptive) {
+        new_block_size = std::max(num_edges, avg_edges_per_insertion);
+      } else if (adaptive_block_size_strategy_ ==
+                 AdaptiveBlockSizeStrategy::kLinearRoundAdaptive) {
         new_block_size = std::max(num_edges, avg_edges_per_insertion);
         // round up to the nearest power of 2
         new_block_size = get_next_power_of_two(new_block_size);
-      } else {
-        new_block_size = num_edges;
+      } else if (adaptive_block_size_strategy_ ==
+                 AdaptiveBlockSizeStrategy::kLinearDegree) {
+        new_block_size = std::max(num_edges, h_list.num_edges);
+      } else if (adaptive_block_size_strategy_ ==
+                 AdaptiveBlockSizeStrategy::kLogDegree) {
+        new_block_size = static_cast<std::size_t>(std::log2(h_list.num_edges));
+        new_block_size = get_next_power_of_two(new_block_size);
+        new_block_size = std::max(num_edges, new_block_size);
       }
 
       h_block = allocator_.Allocate(new_block_size);

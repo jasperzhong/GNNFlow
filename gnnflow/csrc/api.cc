@@ -37,10 +37,18 @@ PYBIND11_MODULE(libgnnflow, m) {
       .value("UNIFIED", MemoryResourceType::kMemoryResourceTypeUnified)
       .value("PINNED", MemoryResourceType::kMemoryResourceTypePinned)
       .value("SHARED", MemoryResourceType::kMemoryResourceTypeShared);
+  
+  py::enum_<AdaptiveBlockSizeStrategy>(m, "AdaptiveBlockSizeStrategy")
+      .value("NAIVE", AdaptiveBlockSizeStrategy::kNaive)
+      .value("LINEARADT", AdaptiveBlockSizeStrategy::kLinearAdaptive)
+      .value("LINEARROUNDADT", AdaptiveBlockSizeStrategy::kLinearRoundAdaptive)
+      .value("LINEARDEG", AdaptiveBlockSizeStrategy::kLinearDegree)
+      .value("LOGDEG", AdaptiveBlockSizeStrategy::kLogDegree);
 
   py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
-                    std::size_t, InsertionPolicy, int, bool>(),
+                    std::size_t, InsertionPolicy, int,
+                    AdaptiveBlockSizeStrategy>(),
            py::arg("initial_pool_size"), py::arg("maximum_pool_size"),
            py::arg("mem_resource_type"), py::arg("minium_block_size"),
            py::arg("blocks_to_preallocate"), py::arg("insertion_policy"),

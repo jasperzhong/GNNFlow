@@ -418,8 +418,8 @@ def build_dynamic_graph(
         blocks_to_preallocate: int,
         insertion_policy: str,
         undirected: bool,
-        device: int = 0,
-        adaptive_block_size: bool = True,
+        device: int,
+        adaptive_block_size_strategy: str,
         dataset_df: Optional[pd.DataFrame] = None,
         *args, **kwargs) -> DynamicGraph:
     """
@@ -436,8 +436,8 @@ def build_dynamic_graph(
         insertion_policy: the insertion policy to use
             valid options: ("insert" or "replace") (case insensitive).
         undirected: whether the graph is undirected.
+        adaptive_block_size_strategy: the adaptive block size strategy to use
         device: the device to use.
-        adaptive_block_size: whether to use adaptive block size.
     """
     if dataset_df is None:
         src = dst = ts = eids = None
@@ -457,7 +457,7 @@ def build_dynamic_graph(
         src, dst, ts, eids,
         undirected,
         device,
-        adaptive_block_size)
+        adaptive_block_size_strategy)
 
     return dgraph
 

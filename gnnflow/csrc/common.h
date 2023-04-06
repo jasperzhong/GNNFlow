@@ -88,6 +88,14 @@ enum class MemoryResourceType {
   kMemoryResourceTypeShared
 };
 
+enum class AdaptiveBlockSizeStrategy {
+    kNaive,
+    kLinearAdaptive,
+    kLinearRoundAdaptive,
+    kLinearDegree,
+    kLogDegree
+};
+
 };  // namespace gnnflow
 
 #endif  // GNNFLOW_COMMON_H_

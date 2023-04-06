@@ -48,7 +48,7 @@ class DynamicGraph {
                MemoryResourceType mem_resource_type,
                std::size_t minium_block_size, std::size_t blocks_to_preallocate,
                InsertionPolicy insertion_policy, int device,
-               bool adaptive_block_size);
+               AdaptiveBlockSizeStrategy adaptive_block_size_strategy);
   ~DynamicGraph();
 
   /**
@@ -155,7 +155,7 @@ class DynamicGraph {
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 
   const int device_;
-  bool adaptive_block_size_;
+  AdaptiveBlockSizeStrategy adaptive_block_size_strategy_;
 };
 
 }  // namespace gnnflow
