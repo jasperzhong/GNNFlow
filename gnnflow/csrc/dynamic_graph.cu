@@ -32,6 +32,7 @@ DynamicGraph::DynamicGraph(
       insertion_policy_(insertion_policy),
       max_node_id_(0),
       device_(device),
+      total_num_insertions_(0),
       adaptive_block_size_strategy_(adaptive_block_size_strategy) {
   for (int i = 0; i < kNumStreams; i++) {
     cudaStream_t stream;
@@ -130,6 +131,7 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
                        streams_[i % kNumStreams]);
     i++;
   }
+  total_num_insertions_ += i;
 
   for (auto& stream : streams_) {
     CUDA_CALL(cudaStreamSynchronize(stream));
@@ -240,30 +242,30 @@ void DynamicGraph::AddEdgesForOneNode(
       // allocate and insert a new block
       // calculate avg edge per insertion
       std::size_t avg_edges_per_insertion;
-      if (h_list.num_insertions == 0) {
-        avg_edges_per_insertion = num_edges;
-      } else {
-        avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
-      }
+      avg_edges_per_insertion = h_list.num_edges / h_list.num_insertions;
 
       std::size_t new_block_size;
       if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kNaive) {
         new_block_size = num_edges;
       } else if (adaptive_block_size_strategy_ ==
-                 AdaptiveBlockSizeStrategy::kLinearAdaptive) {
-        new_block_size = std::max(num_edges, avg_edges_per_insertion);
-      } else if (adaptive_block_size_strategy_ ==
-                 AdaptiveBlockSizeStrategy::kLinearRoundAdaptive) {
+                 AdaptiveBlockSizeStrategy::kLinearAvg) {
         new_block_size = std::max(num_edges, avg_edges_per_insertion);
         // round up to the nearest power of 2
         new_block_size = get_next_power_of_two(new_block_size);
       } else if (adaptive_block_size_strategy_ ==
-                 AdaptiveBlockSizeStrategy::kLinearDegree) {
+                 AdaptiveBlockSizeStrategy::kLinearDeg) {
         new_block_size = std::max(num_edges, h_list.num_edges);
       } else if (adaptive_block_size_strategy_ ==
-                 AdaptiveBlockSizeStrategy::kLogDegree) {
-        new_block_size = static_cast<std::size_t>(std::log2(h_list.num_edges));
-        new_block_size = get_next_power_of_two(new_block_size);
+                 AdaptiveBlockSizeStrategy::kLinearDegAdaptive) {
+        auto bigblock_threshold =
+            std::getenv("BIGBLOCK_THRESHOLD")
+                ? std::stoi(std::getenv("BIGBLOCK_THRESHOLD"))
+                : 64lu;
+        auto bigblock_size = std::getenv("BIGBLOCK_SIZE")
+                                 ? std::stoi(std::getenv("BIGBLOCK_SIZE"))
+                                 : 256lu;
+
+        new_block_size = std::min(h_list.num_edges, bigblock_size);
         new_block_size = std::max(num_edges, new_block_size);
       }
 
@@ -305,6 +307,26 @@ std::vector<std::size_t> DynamicGraph::out_degree(
     out_degrees.push_back(h_list.num_edges);
   }
   return out_degrees;
+}
+
+std::vector<std::size_t> DynamicGraph::num_insertions(
+    const std::vector<NIDType>& nodes) const {
+  std::vector<size_t> num_insertions;
+  for (auto& node : nodes) {
+    auto h_list = h_copy_of_d_node_table_[node];
+    num_insertions.push_back(h_list.num_insertions);
+  }
+  return num_insertions;
+}
+
+std::vector<std::size_t> DynamicGraph::num_blocks(
+    const std::vector<NIDType>& nodes) const {
+  std::vector<size_t> num_blocks;
+  for (auto& node : nodes) {
+    auto h_list = h_copy_of_d_node_table_[node];
+    num_blocks.push_back(h_list.size);
+  }
+  return num_blocks;
 }
 
 DynamicGraph::NodeNeighborTuple DynamicGraph::get_temporal_neighbors(
@@ -369,7 +391,7 @@ NIDType DynamicGraph::max_node_id() const { return max_node_id_; }
 
 float DynamicGraph::avg_linked_list_length() const {
   float sum = 0;
-  for (auto& node : nodes_) {
+  for (auto node : nodes_) {
     auto& list = h_copy_of_d_node_table_[node];
     sum += list.size;
   }

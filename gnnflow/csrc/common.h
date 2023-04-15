@@ -89,11 +89,10 @@ enum class MemoryResourceType {
 };
 
 enum class AdaptiveBlockSizeStrategy {
-    kNaive,
-    kLinearAdaptive,
-    kLinearRoundAdaptive,
-    kLinearDegree,
-    kLogDegree
+  kNaive,
+  kLinearAvg,
+  kLinearDeg,
+  kLinearDegAdaptive
 };
 
 };  // namespace gnnflow

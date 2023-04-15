@@ -37,13 +37,13 @@ PYBIND11_MODULE(libgnnflow, m) {
       .value("UNIFIED", MemoryResourceType::kMemoryResourceTypeUnified)
       .value("PINNED", MemoryResourceType::kMemoryResourceTypePinned)
       .value("SHARED", MemoryResourceType::kMemoryResourceTypeShared);
-  
+
   py::enum_<AdaptiveBlockSizeStrategy>(m, "AdaptiveBlockSizeStrategy")
       .value("NAIVE", AdaptiveBlockSizeStrategy::kNaive)
-      .value("LINEARADT", AdaptiveBlockSizeStrategy::kLinearAdaptive)
-      .value("LINEARROUNDADT", AdaptiveBlockSizeStrategy::kLinearRoundAdaptive)
-      .value("LINEARDEG", AdaptiveBlockSizeStrategy::kLinearDegree)
-      .value("LOGDEG", AdaptiveBlockSizeStrategy::kLogDegree);
+      .value("LINEARAVG", AdaptiveBlockSizeStrategy::kLinearAvg)
+      .value("LINEARDEG", AdaptiveBlockSizeStrategy::kLinearDeg)
+      .value("LINEARDEG_ADAPTIVE",
+             AdaptiveBlockSizeStrategy::kLinearDegAdaptive);
 
   py::class_<DynamicGraph>(m, "_DynamicGraph")
       .def(py::init<std::size_t, std::size_t, MemoryResourceType, std::size_t,
@@ -64,6 +64,14 @@ PYBIND11_MODULE(libgnnflow, m) {
       .def("out_degree",
            [](const DynamicGraph &dgraph, std::vector<NIDType> nodes) {
              return vec2npy(dgraph.out_degree(nodes));
+           })
+      .def("num_insertions",
+           [](const DynamicGraph &dgraph, std::vector<NIDType> nodes) {
+             return vec2npy(dgraph.num_insertions(nodes));
+           })
+      .def("num_blocks",
+           [](const DynamicGraph &dgraph, std::vector<NIDType> nodes) {
+             return vec2npy(dgraph.num_blocks(nodes));
            })
       .def("nodes",
            [](const DynamicGraph &dgraph) { return vec2npy(dgraph.nodes()); })

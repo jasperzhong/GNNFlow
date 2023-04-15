@@ -74,14 +74,12 @@ class DynamicGraph:
         adaptive_block_size_strategy = adaptive_block_size_strategy.lower()
         if adaptive_block_size_strategy == "naive":
             adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.NAIVE
-        elif adaptive_block_size_strategy == "linearadt":
-            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARADT
-        elif adaptive_block_size_strategy == "linearroundadt":
-            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARROUNDADT
+        elif adaptive_block_size_strategy == "linearavg":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARAVG
         elif adaptive_block_size_strategy == "lineardeg":
             adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARDEG
-        elif adaptive_block_size_strategy == "logdeg":
-            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LOGDEG
+        elif adaptive_block_size_strategy == "lineardeg_adaptive":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARDEG_ADAPTIVE
         else:
             raise ValueError("Invalid adaptive block size strategy: {}".format(
                 adaptive_block_size_strategy))
@@ -167,6 +165,12 @@ class DynamicGraph:
 
     def out_degree(self, vertexs: np.ndarray) -> np.ndarray:
         return self._dgraph.out_degree(vertexs)
+
+    def num_insertions(self, vertexs: np.ndarray) -> np.ndarray:
+        return self._dgraph.num_insertions(vertexs)
+
+    def num_blocks(self, vertexs: np.ndarray) -> np.ndarray:
+        return self._dgraph.num_blocks(vertexs)
 
     def nodes(self) -> np.ndarray:
         """

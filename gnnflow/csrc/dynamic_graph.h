@@ -96,6 +96,8 @@ class DynamicGraph {
   NIDType max_node_id() const;
 
   std::vector<std::size_t> out_degree(const std::vector<NIDType>& nodes) const;
+  std::vector<std::size_t> num_insertions(const std::vector<NIDType>& nodes) const;
+  std::vector<std::size_t> num_blocks(const std::vector<NIDType>& nodes) const;
 
   // NB: it is inefficient to call this function every time for each node. Debug
   // only.
@@ -114,6 +116,7 @@ class DynamicGraph {
   float graph_mem_usage() const;
 
   float graph_metadata_mem_usage();
+
 
  private:
   void AddEdgesForOneNode(NIDType src_node,
@@ -151,6 +154,8 @@ class DynamicGraph {
   std::set<NIDType> nodes_;
   std::set<NIDType> src_nodes_;
   std::unordered_map<EIDType, std::size_t> edges_;
+
+  std::size_t total_num_insertions_;
 
   std::stack<rmm::mr::device_memory_resource*> mem_resources_for_metadata_;
 

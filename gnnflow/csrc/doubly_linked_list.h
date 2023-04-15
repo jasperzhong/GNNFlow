@@ -29,7 +29,7 @@ struct HostDoublyLinkedList {
       : head(nullptr),
         tail(nullptr),
         num_edges(0),
-        num_insertions(0),
+        num_insertions(1),
         size(0) {}
 };
 
