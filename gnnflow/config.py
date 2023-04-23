@@ -16,6 +16,7 @@ def get_default_config(model: str, dataset: str):
         Default configuration for the model and dataset.
     """
     model, dataset = model.lower(), dataset.lower()
+    print(model, dataset)
     assert model in ["tgn", "tgat", "dysat", "graphsage", "gat"] and dataset in [
         "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag"], "Invalid model or dataset."
 

@@ -25,6 +25,7 @@ parser.add_argument("--edge-cache-ratio", type=float, default=0,
 parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="cache ratio for node feature cache")
 args = parser.parse_args()
+print(args)
 
 MB = 1 << 20
 GB = 1 << 30
@@ -44,7 +45,7 @@ def main():
     # Create a dynamic graph
     train_df, _, _, df = load_dataset(args.dataset)
     model_config,  dataset_config = get_default_config(
-        args.model[len("shuffle_"):], args.dataset)
+        args.model, args.dataset)
     dgraph = build_dynamic_graph(
         **dataset_config, dataset_df=df)
     batch_size = model_config['batch_size']
@@ -93,7 +94,7 @@ def main():
     if args.model.startswith("shuffle_"):
         df = df.sample(frac=1).reset_index(drop=True)
 
-    for e in range(10):
+    for e in range(3):
         cache.reset()
         for _, rows in tqdm(df.groupby(df.index // batch_size)):
             # Sample a batch of data
@@ -123,7 +124,7 @@ if __name__ == "__main__":
         cache_edge_hit_ratio = 0
         print(e)
 
-    sub_dir = "tmp_res/cache_hit_rate_10epochs/"
+    sub_dir = "tmp_res/cache_hit_rate_new/"
     os.makedirs(sub_dir, exist_ok=True)
     print(
         f"node cache ratio: {args.node_cache_ratio} cache_node_hit_ratio: {cache_node_hit_ratio:.2f}\nedge cache ratio: {args.edge_cache_ratio} cache_edge_hit_ratio: {cache_edge_hit_ratio:.2f}")

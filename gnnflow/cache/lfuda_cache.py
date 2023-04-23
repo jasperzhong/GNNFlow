@@ -6,7 +6,7 @@ from gnnflow.cache.cache import Cache
 from gnnflow.distributed.kvstore import KVStoreClient
 
 
-class LFUCache(Cache):
+class LFUDACache(Cache):
     """
     Least-frequently-used (LFU) Cache
     """
@@ -45,7 +45,7 @@ class LFUCache(Cache):
             distributed: Whether to use distributed training
             neg_sample_ratio: The ratio of negative samples to positive samples
         """
-        super(LFUCache, self).__init__(edge_cache_ratio, node_cache_ratio, num_nodes,
+        super(LFUDACache, self).__init__(edge_cache_ratio, node_cache_ratio, num_nodes,
                                        num_edges, device, node_feats,
                                        edge_feats, dim_node_feat,
                                        dim_edge_feat, pinned_nfeat_buffs,
@@ -56,15 +56,17 @@ class LFUCache(Cache):
         if self.dim_node_feat != 0:
             self.cache_node_count = torch.zeros(
                 self.num_nodes, dtype=torch.int32, device=self.device)
+            self.node_cache_age = 0
         if self.dim_edge_feat != 0:
             self.cache_edge_count = torch.zeros(
                 self.num_edges, dtype=torch.int32, device=self.device)
+            self.edge_cache_age = 0
 
     def get_mem_size(self) -> int:
         """
         Get the memory size of the cache in bytes
         """
-        mem_size = super(LFUCache, self).get_mem_size()
+        mem_size = super(LFUDACache, self).get_mem_size()
         if self.dim_node_feat != 0:
             mem_size += self.cache_node_count.element_size() * self.cache_node_count.nelement()
         if self.dim_edge_feat != 0:
@@ -77,7 +79,7 @@ class LFUCache(Cache):
         """
         if self.distributed:
             return
-        super(LFUCache, self).init_cache(*args, **kwargs)
+        super(LFUDACache, self).init_cache(*args, **kwargs)
         if self.dim_node_feat != 0:
             self.cache_node_count[self.cache_index_to_node_id] += 1
 
@@ -125,7 +127,7 @@ class LFUCache(Cache):
             new_num_nodes: The new number of nodes
             new_num_edges: The new number of edges
         """
-        super(LFUCache, self).resize(new_num_nodes, new_num_edges)
+        super(LFUDACache, self).resize(new_num_nodes, new_num_edges)
         if self.dim_node_feat != 0:
             self.cache_node_count.resize_(self.new_num_nodes)
         if self.dim_edge_feat != 0:
@@ -152,7 +154,7 @@ class LFUCache(Cache):
         node_feature_to_cache = uncached_node_feature[:num_node_to_cache]
 
         # update cached node index first
-        self.cache_node_count[self.cache_index_to_node_id[cached_node_index]] += 1
+        self.cache_node_count[self.cache_index_to_node_id[cached_node_index]] += 1 + self.node_cache_age
 
         # get the k node id with the least water level
         removing_node_id = torch.topk(
@@ -161,6 +163,8 @@ class LFUCache(Cache):
             node_id_to_cache) == len(node_feature_to_cache)
         # removing_node_id = self.cache_index_to_node_id[removing_cache_index]
         removing_cache_index = self.cache_node_map[removing_node_id]
+
+        self.node_cache_age = self.cache_node_count[removing_node_id].max().item()
 
         # update cache attributes
         self.cache_node_buffer[removing_cache_index] = node_feature_to_cache
@@ -192,7 +196,7 @@ class LFUCache(Cache):
         edge_feature_to_cache = uncached_edge_feature[:num_edge_to_cache]
 
         # update cached edge index first
-        self.cache_edge_count[self.cache_index_to_edge_id[cached_edge_index]] += 1
+        self.cache_edge_count[self.cache_index_to_edge_id[cached_edge_index]] += 1 + self.edge_cache_age
 
         # get the k edge id with the least water level
         removing_edge_id = torch.topk(
@@ -201,6 +205,8 @@ class LFUCache(Cache):
             edge_id_to_cache) == len(edge_feature_to_cache)
         # removing_edge_id = self.cache_index_to_edge_id[removing_cache_index]
         removing_cache_index = self.cache_edge_map[removing_edge_id]
+
+        self.edge_cache_age = self.cache_edge_count[removing_edge_id].max().item()
 
         # update cache attributes
         self.cache_edge_buffer[removing_cache_index] = edge_feature_to_cache
