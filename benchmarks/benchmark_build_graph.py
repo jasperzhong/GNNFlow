@@ -32,7 +32,7 @@ def main():
     # print("Dynamic graph built")
 
     insertion_times = 0
-    for i in range(0, len(df), args.ingestion_batch_size):
+    for i in tqdm(range(0, len(df), args.ingestion_batch_size)):
         batch = df[i:i + args.ingestion_batch_size]
         src_nodes = batch["src"].values.astype(np.int64)
         dst_nodes = batch["dst"].values.astype(np.int64)
@@ -43,9 +43,14 @@ def main():
         insertion_times += 1
     build_end = time.time()
     build_time = build_end - build_start
+    nodes = dgraph.nodes()
+    out_degree = dgraph.out_degree(nodes)
+    num_insertions = dgraph.num_insertions(nodes)
+    num_blocks = dgraph.num_blocks(nodes)
 
-    print('build graph time: {:.2f}s, avg_linked_list_length: {:.2f}, graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size-strategy: {}) insertion times: {} node size: {}'.format(
+    print('build graph time: {:.2f}s, avg_linked_list_length: {:.2f}, max linked list length: {:.2f} graph mem usage: {:.2f}MB, metadata (on GPU) mem usage: {:.2f}MB (adaptive-block-size-strategy: {}) insertion times: {} node size: {}'.format(
         build_time, dgraph.avg_linked_list_length(),
+        max(num_blocks),
         dgraph.get_graph_memory_usage() / MB,
         dgraph.get_metadata_memory_usage() / MB,
         args.adaptive_block_size_strategy, insertion_times, dgraph.num_vertices()))
@@ -53,11 +58,6 @@ def main():
     # res = np.array([build_time, dgraph.avg_linked_list_length(),
     #                 dgraph.get_graph_memory_usage() / MB,
     #                 dgraph.get_metadata_memory_usage() / MB])
-
-    nodes = dgraph.nodes()
-    out_degree = dgraph.out_degree(nodes)
-    num_insertions = dgraph.num_insertions(nodes)
-    num_blocks = dgraph.num_blocks(nodes)
 
     subdir = "tmp_res/adaptive_block_size_insights/"
     os.makedirs(subdir, exist_ok=True)

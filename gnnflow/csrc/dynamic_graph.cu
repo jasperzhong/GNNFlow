@@ -257,16 +257,20 @@ void DynamicGraph::AddEdgesForOneNode(
         new_block_size = std::max(num_edges, h_list.num_edges);
       } else if (adaptive_block_size_strategy_ ==
                  AdaptiveBlockSizeStrategy::kLinearDegAdaptive) {
-        auto bigblock_threshold =
-            std::getenv("BIGBLOCK_THRESHOLD")
-                ? std::stoi(std::getenv("BIGBLOCK_THRESHOLD"))
-                : 64lu;
         auto bigblock_size = std::getenv("BIGBLOCK_SIZE")
                                  ? std::stoi(std::getenv("BIGBLOCK_SIZE"))
                                  : 256lu;
 
         new_block_size = std::min(h_list.num_edges, bigblock_size);
-        new_block_size = std::max(num_edges, new_block_size);
+        if (new_block_size == bigblock_size) {
+          // num_edges may be multiple of bigblock_size
+          new_block_size =
+              static_cast<size_t>((num_edges + new_block_size - 1) /
+                                  new_block_size) *
+              new_block_size;
+        } else {
+          new_block_size = std::max(num_edges, new_block_size);
+        }
       }
 
       h_block = allocator_.Allocate(new_block_size);
@@ -407,8 +411,8 @@ float DynamicGraph::graph_metadata_mem_usage() {
   // num blocks
   sum += sizeof(TemporalBlock) * h2d_mapping_.size();
   // node table
-  d_node_table_.shrink_to_fit();
-  sum += sizeof(DoublyLinkedList) * d_node_table_.capacity();
+  // d_node_table_.shrink_to_fit();
+  // sum += sizeof(DoublyLinkedList) * d_node_table_.capacity();
   return sum;
 }
 
