@@ -116,6 +116,7 @@ _wiki_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
 
 _reddit_default_config = {
@@ -128,6 +129,7 @@ _reddit_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
 
 _mooc_default_config = {
@@ -140,6 +142,7 @@ _mooc_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
 
 _lastfm_default_config = {
@@ -152,6 +155,7 @@ _lastfm_default_config = {
     "undirected": False,
     "node_feature": False,
     "edge_feature": True,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
 
 _gdelt_default_config = {
@@ -164,6 +168,7 @@ _gdelt_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": True,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
 
 _mag_default_config = {
@@ -176,4 +181,5 @@ _mag_default_config = {
     "undirected": False,
     "node_feature": True,
     "edge_feature": False,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
