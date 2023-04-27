@@ -3,8 +3,10 @@ import logging
 import math
 import os
 import random
+import sys
 import threading
 import time
+import warnings
 
 import GPUtil
 import numpy as np
@@ -30,6 +32,10 @@ from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
                            get_project_root_dir, load_dataset, load_feat,
                            mfgs_to_cuda)
 
+warnings.filterwarnings('ignore', category=UserWarning,
+                        message='TypedStorage is deprecated')
+
+
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
@@ -42,7 +48,7 @@ parser.add_argument("--model", choices=model_names, required=True,
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
 parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=50)
+                    type=int, default=1)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -172,7 +178,8 @@ def main():
         model_config["snapshot_time_window"] = 25
     else:
         model_config["snapshot_time_window"] = args.snapshot_time_window
-    logging.info("snapshot_time_window's value is {}".format(model_config["snapshot_time_window"]))
+    logging.info("snapshot_time_window's value is {}".format(
+        model_config["snapshot_time_window"]))
     args.use_memory = model_config['use_memory']
 
     if args.distributed:
@@ -345,9 +352,9 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         mfgs = sampler.sample(target_nodes, ts)
         next_data = (mfgs, eid)
 
-    if args.local_rank == 0:
-        gpu_load_thread = threading.Thread(target=gpu_load)
-        gpu_load_thread.start()
+#    if args.local_rank == 0:
+#        gpu_load_thread = threading.Thread(target=gpu_load)
+#        gpu_load_thread.start()
 
     logging.info('Start training...')
     if args.distributed:
@@ -481,6 +488,14 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
+        subdir = 'results'
+        os.makedirs(subdir, exist_ok=True)
+        throughput = total_samples * args.world_size / epoch_time
+        # save throughput filename model dataset n_gpus
+        np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
+            args.model, args.data, args.world_size)), throughput)
+        sys.exit(0)
+
         # Validation
         val_start = time.time()
         val_ap, val_auc = evaluate(
@@ -540,7 +555,7 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
 
     if args.local_rank == 0:
         training = False
-        gpu_load_thread.join()
+        # gpu_load_thread.join()
 
     return best_e
 

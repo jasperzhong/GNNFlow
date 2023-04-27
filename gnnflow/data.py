@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.distributed
-from torch._six import string_classes
 from torch.utils.data import BatchSampler, Dataset, Sampler
 
 from gnnflow.utils import DstRandEdgeSampler, RandEdgeSampler, local_rank
@@ -260,7 +259,7 @@ def default_collate_ndarray(batch):
         return np.array(batch, dtype=np.float64)
     elif isinstance(elem, int):
         return np.array(batch)
-    elif isinstance(elem, string_classes):
+    elif isinstance(elem, str):
         return batch
     elif isinstance(elem, collections.abc.Mapping):
         try:

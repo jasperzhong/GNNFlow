@@ -196,6 +196,7 @@ partition_table.txt
 *.png
 tmp_res
 edge_cache/
+scripts/results/
 
 # MacOS
 .DS_Store
