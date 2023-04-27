@@ -1,5 +1,5 @@
 #!/bin/bash
-INTERFACE="ens5"
+INTERFACE="ens8"
 
 MODEL=$1
 DATA=$2
@@ -7,10 +7,10 @@ CACHE="${3:-LFUCache}"
 CACHE_RATIO="${4:-0.2}" # default 20% of cache
 PARTITION_STRATEGY="${5:-hash}"
 
-HOST_NODE_ADDR=172.31.34.17
+HOST_NODE_ADDR=172,31.27.162
 HOST_NODE_PORT=29400
 NNODES=2
-NPROC_PER_NODE=1
+NPROC_PER_NODE=8
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)
 if [ $CURRENT_NODE_IP = $HOST_NODE_ADDR ]; then
@@ -28,13 +28,9 @@ cmd="torchrun \
     --rdzv_id=1234 --rdzv_backend=c10d \
     --rdzv_endpoint=$HOST_NODE_ADDR:$HOST_NODE_PORT \
     --rdzv_conf is_host=$IS_HOST \
-    offline_edge_prediction_multi_node_kvstore.py --model $MODEL --data $DATA \
+    offline_edge_prediction.py --model $MODEL --data $DATA \
     --cache $CACHE --cache-ratio $CACHE_RATIO \
-    --partition --ingestion-batch-size 10000 \
-    --initial-ingestion-batch-size 500000 \
-    --partition-strategy $PARTITION_STRATEGY \
-    --num-workers 4"
+    --ingestion-batch-size 10000000"
 
 echo $cmd
-NCCL_DEBUG=INFO LOGLEVEL=INFO OMP_NUM_THREADS=4 exec $cmd
-
+OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${NNODES}_${NPROC_PER_NODE}.log 2>&1
