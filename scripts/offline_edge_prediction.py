@@ -36,7 +36,6 @@ from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
 warnings.filterwarnings('ignore', category=UserWarning,
                         message='TypedStorage is deprecated')
 
-
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
@@ -358,7 +357,7 @@ def main():
             model.memory.restore(ckpt['memory'])
 
     ap, auc = evaluate(test_data, sampler, model,
-                        criterion, cache, device, eval_rand_sampler)
+                        criterion, cache, device, val_rand_sampler)
     if args.distributed:
         metrics = torch.tensor([ap, auc], device=device)
         torch.distributed.all_reduce(metrics)
@@ -375,7 +374,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
           cache, device, train_rand_sampler, val_rand_sampler):
     global training
     best_ap = 0
-    best_e = 0
+    best_e = 1
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
 
@@ -518,30 +517,30 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s | Total Time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time, time.time() - epoch_time_start))
+                        train_data)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time, time.time() - epoch_time_start))
 
-            if (i+1) % int(10000//args.world_size) == 0:
-                epoch_time = time.time() - epoch_time_start
-                epoch_time_sum += epoch_time
+            # if (i+1) % int(10000//args.world_size) == 0:
+            #     epoch_time = time.time() - epoch_time_start
+            #     epoch_time_sum += epoch_time
 
-                subdir = 'results'
-                os.makedirs(subdir, exist_ok=True)
-                throughput = total_samples * args.world_size / epoch_time
-                # save throughput filename model dataset n_gpus
-                np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
-                    args.model, args.data, args.world_size)), throughput)
-                sys.exit(0)
+            #     subdir = 'results'
+            #     os.makedirs(subdir, exist_ok=True)
+            #     throughput = total_samples * args.world_size / epoch_time
+            #     # save throughput filename model dataset n_gpus
+            #     np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
+            #         args.model, args.data, args.world_size)), throughput)
+            #     sys.exit(0)
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
-        subdir = 'results'
-        os.makedirs(subdir, exist_ok=True)
-        throughput = total_samples * args.world_size / epoch_time
-        # save throughput filename model dataset n_gpus
-        np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
-            args.model, args.data, args.world_size)), throughput)
-        sys.exit(0)
+        # subdir = 'results'
+        # os.makedirs(subdir, exist_ok=True)
+        # throughput = total_samples * args.world_size / epoch_time
+        # # save throughput filename model dataset n_gpus
+        # np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
+        #     args.model, args.data, args.world_size)), throughput)
+        # sys.exit(0)
 
         # Validation
         val_start = time.time()

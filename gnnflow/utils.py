@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import time
+from multiprocessing import shared_memory
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -9,11 +10,31 @@ import pandas as pd
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
-from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
 from .dynamic_graph import DynamicGraph
 
 NODE_FEATS = None
+
+shms = []
+
+
+def create_shared_mem_array(name, shape, dtype):
+    d_size = np.dtype(dtype).itemsize * np.prod(shape)
+
+    shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    shms.append(shm) # keep track of shared memory blocks
+    # numpy array on shared memory buffer
+    dst = np.ndarray(shape=shape, dtype=dtype, buffer=shm.buf)
+    print(f'create shared memory array {name} with size {dst.size}')
+    return dst
+
+
+def get_shared_mem_array(name, shape, dtype):
+    shm = shared_memory.SharedMemory(name=name)
+    shms.append(shm) # keep track of shared memory blocks
+    dst = np.ndarray(shape=shape, dtype=dtype, buffer=shm.buf)
+    print(f'get shared memory array {name} with size {dst.size}')
+    return dst
 
 
 def get_node_feats():
@@ -287,28 +308,30 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         if os.path.exists(node_feat_path) and load_node:
             node_feats = np.load(
                 node_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
-            if not memmap:
-                node_feats = torch.from_numpy(node_feats)
+            # if not memmap:
+            #     node_feats = torch.from_numpy(node_feats)
 
         if os.path.exists(edge_feat_path) and load_edge:
             edge_feats = np.load(
                 edge_feat_path, mmap_mode=mmap_mode, allow_pickle=False)
-            if not memmap:
-                edge_feats = torch.from_numpy(edge_feats)
+            # if not memmap:
+            #     edge_feats = torch.from_numpy(edge_feats)
 
     if shared_memory:
         node_feats_shm, edge_feats_shm = None, None
         if local_rank == 0:
             if node_feats is not None:
-                node_feats = node_feats.to(torch.float32)
+                node_feats = node_feats.astype(np.float32)
                 node_feats_shm = create_shared_mem_array(
                     'node_feats', node_feats.shape, node_feats.dtype)
                 node_feats_shm[:] = node_feats[:]
             if edge_feats is not None:
-                edge_feats = edge_feats.to(torch.float32)
+                edge_feats = edge_feats.astype(np.float32)
                 edge_feats_shm = create_shared_mem_array(
                     'edge_feats', edge_feats.shape, edge_feats.dtype)
+                print("edge_feats_shm.shape: ", edge_feats_shm.shape, flush=True)
                 edge_feats_shm[:] = edge_feats[:]
+                print("edge_feats assigned", flush=True)
             # broadcast the shape and dtype of the features
             node_feats_shape = node_feats.shape if node_feats is not None else None
             edge_feats_shape = edge_feats.shape if edge_feats is not None else None
@@ -322,22 +345,30 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
             node_feats_shape, edge_feats_shape = shapes
             if node_feats_shape is not None:
                 node_feats_shm = get_shared_mem_array(
-                    'node_feats', node_feats_shape, torch.float32)
+                    'node_feats', node_feats_shape, np.float32)
             if edge_feats_shape is not None:
                 edge_feats_shm = get_shared_mem_array(
-                    'edge_feats', edge_feats_shape, torch.float32)
+                    'edge_feats', edge_feats_shape, np.float32)
 
         torch.distributed.barrier()
         if node_feats_shm is not None:
             logging.info("rank {} node_feats_shm shape {}".format(
                 local_rank, node_feats_shm.shape))
+            node_feats_shm = torch.from_numpy(node_feats_shm)
+
 
         if edge_feats_shm is not None:
             logging.info("rank {} edge_feats_shm shape {}".format(
                 local_rank, edge_feats_shm.shape))
+            edge_feats_shm = torch.from_numpy(edge_feats_shm)
 
         return node_feats_shm, edge_feats_shm
 
+    if not memmap:
+        if node_feats is not None:
+            node_feats = torch.from_numpy(node_feats)
+        if edge_feats is not None:
+            edge_feats = torch.from_numpy(edge_feats)
     return node_feats, edge_feats
 
 

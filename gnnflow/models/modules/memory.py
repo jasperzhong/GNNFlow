@@ -6,13 +6,14 @@ Implementation at:
 """
 from typing import Dict, Optional, Union
 
+import numpy as np
 import torch
 import torch.distributed
 from dgl.heterograph import DGLBlock
-from dgl.utils.shared_mem import create_shared_mem_array, get_shared_mem_array
 
-from gnnflow.distributed.kvstore import KVStoreClient
 import gnnflow.utils as utils
+from gnnflow.distributed.kvstore import KVStoreClient
+from gnnflow.utils import create_shared_mem_array, get_shared_mem_array
 
 
 class Memory:
@@ -67,19 +68,19 @@ class Memory:
             else:
                 if local_rank == 0:
                     self.node_memory = create_shared_mem_array(
-                        'node_memory', (num_nodes, dim_memory), dtype=torch.float32)
+                        'node_memory', (num_nodes, dim_memory), dtype=np.float32)
                     self.node_memory_ts = create_shared_mem_array(
-                        'node_memory_ts', (num_nodes,), dtype=torch.float32)
+                        'node_memory_ts', (num_nodes,), dtype=np.float32)
                     self.mailbox = create_shared_mem_array(
                         'mailbox', (num_nodes, self.dim_raw_message),
-                        dtype=torch.float32)
+                        dtype=np.float32)
                     self.mailbox_ts = create_shared_mem_array(
-                        'mailbox_ts', (num_nodes,), dtype=torch.float32)
+                        'mailbox_ts', (num_nodes,), dtype=np.float32)
 
-                    self.node_memory.zero_()
-                    self.node_memory_ts.zero_()
-                    self.mailbox.zero_()
-                    self.mailbox_ts.zero_()
+                    self.node_memory.fill(0)
+                    self.node_memory_ts.fill(0)
+                    self.mailbox.fill(0)
+                    self.mailbox_ts.fill(0)
 
                 torch.distributed.barrier()
 
@@ -87,13 +88,23 @@ class Memory:
                     # NB: `num_nodes` should be same for all local processes because
                     # they share the same local graph
                     self.node_memory = get_shared_mem_array(
-                        'node_memory', (num_nodes, dim_memory), torch.float32)
+                        'node_memory', (num_nodes, dim_memory), np.float32)
                     self.node_memory_ts = get_shared_mem_array(
-                        'node_memory_ts', (num_nodes,), torch.float32)
+                        'node_memory_ts', (num_nodes,), np.float32)
                     self.mailbox = get_shared_mem_array(
-                        'mailbox', (num_nodes, self.dim_raw_message), torch.float32)
+                        'mailbox', (num_nodes, self.dim_raw_message), np.float32)
                     self.mailbox_ts = get_shared_mem_array(
-                        'mailbox_ts', (num_nodes,), torch.float32)
+                        'mailbox_ts', (num_nodes,), np.float32)
+
+                # to torch tensor
+                self.node_memory = torch.from_numpy(
+                    self.node_memory)
+                self.node_memory_ts = torch.from_numpy(
+                    self.node_memory_ts)
+                self.mailbox = torch.from_numpy(
+                    self.mailbox)
+                self.mailbox_ts = torch.from_numpy(
+                    self.mailbox_ts)
 
     def reset(self):
         """
@@ -192,8 +203,8 @@ class Memory:
     def update_mem_mail(self, last_updated_nid: torch.Tensor,
                         last_updated_memory: torch.Tensor,
                         last_updated_ts: torch.Tensor,
-                        edge_feats: Optional[torch.Tensor]=None,
-                        neg_sample_ratio: int=1):
+                        edge_feats: Optional[torch.Tensor] = None,
+                        neg_sample_ratio: int = 1):
         """
         Update the mem and mailbox of last updated nodes.
 
@@ -215,7 +226,6 @@ class Memory:
             edge_feats = torch.zeros(
                 last_updated_nid.shape[0] // split_chunks, self.dim_edge,
                 device=self.device)
-
 
         edge_feats = edge_feats.to(self.device)
 
