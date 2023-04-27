@@ -2,7 +2,7 @@ import itertools
 import os
 
 models = ['TGN']
-datasets = ['GDELT']
+datasets = ['REDDIT']
 n_gpus = [1, 2, 4, 8]
 
 for model, dataset, n_gpu in itertools.product(models, datasets, n_gpus):

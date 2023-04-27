@@ -30,11 +30,11 @@ from gnnflow.temporal_sampler import TemporalSampler
 from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
                            build_dynamic_graph, get_pinned_buffers,
                            get_project_root_dir, load_dataset, load_feat,
-                           mfgs_to_cuda, load_partitioned_dataset,
-                           load_dataset_in_chunks, get_batch)
+                           mfgs_to_cuda)
 
 warnings.filterwarnings('ignore', category=UserWarning,
                         message='TypedStorage is deprecated')
+
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -105,7 +105,7 @@ def gpu_load():
         time.sleep(1)
 
 
-def evaluate(data, sampler, model, criterion, cache, device, rand_sampler):
+def evaluate(dataloader, sampler, model, criterion, cache, device):
     model.eval()
     val_losses = list()
     aps = list()
@@ -113,7 +113,7 @@ def evaluate(data, sampler, model, criterion, cache, device, rand_sampler):
 
     with torch.no_grad():
         total_loss = 0
-        for target_nodes, ts, eid in get_batch(data, args.batch_size, 0, rand_sampler):
+        for target_nodes, ts, eid in dataloader:
             mfgs = sampler.sample(target_nodes, ts)
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
@@ -186,103 +186,71 @@ def main():
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
 
-    # train_data, val_data, test_data, full_data = load_dataset(args.data)
+    train_data, val_data, test_data, full_data = load_dataset(args.data)
+    train_rand_sampler = DstRandEdgeSampler(
+        train_data['dst'].to_numpy(dtype=np.int32))
+    val_rand_sampler = DstRandEdgeSampler(
+        full_data['dst'].to_numpy(dtype=np.int32))
+    test_rand_sampler = DstRandEdgeSampler(
+        full_data['dst'].to_numpy(dtype=np.int32))
 
-    train_data, val_data, test_data = load_partitioned_dataset(
-        args.data, rank=args.rank, world_size=args.world_size,
-        partition_train_data=False)
+    train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
+    val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
+    test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
+
+    batch_size = model_config['batch_size']
+    # NB: learning rate is scaled by the number of workers
+    args.lr = args.lr * math.sqrt(args.world_size)
+    logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
+
+    if args.distributed:
+        train_sampler = DistributedBatchSampler(
+            SequentialSampler(train_ds), batch_size=batch_size,
+            drop_last=False, rank=args.rank, world_size=args.world_size,
+            num_chunks=args.num_chunks)
+        val_sampler = DistributedBatchSampler(
+            SequentialSampler(val_ds),
+            batch_size=batch_size, drop_last=False, rank=args.rank,
+            world_size=args.world_size)
+        test_sampler = DistributedBatchSampler(
+            SequentialSampler(test_ds),
+            batch_size=batch_size, drop_last=False, rank=args.rank,
+            world_size=args.world_size)
+    else:
+        train_sampler = RandomStartBatchSampler(
+            SequentialSampler(train_ds), batch_size=batch_size, drop_last=False)
+        val_sampler = BatchSampler(
+            SequentialSampler(val_ds), batch_size=batch_size, drop_last=False)
+        test_sampler = BatchSampler(
+            SequentialSampler(test_ds),
+            batch_size=batch_size, drop_last=False)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_ds, sampler=train_sampler,
+        collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    val_loader = torch.utils.data.DataLoader(
+        val_ds, sampler=val_sampler,
+        collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    test_loader = torch.utils.data.DataLoader(
+        test_ds, sampler=test_sampler,
+        collate_fn=default_collate_ndarray, num_workers=args.num_workers)
 
     dgraph = build_dynamic_graph(
         **data_config, device=args.local_rank)
 
     if args.distributed:
         torch.distributed.barrier()
-
-    df_iterator = load_dataset_in_chunks(
-        args.data, chunksize=1000000000)
-
-    t = tqdm()
-    # ingest the first chunk
-    for i, dataset in enumerate(df_iterator):
-        dataset.rename(columns={'Unnamed: 0': 'eid'}, inplace=True)
-        for i in range(0, len(dataset), args.ingestion_batch_size):
-            batch = dataset.iloc[i:i + args.ingestion_batch_size]
-            src_nodes = batch["src"].values.astype(np.int64)
-            dst_nodes = batch["dst"].values.astype(np.int64)
-            timestamps = batch["time"].values.astype(np.float32)
-            eids = batch["eid"].values.astype(np.int64)
-            dgraph.add_edges(src_nodes, dst_nodes, timestamps,
-                             eids, add_reverse=False)
-            if args.distributed:
-                torch.distributed.barrier()
-
-            t.update(len(batch))
-        del dataset
-    t.close()
-
-    # # insert in batch
-    # for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
-    #     batch = full_data[i:i + args.ingestion_batch_size]
-    #     src_nodes = batch["src"].values.astype(np.int64)
-    #     dst_nodes = batch["dst"].values.astype(np.int64)
-    #     timestamps = batch["time"].values.astype(np.float32)
-    #     eids = batch["eid"].values.astype(np.int64)
-    #     dgraph.add_edges(src_nodes, dst_nodes, timestamps,
-    #                      eids, add_reverse=False)
-    #     if args.distributed:
-    #         torch.distributed.barrier()
-
-    train_rand_sampler = DstRandEdgeSampler(
-        train_data['dst'].to_numpy(dtype=np.int32))
-    full_data_dst = np.concatenate(
-        [train_data['dst'].to_numpy(dtype=np.int32),
-            val_data['dst'].to_numpy(dtype=np.int32),
-            test_data['dst'].to_numpy(dtype=np.int32)])
-    val_rand_sampler = DstRandEdgeSampler(full_data_dst)
-    test_rand_sampler = DstRandEdgeSampler(full_data_dst)
-
-#     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
-#     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
-#     test_ds = EdgePredictionDataset(test_data, test_rand_sampler)
-
-    batch_size = model_config['batch_size']
-    args.batch_size = model_config['batch_size']
-    # NB: learning rate is scaled by the number of workers
-    args.lr = args.lr * math.sqrt(args.world_size)
-    logging.info("batch size: {}, lr: {}".format(batch_size, args.lr))
-
-    # if args.distributed:
-    #     train_sampler = DistributedBatchSampler(
-    #         SequentialSampler(train_ds), batch_size=batch_size,
-    #         drop_last=False, rank=args.rank, world_size=args.world_size,
-    #         num_chunks=args.num_chunks)
-    #     val_sampler = DistributedBatchSampler(
-    #         SequentialSampler(val_ds),
-    #         batch_size=batch_size, drop_last=False, rank=args.rank,
-    #         world_size=args.world_size)
-    #     test_sampler = DistributedBatchSampler(
-    #         SequentialSampler(test_ds),
-    #         batch_size=batch_size, drop_last=False, rank=args.rank,
-    #         world_size=args.world_size)
-    # else:
-
-    # train_sampler = RandomStartBatchSampler(
-    #     SequentialSampler(train_ds), batch_size=batch_size, drop_last=False)
-    # val_sampler = BatchSampler(
-    #     SequentialSampler(val_ds), batch_size=batch_size, drop_last=False)
-    # test_sampler = BatchSampler(
-    #     SequentialSampler(test_ds),
-    #     batch_size=batch_size, drop_last=False)
-
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_ds, sampler=train_sampler,
-    #     collate_fn=default_collate_ndarray, num_workers=args.num_workers)
-    # val_loader = torch.utils.data.DataLoader(
-    #     val_ds, sampler=val_sampler,
-    #     collate_fn=default_collate_ndarray, num_workers=args.num_workers)
-    # test_loader = torch.utils.data.DataLoader(
-    #     test_ds, sampler=test_sampler,
-    #     collate_fn=default_collate_ndarray, num_workers=args.num_workers)
+    # insert in batch
+    for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
+        batch = full_data[i:i + args.ingestion_batch_size]
+        src_nodes = batch["src"].values.astype(np.int64)
+        dst_nodes = batch["dst"].values.astype(np.int64)
+        timestamps = batch["time"].values.astype(np.float32)
+        eids = batch["eid"].values.astype(np.int64)
+        dgraph.add_edges(src_nodes, dst_nodes, timestamps,
+                         eids, add_reverse=False)
+        if args.distributed:
+            torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
@@ -340,9 +308,8 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.BCEWithLogitsLoss()
 
-    best_e = train(train_data, val_data, sampler,
-                   model, optimizer, criterion, cache, device, train_rand_sampler,
-                   val_rand_sampler)
+    best_e = train(train_loader, val_loader, sampler,
+                   model, optimizer, criterion, cache, device)
 
     logging.info('Loading model at epoch {}...'.format(best_e))
     ckpt = torch.load(checkpoint_path)
@@ -356,8 +323,8 @@ def main():
         else:
             model.memory.restore(ckpt['memory'])
 
-    ap, auc = evaluate(test_data, sampler, model,
-                        criterion, cache, device, val_rand_sampler)
+    ap, auc = evaluate(test_loader, sampler, model,
+                       criterion, cache, device)
     if args.distributed:
         metrics = torch.tensor([ap, auc], device=device)
         torch.distributed.all_reduce(metrics)
@@ -370,11 +337,11 @@ def main():
         torch.distributed.barrier()
 
 
-def train(train_data, val_data, sampler, model, optimizer, criterion,
-          cache, device, train_rand_sampler, val_rand_sampler):
+def train(train_loader, val_loader, sampler, model, optimizer, criterion,
+          cache, device):
     global training
     best_ap = 0
-    best_e = 1
+    best_e = 0
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
 
@@ -389,8 +356,6 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 #        gpu_load_thread = threading.Thread(target=gpu_load)
 #        gpu_load_thread.start()
 
-    train_iter = get_batch(train_data, args.batch_size,
-                           args.num_chunks, train_rand_sampler, args.world_size)
     logging.info('Start training...')
     if args.distributed:
         torch.distributed.barrier()
@@ -416,6 +381,7 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
 
+        train_iter = iter(train_loader)
         target_nodes, ts, eid = next(train_iter)
         mfgs = sampler.sample(target_nodes, ts)
         next_data = (mfgs, eid)
@@ -517,35 +483,35 @@ def train(train_data, val_data, sampler, model, optimizer, criterion,
 
                 if args.rank == 0:
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total Sampling Time {:.2f}s | Total Feature Fetching Time {:.2f}s | Total Memory Fetching Time {:.2f}s | Total Memory Update Time {:.2f}s | Total Memory Write Back Time {:.2f}s | Total Model Train Time {:.2f}s | Total Time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
-                        train_data)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time, time.time() - epoch_time_start))
+                        train_loader)/args.world_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sampling_time, total_feature_fetch_time, total_memory_fetch_time, total_memory_update_time, total_memory_write_back_time, total_model_train_time, time.time() - epoch_time_start))
 
-            # if (i+1) % int(10000//args.world_size) == 0:
-            #     epoch_time = time.time() - epoch_time_start
-            #     epoch_time_sum += epoch_time
+            if (i+1) % int(10000//args.world_size) == 0:
+                epoch_time = time.time() - epoch_time_start
+                epoch_time_sum += epoch_time
 
-            #     subdir = 'results'
-            #     os.makedirs(subdir, exist_ok=True)
-            #     throughput = total_samples * args.world_size / epoch_time
-            #     # save throughput filename model dataset n_gpus
-            #     np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
-            #         args.model, args.data, args.world_size)), throughput)
-            #     sys.exit(0)
+                subdir = 'results'
+                os.makedirs(subdir, exist_ok=True)
+                throughput = total_samples * args.world_size / epoch_time
+                # save throughput filename model dataset n_gpus
+                np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
+                    args.model, args.data, args.world_size)), throughput)
+                sys.exit(0)
 
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
-        # subdir = 'results'
-        # os.makedirs(subdir, exist_ok=True)
-        # throughput = total_samples * args.world_size / epoch_time
-        # # save throughput filename model dataset n_gpus
-        # np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
-        #     args.model, args.data, args.world_size)), throughput)
-        # sys.exit(0)
+        subdir = 'results'
+        os.makedirs(subdir, exist_ok=True)
+        throughput = total_samples * args.world_size / epoch_time
+        # save throughput filename model dataset n_gpus
+        np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
+            args.model, args.data, args.world_size)), throughput)
+        sys.exit(0)
 
         # Validation
         val_start = time.time()
         val_ap, val_auc = evaluate(
-            val_data, sampler, model, criterion, cache, device, val_rand_sampler)
+            val_loader, sampler, model, criterion, cache, device)
 
         if args.distributed:
             val_res = torch.tensor([val_ap, val_auc]).to(device)
