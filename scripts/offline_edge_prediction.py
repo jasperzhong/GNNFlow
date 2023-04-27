@@ -187,12 +187,31 @@ def main():
         data_config["mem_resource_type"] = "shared"
 
     train_data, val_data, test_data, full_data = load_dataset(args.data)
+    dgraph = build_dynamic_graph(
+        **data_config, device=args.local_rank)
+
+    if args.distributed:
+        torch.distributed.barrier()
+    # insert in batch
+    for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
+        batch = full_data[i:i + args.ingestion_batch_size]
+        src_nodes = batch["src"].values.astype(np.int64)
+        dst_nodes = batch["dst"].values.astype(np.int64)
+        timestamps = batch["time"].values.astype(np.float32)
+        eids = batch["eid"].values.astype(np.int64)
+        dgraph.add_edges(src_nodes, dst_nodes, timestamps,
+                         eids, add_reverse=False)
+        if args.distributed:
+            torch.distributed.barrier()
+
     train_rand_sampler = DstRandEdgeSampler(
         train_data['dst'].to_numpy(dtype=np.int32))
     val_rand_sampler = DstRandEdgeSampler(
         full_data['dst'].to_numpy(dtype=np.int32))
     test_rand_sampler = DstRandEdgeSampler(
         full_data['dst'].to_numpy(dtype=np.int32))
+
+    del full_data
 
     train_ds = EdgePredictionDataset(train_data, train_rand_sampler)
     val_ds = EdgePredictionDataset(val_data, val_rand_sampler)
@@ -234,23 +253,6 @@ def main():
     test_loader = torch.utils.data.DataLoader(
         test_ds, sampler=test_sampler,
         collate_fn=default_collate_ndarray, num_workers=args.num_workers)
-
-    dgraph = build_dynamic_graph(
-        **data_config, device=args.local_rank)
-
-    if args.distributed:
-        torch.distributed.barrier()
-    # insert in batch
-    for i in tqdm(range(0, len(full_data), args.ingestion_batch_size)):
-        batch = full_data[i:i + args.ingestion_batch_size]
-        src_nodes = batch["src"].values.astype(np.int64)
-        dst_nodes = batch["dst"].values.astype(np.int64)
-        timestamps = batch["time"].values.astype(np.float32)
-        eids = batch["eid"].values.astype(np.int64)
-        dgraph.add_edges(src_nodes, dst_nodes, timestamps,
-                         eids, add_reverse=False)
-        if args.distributed:
-            torch.distributed.barrier()
 
     num_nodes = dgraph.max_vertex_id() + 1
     num_edges = dgraph.num_edges()
