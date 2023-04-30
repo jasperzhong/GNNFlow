@@ -55,7 +55,7 @@ def main():
     dgraph = build_dynamic_graph(
         **dataset_config, device=0)
 
-    if args.model == 'DySAT' and args.dataset == 'GDELT':
+    if args.model == 'dysat' and args.dataset == 'GDELT':
         model_config['snapshot_time_window'] = 25
 
     # insert in batch
