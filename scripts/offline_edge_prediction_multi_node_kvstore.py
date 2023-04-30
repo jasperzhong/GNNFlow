@@ -30,7 +30,7 @@ from gnnflow.utils import (EarlyStopMonitor, build_dynamic_graph, get_batch,
                            get_pinned_buffers, get_project_root_dir, load_feat,
                            load_partitioned_dataset, mfgs_to_cuda)
 
-datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
+datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI', 'NETFLIX']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
