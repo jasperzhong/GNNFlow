@@ -16,7 +16,7 @@ parser.add_argument("--dataset", type=str, default="REDDIT")
 parser.add_argument("--model", type=str)
 parser.add_argument("--ingestion-batch-size", type=int, default=100000)
 parser.add_argument("--seed", type=int, default=42)
-parser.add_argument("--repeat", type=int, default=10)
+parser.add_argument("--repeat", type=int, default=1000)
 parser.add_argument("--sort", action="store_true")
 parser.add_argument("--adaptive-block-size-strategy",
                     type=str, default="naive")
@@ -72,23 +72,25 @@ def main():
 
     throughput_list = []
     batch_size = model_config['batch_size']
-    for _ in tqdm(range(args.repeat)):
-        total_time = 0
-        for _, rows in df.groupby(df.index // batch_size):
-            # Sample a batch of data
-            root_nodes = np.concatenate(
-                [rows.src.values, rows.dst.values,
-                    neg_link_sampler.sample(len(rows))]).astype(np.int64)
-            ts = np.concatenate(
-                [rows.time.values, rows.time.values, rows.time.values]).astype(
-                np.float32)
+    i = 0
+    total_time = 0
+    for _, rows in df.groupby(df.index // batch_size):
+        # Sample a batch of data
+        root_nodes = np.concatenate(
+            [rows.src.values, rows.dst.values,
+                neg_link_sampler.sample(len(rows))]).astype(np.int64)
+        ts = np.concatenate(
+            [rows.time.values, rows.time.values, rows.time.values]).astype(
+            np.float32)
 
-            start = time.time()
-            _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
-            end = time.time()
-            total_time += end - start - sort_time
-
+        start = time.time()
+        _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
+        end = time.time()
+        total_time += end - start - sort_time
         throughput_list.append(len(df) / total_time)
+        i += 1
+        if i == args.repeat:
+            break
 
     print("Throughput for {}'s sampling on {} with {}: {:.2f} samples/s, std: {:.2f}, std/mean: {:.2f}".format(
         args.model, args.dataset, args.adaptive_block_size_strategy, np.mean(
