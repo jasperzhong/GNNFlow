@@ -14,12 +14,12 @@ from gnnflow.utils import build_dynamic_graph, load_dataset
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="REDDIT")
 parser.add_argument("--model", type=str)
-parser.add_argument("--batch_size", type=int, default=600)
 parser.add_argument("--ingestion-batch-size", type=int, default=100000)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--repeat", type=int, default=10)
 parser.add_argument("--sort", action="store_true")
-
+parser.add_argument("--adaptive-block-size-strategy",
+                    type=str, default="naive")
 args = parser.parse_args()
 
 MB = 1 << 20
@@ -51,7 +51,10 @@ def main():
     # Create a dynamic graph
     _, _, _, df = load_dataset(args.dataset)
     model_config, dataset_config = get_default_config(args.model, args.dataset)
-    dgraph = build_dynamic_graph(**dataset_config)
+    dataset_config['adaptive_block_size_strategy'] = args.adaptive_block_size_strategy
+    dgraph = build_dynamic_graph(
+        **dataset_config, device=0)
+
     # insert in batch
     for i in tqdm(range(0, len(df), args.ingestion_batch_size)):
         batch = df[i:i + args.ingestion_batch_size]
@@ -68,9 +71,10 @@ def main():
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
     throughput_list = []
-    for _ in range(args.repeat):
+    batch_size = model_config['batch_size']
+    for _ in tqdm(range(args.repeat)):
         total_time = 0
-        for _, rows in tqdm(df.groupby(df.index // args.batch_size)):
+        for _, rows in df.groupby(df.index // batch_size):
             # Sample a batch of data
             root_nodes = np.concatenate(
                 [rows.src.values, rows.dst.values,
@@ -86,16 +90,16 @@ def main():
 
         throughput_list.append(len(df) / total_time)
 
-    print("Throughput for {}'s sampling on {}: {:.2f} samples/s, std: {:.2f}, std/mean: {:.2f}".format(
-        args.model, args.dataset, np.mean(
+    print("Throughput for {}'s sampling on {} with {}: {:.2f} samples/s, std: {:.2f}, std/mean: {:.2f}".format(
+        args.model, args.dataset, args.adaptive_block_size_strategy, np.mean(
             throughput_list), np.std(throughput_list),
         np.std(throughput_list) / np.mean(throughput_list)))
 
     subdir = "tmp_res/sampling_nextdoor_test_{}_cache/".format(
         "sorted" if args.sort else "unsorted")
     os.makedirs(subdir, exist_ok=True)
-    np.save(os.path.join(subdir, "sampling_throughput_{}_{}.npy".format(
-        args.model, args.dataset)), np.mean(throughput_list))
+    np.save(os.path.join(subdir, "sampling_throughput_{}_{}_{}.npy".format(
+        args.model, args.dataset, args.adaptive_block_size_strategy)), np.mean(throughput_list))
 
 
 if __name__ == "__main__":

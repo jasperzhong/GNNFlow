@@ -40,6 +40,7 @@ PYBIND11_MODULE(libgnnflow, m) {
 
   py::enum_<AdaptiveBlockSizeStrategy>(m, "AdaptiveBlockSizeStrategy")
       .value("NAIVE", AdaptiveBlockSizeStrategy::kNaive)
+      .value("FIX", AdaptiveBlockSizeStrategy::kFix)
       .value("LINEARAVG", AdaptiveBlockSizeStrategy::kLinearAvg)
       .value("LINEARDEG", AdaptiveBlockSizeStrategy::kLinearDeg)
       .value("LINEARDEG_ADAPTIVE",

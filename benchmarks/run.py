@@ -1,9 +1,10 @@
 import itertools
 import os
 
-models = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE']
-datasets = ['WIKI', 'REDDIT', 'MOOC', 'LASTFM']
+models = ['TGN', 'TGAT', 'DySAT']
+datasets = ['GDELT']
+strategies = ['naive',  'fix', 'lineardeg_adaptive']
 
-for model, dataset in itertools.product(models, datasets):
+for model, dataset, strategy in itertools.product(models, datasets, strategies):
     os.system(
-        f'python benchmark_sampler.py --model {model} --dataset {dataset}')
+        f'python benchmark_sampler.py --model {model} --dataset {dataset} --adaptive-block-size-strategy {strategy}')

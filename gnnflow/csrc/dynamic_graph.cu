@@ -127,8 +127,30 @@ void DynamicGraph::AddEdges(const std::vector<NIDType>& src_nodes,
     timestamps = sort_vector(timestamps, idx);
     eids = sort_vector(eids, idx);
 
-    AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids,
-                       streams_[i % kNumStreams]);
+    if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kFix) {
+      auto block_size = std::getenv("BIGBLOCK_SIZE")
+                            ? std::stoi(std::getenv("BIGBLOCK_SIZE"))
+                            : 256lu;
+      // add at most block_size edges at a time
+
+      for (std::size_t j = 0; j < dst_nodes.size(); j += block_size) {
+        auto end = std::min(j + block_size, dst_nodes.size());
+        auto dst_nodes_block = std::vector<NIDType>(dst_nodes.begin() + j,
+                                                    dst_nodes.begin() + end);
+        auto timestamps_block = std::vector<TimestampType>(
+            timestamps.begin() + j, timestamps.begin() + end);
+        auto eids_block =
+            std::vector<EIDType>(eids.begin() + j, eids.begin() + end);
+
+        AddEdgesForOneNode(src_node, dst_nodes_block, timestamps_block,
+                           eids_block, streams_[i % kNumStreams]);
+        i++;
+      }
+    } else {
+      AddEdgesForOneNode(src_node, dst_nodes, timestamps, eids,
+                         streams_[i % kNumStreams]);
+    }
+
     i++;
   }
   total_num_insertions_ += i;
@@ -247,7 +269,14 @@ void DynamicGraph::AddEdgesForOneNode(
       std::size_t new_block_size;
       if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kNaive) {
         new_block_size = num_edges;
-      } else if (adaptive_block_size_strategy_ ==
+      } else if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kFix) {
+        auto bigblock_size = std::getenv("BIGBLOCK_SIZE")
+                                 ? std::stoi(std::getenv("BIGBLOCK_SIZE"))
+                                 : 256lu;
+        new_block_size = bigblock_size;
+        CHECK_GE(new_block_size, num_edges);
+      }
+      else if (adaptive_block_size_strategy_ ==
                  AdaptiveBlockSizeStrategy::kLinearAvg) {
         new_block_size = std::max(num_edges, avg_edges_per_insertion);
         // round up to the nearest power of 2

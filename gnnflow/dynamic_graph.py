@@ -74,6 +74,8 @@ class DynamicGraph:
         adaptive_block_size_strategy = adaptive_block_size_strategy.lower()
         if adaptive_block_size_strategy == "naive":
             adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.NAIVE
+        elif adaptive_block_size_strategy == "fix":
+            adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.FIX
         elif adaptive_block_size_strategy == "linearavg":
             adaptive_block_size_strategy = AdaptiveBlockSizeStrategy.LINEARAVG
         elif adaptive_block_size_strategy == "lineardeg":

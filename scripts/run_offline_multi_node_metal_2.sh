@@ -9,7 +9,7 @@ NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
 
 HOST_NODE_ADDR=172.31.27.162
 HOST_NODE_PORT=29400
-NNODES=2
+NNODES=4
 NPROC_PER_NODE=8
 
 CURRENT_NODE_IP=$(ip -4 a show dev ${INTERFACE} | grep inet | cut -d " " -f6 | cut -d "/" -f1)

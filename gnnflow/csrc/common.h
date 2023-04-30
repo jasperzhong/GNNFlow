@@ -90,6 +90,7 @@ enum class MemoryResourceType {
 
 enum class AdaptiveBlockSizeStrategy {
   kNaive,
+  kFix,
   kLinearAvg,
   kLinearDeg,
   kLinearDegAdaptive

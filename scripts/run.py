@@ -3,7 +3,7 @@ import os
 
 models = ['TGN']
 datasets = ['GDELT']
-n_gpus = [1, 2, 4, 8]
+n_gpus = [8]
 
 for model, dataset, n_gpu in itertools.product(models, datasets, n_gpus):
     print(f'Running {model} on {dataset} with {n_gpu} GPUs')

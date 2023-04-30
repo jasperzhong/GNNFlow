@@ -25,10 +25,10 @@ def main():
     # print("Dataset loaded")
     build_start = time.time()
     _, dataset_config = get_default_config("TGN", args.dataset)
+    dataset_config['adaptive_block_size_strategy'] = args.adaptive_block_size_strategy
     dgraph = build_dynamic_graph(
         **dataset_config,
-        device=0,
-        adaptive_block_size_strategy=args.adaptive_block_size_strategy)
+        device=0)
     # print("Dynamic graph built")
 
     insertion_times = 0
@@ -54,20 +54,6 @@ def main():
         dgraph.get_graph_memory_usage() / MB,
         dgraph.get_metadata_memory_usage() / MB,
         args.adaptive_block_size_strategy, insertion_times, dgraph.num_vertices()))
-
-    # res = np.array([build_time, dgraph.avg_linked_list_length(),
-    #                 dgraph.get_graph_memory_usage() / MB,
-    #                 dgraph.get_metadata_memory_usage() / MB])
-
-    subdir = "tmp_res/adaptive_block_size_insights/"
-    os.makedirs(subdir, exist_ok=True)
-    np.save(os.path.join(subdir, "out_degree_{}_{}.npy".format(
-        args.dataset, args.adaptive_block_size_strategy)), out_degree)
-    np.save(os.path.join(subdir, "num_insertions_{}_{}.npy".format(
-        args.dataset, args.adaptive_block_size_strategy)), num_insertions)
-    np.save(os.path.join(subdir, "num_blocks_{}_{}.npy".format(
-        args.dataset, args.adaptive_block_size_strategy)), num_blocks)
-
 
 if __name__ == "__main__":
     main()
