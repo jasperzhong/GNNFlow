@@ -165,7 +165,7 @@ _netflix_default_config = {
     "minimum_block_size": 4,
     "blocks_to_preallocate": 8196,
     "insertion_policy": "insert",
-    "undirected": False,
+    "undirected": True,
     "node_feature": True,
     "edge_feature": True,
     "adaptive_block_size_strategy": "lineardeg_adaptive"
