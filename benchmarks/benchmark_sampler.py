@@ -55,6 +55,9 @@ def main():
     dgraph = build_dynamic_graph(
         **dataset_config, device=0)
 
+    if args.model == 'DySAT' and args.dataset == 'GDELT':
+        model_config['snapshot_time_window'] = 25
+
     # insert in batch
     for i in tqdm(range(0, len(df), args.ingestion_batch_size)):
         batch = df[i:i + args.ingestion_batch_size]
