@@ -33,6 +33,8 @@ cmd="torchrun \
     --ingestion-batch-size 10000000"
 
 rm -rf /dev/shm/rmm_pool_*
+rm -rf /dev/shm/edge_feats
+rm -rf /dev/shm/node_feats
 
 echo $cmd
 OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${NNODES}_${NPROC_PER_NODE}.log 2>&1
