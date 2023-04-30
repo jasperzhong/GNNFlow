@@ -74,23 +74,29 @@ def main():
     batch_size = model_config['batch_size']
     i = 0
     total_time = 0
-    for _, rows in df.groupby(df.index // batch_size):
-        # Sample a batch of data
-        root_nodes = np.concatenate(
-            [rows.src.values, rows.dst.values,
-                neg_link_sampler.sample(len(rows))]).astype(np.int64)
-        ts = np.concatenate(
-            [rows.time.values, rows.time.values, rows.time.values]).astype(
-            np.float32)
+    t = tqdm()
+    while True:
+        for _, rows in df.groupby(df.index // batch_size):
+            # Sample a batch of data
+            root_nodes = np.concatenate(
+                [rows.src.values, rows.dst.values,
+                    neg_link_sampler.sample(len(rows))]).astype(np.int64)
+            ts = np.concatenate(
+                [rows.time.values, rows.time.values, rows.time.values]).astype(
+                np.float32)
 
-        start = time.time()
-        _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
-        end = time.time()
-        total_time += end - start - sort_time
-        throughput_list.append(len(df) / total_time)
-        i += 1
+            start = time.time()
+            _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
+            end = time.time()
+            total_time += end - start - sort_time
+            throughput_list.append(len(df) / total_time)
+            i += 1
+            t.update(1)
+            if i == args.repeat:
+                break
         if i == args.repeat:
             break
+    t.close()
 
     print("Throughput for {}'s sampling on {} with {}: {:.2f} samples/s, std: {:.2f}, std/mean: {:.2f}".format(
         args.model, args.dataset, args.adaptive_block_size_strategy, np.mean(
