@@ -73,7 +73,6 @@ def main():
 
     neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
-    throughput_list = []
     batch_size = model_config['batch_size']
     i = 0
     total_time = 0
@@ -92,7 +91,6 @@ def main():
             _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
             end = time.time()
             total_time += end - start - sort_time
-            throughput_list.append(len(df) / total_time)
             i += 1
             t.update(1)
             if i == args.repeat:
@@ -101,16 +99,9 @@ def main():
             break
     t.close()
 
-    print("Throughput for {}'s sampling on {} with {}: {:.2f} samples/s, std: {:.2f}, std/mean: {:.2f}".format(
-        args.model, args.dataset, args.adaptive_block_size_strategy, np.mean(
-            throughput_list), np.std(throughput_list),
-        np.std(throughput_list) / np.mean(throughput_list)))
-
-    subdir = "tmp_res/sampling_nextdoor_test_{}_cache/".format(
-        "sorted" if args.sort else "unsorted")
-    os.makedirs(subdir, exist_ok=True)
-    np.save(os.path.join(subdir, "sampling_throughput_{}_{}_{}.npy".format(
-        args.model, args.dataset, args.adaptive_block_size_strategy)), np.mean(throughput_list))
+    print("Throughput for {}'s sampling on {} with {}: {:.2f} samples/s".format(
+        args.model, args.dataset, args.adaptive_block_size_strategy,
+        args.repeat * batch_size / total_time))
 
 
 if __name__ == "__main__":
