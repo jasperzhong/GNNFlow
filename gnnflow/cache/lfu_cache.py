@@ -97,9 +97,11 @@ class LFUCache(Cache):
                     len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
                     self.device).float()
+                self.cache_edge_flag[:] = False
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id[cache_edge_id] = keys.to(
                     self.device)
+                self.cache_edge_map[:] = -1
                 self.cache_edge_map[keys] = cache_edge_id
 
                 self.cache_edge_count.zero_()
@@ -111,8 +113,10 @@ class LFUCache(Cache):
                 # Init parameters related to feature fetching
                 self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
                     self.device, non_blocking=True)
+                self.cache_edge_flag[:] = False
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id = cache_edge_id
+                self.cache_edge_map[:] = -1
                 self.cache_edge_map[cache_edge_id] = cache_edge_id
 
                 self.cache_edge_count.zero_()

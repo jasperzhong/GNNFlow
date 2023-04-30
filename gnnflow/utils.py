@@ -321,34 +321,45 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
         node_feats_shm, edge_feats_shm = None, None
         if local_rank == 0:
             if node_feats is not None:
-                node_feats = node_feats.astype(np.float32)
+                # node_feats = node_feats.astype(np.float32)
                 node_feats_shm = create_shared_mem_array(
                     'node_feats', node_feats.shape, node_feats.dtype)
-                node_feats_shm[:] = node_feats[:]
+                # node_feats_shm[:] = node_feats[:]
+                np.copyto(node_feats_shm, node_feats)
             if edge_feats is not None:
-                edge_feats = edge_feats.astype(np.float32)
+                # edge_feats = edge_feats.astype(np.float32)
                 edge_feats_shm = create_shared_mem_array(
                     'edge_feats', edge_feats.shape, edge_feats.dtype)
                 print("edge_feats_shm.shape: ", edge_feats_shm.shape, flush=True)
-                edge_feats_shm[:] = edge_feats[:]
+                # edge_feats_shm[:] = edge_feats[:]
+                np.copyto(edge_feats_shm, edge_feats)
                 print("edge_feats assigned", flush=True)
             # broadcast the shape and dtype of the features
             node_feats_shape = node_feats.shape if node_feats is not None else None
             edge_feats_shape = edge_feats.shape if edge_feats is not None else None
+            node_feats_dtype = node_feats.dtype if node_feats is not None else None
+            edge_feats_dtype = edge_feats.dtype if edge_feats is not None else None
             torch.distributed.broadcast_object_list(
                 [node_feats_shape, edge_feats_shape], src=0)
+            torch.distributed.broadcast_object_list(
+                [node_feats_dtype, edge_feats_dtype], src=0)
+            del node_feats, edge_feats
 
         if local_rank != 0:
             shapes = [None, None]
+            dtypes = [None, None]
             torch.distributed.broadcast_object_list(
                 shapes, src=0)
+            torch.distributed.broadcast_object_list(
+                dtypes, src=0)
             node_feats_shape, edge_feats_shape = shapes
+            node_feats_dtype, edge_feats_dtype = dtypes
             if node_feats_shape is not None:
                 node_feats_shm = get_shared_mem_array(
-                    'node_feats', node_feats_shape, np.float32)
+                    'node_feats', node_feats_shape, node_feats_dtype)
             if edge_feats_shape is not None:
                 edge_feats_shm = get_shared_mem_array(
-                    'edge_feats', edge_feats_shape, np.float32)
+                    'edge_feats', edge_feats_shape, edge_feats_dtype)
 
         torch.distributed.barrier()
         if node_feats_shm is not None:
@@ -513,7 +524,7 @@ def mfgs_to_cuda(mfgs: List[List[DGLBlock]], device: Union[str, torch.device]):
 
 
 def get_pinned_buffers(
-        fanouts, sample_history, batch_size, dim_node, dim_edge):
+        fanouts, sample_history, batch_size, dim_node, dim_edge, node_dtype, edge_dtype):
     pinned_nfeat_buffs = list()
     pinned_efeat_buffs = list()
     limit = int(batch_size * 3.3)
@@ -522,12 +533,12 @@ def get_pinned_buffers(
         if dim_edge != 0:
             for _ in range(sample_history):
                 pinned_efeat_buffs.insert(0, torch.zeros(
-                    (limit, dim_edge), pin_memory=True))
+                    (limit, dim_edge), pin_memory=True, dtype=edge_dtype))
 
     if dim_node != 0:
         for _ in range(sample_history):
             pinned_nfeat_buffs.insert(0, torch.zeros(
-                (limit, dim_node), pin_memory=True))
+                (limit, dim_node), pin_memory=True, dtype=node_dtype))
 
     return pinned_nfeat_buffs, pinned_efeat_buffs
 

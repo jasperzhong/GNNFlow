@@ -5,7 +5,7 @@ DATA=$2
 CACHE="${3:-LFUCache}"
 EDGE_CACHE_RATIO="${4:-0.2}" # default 20% of cache
 NODE_CACHE_RATIO="${5:-0.2}" # default 20% of cache
-NPROC_PER_NODE=${7:-1}
+NPROC_PER_NODE=${6:-1}
 
 if [[ $NPROC_PER_NODE -gt 1 ]]; then
     cmd="torchrun \
@@ -21,6 +21,8 @@ else
         --node-cache-ratio $NODE_CACHE_RATIO \
         --ingestion-batch-size 10000000"
 fi
+
+rm -rf /dev/shm/rmm_pool_*
 
 echo $cmd
 OMP_NUM_THREADS=8 exec $cmd > ${MODEL}_${DATA}_${CACHE}_${EDGE_CACHE_RATIO}_${NODE_CACHE_RATIO}_${NPROC_PER_NODE}.log 2>&1

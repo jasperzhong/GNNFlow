@@ -67,11 +67,11 @@ class Cache:
             assert kvstore_client is not None, 'kvstore_client must be provided when using ' \
                 'distributed training'
             assert neg_sample_ratio > 0, 'neg_sample_ratio must be positive'
-        else:
-            if node_feats is not None and node_feats.dtype == torch.bool:
-                node_feats = node_feats.to(torch.float32)
-            if edge_feats is not None and edge_feats.dtype == torch.bool:
-                edge_feats = edge_feats.to(torch.float32)
+        # else:
+        #     if node_feats is not None and node_feats.dtype == torch.bool:
+        #         node_feats = node_feats.to(torch.float32)
+        #     if edge_feats is not None and edge_feats.dtype == torch.bool:
+        #         edge_feats = edge_feats.to(torch.float32)
 
         # NB: cache_ratio == 0 means no cache
         assert edge_cache_ratio >= 0 and edge_cache_ratio <= 1, 'edge_cache_ratio must be in [0, 1]'
@@ -107,7 +107,7 @@ class Cache:
         # stores node's features
         if self.dim_node_feat != 0:
             self.cache_node_buffer = torch.zeros(
-                self.node_capacity, self.dim_node_feat, dtype=torch.float32, device=self.device)
+                self.node_capacity, self.dim_node_feat, dtype=node_feats.dtype, device=self.device)
 
             # flag for indicating those cached nodes
             self.cache_node_flag = torch.zeros(
@@ -121,7 +121,7 @@ class Cache:
 
         if self.dim_edge_feat != 0:
             self.cache_edge_buffer = torch.zeros(
-                self.edge_capacity, self.dim_edge_feat, dtype=torch.float32, device=self.device)
+                self.edge_capacity, self.dim_edge_feat, dtype=edge_feats.dtype, device=self.device)
 
             # flag for indicating those cached edges
             self.cache_edge_flag = torch.zeros(
@@ -166,23 +166,14 @@ class Cache:
                 cache_edge_id = torch.arange(
                     len(keys), dtype=torch.int64, device=self.device)
                 self.cache_edge_buffer[cache_edge_id] = feats.to(
-                    self.device).float()
+                    self.device)
+                self.cache_edge_flag[:] = False
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id[cache_edge_id] = keys.to(
                     self.device)
+                self.cache_edge_map[:] = -1
                 self.cache_edge_map[keys] = cache_edge_id
         else:
-            if self.dim_node_feat != 0:
-                cache_node_id = torch.arange(
-                    self.node_capacity, dtype=torch.int64, device=self.device)
-
-                # Init parameters related to feature fetching
-                self.cache_node_buffer[cache_node_id] = self.node_feats[:self.node_capacity].to(
-                    self.device, non_blocking=True)
-                self.cache_node_flag[cache_node_id] = True
-                self.cache_index_to_node_id = cache_node_id
-                self.cache_node_map[cache_node_id] = cache_node_id
-
             if self.dim_edge_feat != 0:
                 cache_edge_id = torch.arange(
                     self.edge_capacity, dtype=torch.int64, device=self.device)
@@ -190,8 +181,10 @@ class Cache:
                 # Init parameters related to feature fetching
                 self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
                     self.device, non_blocking=True)
+                self.cache_edge_flag[:] = False
                 self.cache_edge_flag[cache_edge_id] = True
                 self.cache_index_to_edge_id = cache_edge_id
+                self.cache_edge_map[:] = -1
                 self.cache_edge_map[cache_edge_id] = cache_edge_id
 
     def resize(self, new_num_nodes: int, new_num_edges: int):
@@ -278,7 +271,7 @@ class Cache:
                 hit_ratio_sum += hit_ratio
 
                 node_feature = torch.zeros(
-                    len(nodes), self.dim_node_feat, dtype=torch.float32, device=self.device)
+                    len(nodes), self.dim_node_feat, dtype=self.node_feats.dtype, device=self.device)
 
                 # fetch the cached features
                 cached_node_index = self.cache_node_map[nodes[cache_mask]]
@@ -297,10 +290,10 @@ class Cache:
                                 i][:uncached_node_id_unique.shape[0]] = self.kvstore_client.pull(
                                 uncached_node_id_unique.cpu(), mode='node')
                             uncached_node_feature = self.pinned_nfeat_buffs[i][:uncached_node_id_unique.shape[0]].to(
-                                self.device, non_blocking=True).float()
+                                self.device, non_blocking=True)
                         else:
                             uncached_node_feature = self.kvstore_client.pull(
-                                uncached_node_id_unique.cpu(), mode='node').to(self.device).float()
+                                uncached_node_id_unique.cpu(), mode='node').to(self.device)
                     else:
                         if self.pinned_nfeat_buffs is not None:
                             torch.index_select(self.node_feats, 0, uncached_node_id_unique.to('cpu'),
@@ -313,7 +306,7 @@ class Cache:
                     node_feature[uncached_mask] = uncached_node_feature[uncached_node_id_unique_index]
 
                 i += 1
-                b.srcdata['h'] = node_feature
+                b.srcdata['h'] = node_feature.float()
 
                 if update_cache and uncached_mask.sum() > 0:
                     self.update_node_cache(cached_node_index=cached_node_index,
@@ -338,7 +331,7 @@ class Cache:
                     hit_ratio_sum += hit_ratio
 
                     edge_feature = torch.zeros(len(edges), self.dim_edge_feat,
-                                               dtype=torch.float32, device=self.device)
+                                               dtype=self.edge_feats.dtype, device=self.device)
 
                     # fetch the cached features
                     cached_edge_index = self.cache_edge_map[edges[cache_mask]]
@@ -371,10 +364,10 @@ class Cache:
                                     i][:uncached_edge_id_unique.shape[0]] = self.kvstore_client.pull(
                                         uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique)
                                 uncached_edge_feature = self.pinned_efeat_buffs[i][:uncached_edge_id_unique.shape[0]].to(
-                                    self.device, non_blocking=True).float()
+                                    self.device, non_blocking=True)
                             else:
                                 uncached_edge_feature = self.kvstore_client.pull(
-                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device).float()
+                                    uncached_edge_id_unique.cpu(), mode='edge', nid=uncached_eid_to_nid_unique).to(self.device)
                         else:
                             uncached_edge_id_unique, uncached_edge_id_unique_index = torch.unique(
                                 uncached_edge_id, return_inverse=True)
@@ -390,7 +383,7 @@ class Cache:
                         edge_feature[uncached_mask] = uncached_edge_feature[uncached_edge_id_unique_index]
 
                     i += 1
-                    b.edata['f'] = edge_feature
+                    b.edata['f'] = edge_feature.float()
 
                     if update_cache and len(uncached_edge_id) > 0:
                         self.update_edge_cache(cached_edge_index=cached_edge_index,
