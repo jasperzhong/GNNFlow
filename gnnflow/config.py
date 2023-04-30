@@ -17,7 +17,7 @@ def get_default_config(model: str, dataset: str):
     """
     model, dataset = model.lower(), dataset.lower()
     assert model in ["tgn", "tgat", "dysat", "graphsage", "gat"] and dataset in [
-        "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag"], "Invalid model or dataset."
+        "wiki", "reddit", "mooc", "lastfm", "gdelt", "mag", "netflix"], "Invalid model or dataset."
 
     mod = sys.modules[__name__]
     return getattr(
@@ -154,6 +154,19 @@ _lastfm_default_config = {
     "insertion_policy": "insert",
     "undirected": False,
     "node_feature": False,
+    "edge_feature": True,
+    "adaptive_block_size_strategy": "lineardeg_adaptive"
+}
+
+_netflix_default_config = {
+    "initial_pool_size": 10*GiB,
+    "maximum_pool_size": 20*GiB,
+    "mem_resource_type": "pinned",
+    "minimum_block_size": 4,
+    "blocks_to_preallocate": 8196,
+    "insertion_policy": "insert",
+    "undirected": False,
+    "node_feature": True,
     "edge_feature": True,
     "adaptive_block_size_strategy": "lineardeg_adaptive"
 }
