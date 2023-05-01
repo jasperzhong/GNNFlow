@@ -4,6 +4,9 @@ import math
 import os
 import random
 import time
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning,
+                        message='TypedStorage is deprecated')
 
 import numpy as np
 import torch
@@ -24,7 +27,7 @@ from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
                            get_project_root_dir, load_dataset, load_feat,
                            mfgs_to_cuda)
 
-datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI']
+datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI', 'NETFLIX']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
 cache_names = sorted(name for name in caches.__dict__
                      if not name.startswith("__")
@@ -35,8 +38,6 @@ parser.add_argument("--model", choices=model_names, required=True,
                     help="model architecture" + '|'.join(model_names))
 parser.add_argument("--data", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
-parser.add_argument("--epoch", help="maximum training epoch",
-                    type=int, default=1)
 parser.add_argument("--lr", help='learning rate', type=float, default=0.0001)
 parser.add_argument("--num-workers", help="num workers for dataloaders",
                     type=int, default=8)
@@ -57,12 +58,17 @@ parser.add_argument("--node-cache-ratio", type=float, default=0,
 # online learning
 parser.add_argument("--phase1-ratio", type=float, default=0.3,
                     help="ratio of phase 1")
+parser.add_argument("--epoch", help="maximum training epoch",
+                    type=int, default=1)
+parser.add_argument("--split-type", type=str, default='size')
+parser.add_argument("--split-value", type=float, default=100)
 parser.add_argument("--val-ratio", type=float, default=0.1,
                     help="ratio of validation set")
 parser.add_argument("--replay-ratio", type=float, default=0,
                     help="replay ratio")
 parser.add_argument("--retrain-ratio", type=int, default=1,
                     help="retrain ratio")
+
 parser.add_argument("--snapshot-time-window", type=float, default=0,
                     help="time window for sampling")
 
@@ -99,6 +105,16 @@ def evaluate(df, sampler, model, criterion, cache, device, rand_edge_sampler):
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid)
+
+            if args.use_memory:
+                b = mfgs[0][0]  # type: DGLBlock
+                if args.distributed:
+                    model.module.memory.prepare_input(b)
+                    model.module.last_updated = model.module.memory_updater(b)
+                else:
+                    model.memory.prepare_input(b)
+                    model.last_updated = model.memory_updater(b)
+
             pred_pos, pred_neg = model(mfgs)
 
             if args.use_memory:
@@ -209,6 +225,8 @@ def main():
 
     dim_node = 0 if node_feats is None else node_feats.shape[1]
     dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
+    node_dtype = None if node_feats is None else node_feats.dtype
+    edge_dtype = None if edge_feats is None else edge_feats.dtype
 
     device = torch.device('cuda:{}'.format(args.local_rank))
     logging.debug("device: {}".format(device))
@@ -231,7 +249,7 @@ def main():
 
     pinned_nfeat_buffs, pinned_efeat_buffs = get_pinned_buffers(
         model_config['fanouts'], model_config['num_snapshots'], args.batch_size,
-        dim_node, dim_edge)
+        dim_node, dim_edge, node_dtype, edge_dtype)
 
     # Cache
     cache = caches.__dict__[args.cache](args.edge_cache_ratio,
@@ -298,8 +316,8 @@ def main():
     if args.rank == 0:
         logging.info("Phase2 start")
 
-    # retrain 100 times
-    retrain_num = 100
+    # retrain N times
+    retrain_num = int(args.split_value)
     phase2_df = full_data[phase1_len:]
     phase2_len = len(phase2_df)
     incremental_step = int(phase2_len / retrain_num)
@@ -307,6 +325,7 @@ def main():
     old_data_start_index = 0
     logging.info("replay ratio: {}".format(replay_ratio))
     logging.info("retrain ratio: {}".format(args.retrain_ratio))
+    val_ap_list = []
     for i in range(retrain_num):
         phase2_build_graph_start = time.time()
         increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
@@ -340,6 +359,7 @@ def main():
             torch.distributed.all_reduce(val_res)
             val_res /= args.world_size
             ap, auc = val_res[0].item(), val_res[1].item()
+        val_ap_list.append(ap)
         if args.rank == 0:
             logging.info("incremental step: {}".format(incremental_step))
             logging.info(
@@ -405,6 +425,13 @@ def main():
     logging.info("total time: {}".format(
         build_graph_time + total_training_time))
 
+    if args.rank == 0:
+        subdir = 'tmp_res'
+        os.makedirs(subdir, exist_ok=True)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_ap.npy'), val_ap_list)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_build_graph_time.npy'), build_graph_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_total_training_time.npy'), total_training_time)
+
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
           cache, device, train_rand_sampler, test_rand_sampler):
@@ -443,6 +470,15 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
             mfgs_to_cuda(mfgs, device)
             mfgs = cache.fetch_feature(
                 mfgs, eid)
+
+            if args.use_memory:
+                b = mfgs[0][0]  # type: DGLBlock
+                if args.distributed:
+                    model.module.memory.prepare_input(b)
+                    model.module.last_updated = model.module.memory_updater(b)
+                else:
+                    model.memory.prepare_input(b)
+                    model.last_updated = model.memory_updater(b)
 
             # Train
             optimizer.zero_grad()
@@ -486,7 +522,6 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
                     logging.info('Epoch {:d}/{:d} | Iter {:d}/{:d} | Throughput {:.2f} samples/s | Loss {:.4f} | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s'.format(e + 1, args.epoch, i + 1, int(len(
                         train_df)/args.batch_size), total_samples * args.world_size / (time.time() - epoch_time_start), total_loss / (i + 1), cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
 
-        torch.distributed.barrier()
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
