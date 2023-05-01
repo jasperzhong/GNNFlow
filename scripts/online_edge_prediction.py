@@ -162,6 +162,12 @@ def main():
 
     model_config, data_config = get_default_config(args.model, args.data)
     args.use_memory = model_config['use_memory']
+    if model_config["snapshot_time_window"] > 0 and args.data == "GDELT":
+        model_config["snapshot_time_window"] = 25
+    else:
+        model_config["snapshot_time_window"] = args.snapshot_time_window
+    logging.info("snapshot_time_window's value is {}".format(
+        model_config["snapshot_time_window"]))
 
     build_graph_time = 0
     total_training_time = 0
@@ -428,9 +434,9 @@ def main():
     if args.rank == 0:
         subdir = 'tmp_res'
         os.makedirs(subdir, exist_ok=True)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_ap.npy'), val_ap_list)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_build_graph_time.npy'), build_graph_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_total_training_time.npy'), total_training_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_{args.epoch}_ap.npy'), val_ap_list)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_{args.epoch}_build_graph_time.npy'), build_graph_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_{args.epoch}_total_training_time.npy'), total_training_time)
 
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
