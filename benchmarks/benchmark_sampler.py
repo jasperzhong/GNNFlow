@@ -16,7 +16,7 @@ parser.add_argument("--dataset", type=str, default="REDDIT")
 parser.add_argument("--models", type=str, nargs='+', default=[])
 parser.add_argument("--ingestion-batch-size", type=int, default=100000)
 parser.add_argument("--seed", type=int, default=42)
-parser.add_argument("--repeat", type=int, default=1000)
+parser.add_argument("--repeat", type=int, default=10000)
 parser.add_argument("--sort", action="store_true")
 parser.add_argument("--adaptive-block-size-strategy",
                     type=str, default="naive")
