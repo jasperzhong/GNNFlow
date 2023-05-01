@@ -69,6 +69,7 @@ parser.add_argument("--node-cache-ratio", type=float, default=0,
                     help="cache ratio for node feature cache")
 parser.add_argument("--snapshot-time-window", type=float, default=0,
                     help="time window for sampling")
+parser.add_argument("--mem-resource-type", type=str, default="cuda")
 
 args = parser.parse_args()
 
@@ -182,6 +183,7 @@ def main():
         model_config["snapshot_time_window"]))
     args.use_memory = model_config['use_memory']
 
+    data_config["mem_resource_type"] = args.mem_resource_type
     if args.distributed:
         # graph is stored in shared memory
         data_config["mem_resource_type"] = "shared"
@@ -495,8 +497,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
                 os.makedirs(subdir, exist_ok=True)
                 throughput = total_samples * args.world_size / epoch_time
                 # save throughput filename model dataset n_gpus
-                np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
-                    args.model, args.data, args.world_size)), throughput)
+                np.save(os.path.join(subdir, '{}_{}_{}_{}.npy'.format(
+                    args.model, args.data, args.world_size, args.mem_resource_type)), throughput)
                 sys.exit(0)
 
         epoch_time = time.time() - epoch_time_start
@@ -506,8 +508,8 @@ def train(train_loader, val_loader, sampler, model, optimizer, criterion,
         os.makedirs(subdir, exist_ok=True)
         throughput = total_samples * args.world_size / epoch_time
         # save throughput filename model dataset n_gpus
-        np.save(os.path.join(subdir, '{}_{}_{}.npy'.format(
-            args.model, args.data, args.world_size)), throughput)
+        np.save(os.path.join(subdir, '{}_{}_{}_{}.npy'.format(
+            args.model, args.data, args.world_size, args.mem_resource_type)), throughput)
         sys.exit(0)
 
         # Validation
