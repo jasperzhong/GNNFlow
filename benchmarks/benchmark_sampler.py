@@ -1,7 +1,7 @@
 import argparse
+import os
 import random
 import time
-import os
 
 import numpy as np
 import torch
@@ -13,13 +13,14 @@ from gnnflow.utils import build_dynamic_graph, load_dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="REDDIT")
-parser.add_argument("--model", type=str)
+parser.add_argument("--models", type=str, nargs='+', default=[])
 parser.add_argument("--ingestion-batch-size", type=int, default=100000)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--repeat", type=int, default=1000)
 parser.add_argument("--sort", action="store_true")
 parser.add_argument("--adaptive-block-size-strategy",
                     type=str, default="naive")
+parser.add_argument("--mem-resource-type", type=str, default="cuda")
 args = parser.parse_args()
 
 MB = 1 << 20
@@ -35,8 +36,6 @@ def set_seed(seed):
 
 set_seed(args.seed)
 
-args.model = args.model.lower()
-
 
 class NegLinkSampler:
 
@@ -50,13 +49,20 @@ class NegLinkSampler:
 def main():
     # Create a dynamic graph
     _, _, _, df = load_dataset(args.dataset)
-    model_config, dataset_config = get_default_config(args.model, args.dataset)
+    _, dataset_config = get_default_config('TGN', args.dataset)
     dataset_config['adaptive_block_size_strategy'] = args.adaptive_block_size_strategy
-    dgraph = build_dynamic_graph(
-        **dataset_config, device=0)
-
-    if args.model == 'dysat' and args.dataset == 'GDELT':
-        model_config['snapshot_time_window'] = 25
+    dataset_config['mem_resource_type'] = args.mem_resource_type
+    try:
+        dgraph = build_dynamic_graph(
+            **dataset_config, device=0)
+    except Exception as e:
+        print("Failed to build dynamic graph with error: {}".format(e))
+        subdir = 'tmp_res'
+        os.makedirs(subdir, exist_ok=True)
+        for model in args.models:
+            np.save(f'{subdir}/{model}_{args.dataset}_{args.adaptive_block_size_strategy}_{args.mem_resource_type}.npy',
+                    0)
+        return
 
     # insert in batch
     for i in tqdm(range(0, len(df), args.ingestion_batch_size)):
@@ -68,40 +74,53 @@ def main():
         dgraph.add_edges(src_nodes, dst_nodes, timestamps,
                          eids, add_reverse=dataset_config["undirected"])
 
-    sampler = TemporalSampler(
-        dgraph, **model_config)
+    for model in args.models:
+        print(model)
+        model_config, dataset_config = get_default_config(model, args.dataset)
+        if model == 'DySAT' and args.dataset == 'GDELT':
+            print("snapshot_time_window set to 25")
+            model_config['snapshot_time_window'] = 25
 
-    neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
+        sampler = TemporalSampler(
+            dgraph, **model_config)
 
-    batch_size = model_config['batch_size']
-    i = 0
-    total_time = 0
-    t = tqdm()
-    while True:
-        for _, rows in df.groupby(df.index // batch_size):
-            # Sample a batch of data
-            root_nodes = np.concatenate(
-                [rows.src.values, rows.dst.values,
-                    neg_link_sampler.sample(len(rows))]).astype(np.int64)
-            ts = np.concatenate(
-                [rows.time.values, rows.time.values, rows.time.values]).astype(
-                np.float32)
+        neg_link_sampler = NegLinkSampler(dgraph.num_vertices())
 
-            start = time.time()
-            _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
-            end = time.time()
-            total_time += end - start - sort_time
-            i += 1
-            t.update(1)
+        batch_size = model_config['batch_size']
+        i = 0
+        total_time = 0
+        t = tqdm()
+        while True:
+            for _, rows in df.groupby(df.index // batch_size):
+                # Sample a batch of data
+                root_nodes = np.concatenate(
+                    [rows.src.values, rows.dst.values,
+                        neg_link_sampler.sample(len(rows))]).astype(np.int64)
+                ts = np.concatenate(
+                    [rows.time.values, rows.time.values, rows.time.values]).astype(
+                    np.float32)
+
+                start = time.time()
+                _, sort_time = sampler._sample(root_nodes, ts, sort=args.sort)
+                end = time.time()
+                total_time += end - start - sort_time
+                i += 1
+                t.update(1)
+                if i == args.repeat:
+                    break
             if i == args.repeat:
                 break
-        if i == args.repeat:
-            break
-    t.close()
+        t.close()
 
-    print("Throughput for {}'s sampling on {} with {}: {:.2f} samples/s".format(
-        args.model, args.dataset, args.adaptive_block_size_strategy,
-        args.repeat * batch_size / total_time))
+        print("Throughput for {}'s sampling on {} with {} and {}: {:.2f} samples/s".format(
+            model, args.dataset, args.adaptive_block_size_strategy,
+            args.mem_resource_type,
+            args.repeat * batch_size / total_time))
+
+        subdir = 'tmp_res'
+        os.makedirs(subdir, exist_ok=True)
+        np.save(f'{subdir}/{model}_{args.dataset}_{args.adaptive_block_size_strategy}_{args.mem_resource_type}.npy',
+                args.repeat * batch_size / total_time)
 
 
 if __name__ == "__main__":

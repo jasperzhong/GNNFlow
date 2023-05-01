@@ -1,10 +1,10 @@
 import itertools
 import os
 
-datasets = ['LASTFM']
+datasets = ['NETFLIX']
 # strategies = ['naive', 'linearavg', 'lineardeg', 'lineardeg_adaptive']
 # strategies = ['naive',  'fix', 'lineardeg_adaptive']
-strategies = ['lineardeg_adaptive']
+strategies = ['fix']
 
 
 bigblock_sizes = {
@@ -16,7 +16,8 @@ bigblock_sizes = {
     "MAG": 8196,
 }
 
-for dataset, strategy in itertools.product(datasets, strategies):
-    bigblock_size = bigblock_sizes[dataset]
+block_sizes = [32]
+
+for dataset, strategy, bigblock_size in itertools.product(datasets, strategies, block_sizes):
     os.system(
-        f'BIGBLOCK_SIZE={bigblock_size} python benchmark_build_graph.py --dataset {dataset} --adaptive-block-size-strategy {strategy} --ingestion-batch-size 10000')
+        f'BIGBLOCK_SIZE={bigblock_size} python benchmark_build_graph.py --dataset {dataset} --adaptive-block-size-strategy {strategy} --ingestion-batch-size 100000')

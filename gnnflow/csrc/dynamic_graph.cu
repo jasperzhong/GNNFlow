@@ -11,7 +11,11 @@
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/fixed_size_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device/pinned_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/shared_memory_resource.hpp>
 #include <type_traits>
 #include <vector>
 
@@ -40,12 +44,44 @@ DynamicGraph::DynamicGraph(
     streams_.push_back(stream);
   }
 
-  auto mem_res = new rmm::mr::cuda_memory_resource();
-  mem_resources_for_metadata_.push(mem_res);
-  auto pool_res =
-      new rmm::mr::fixed_size_memory_resource<rmm::mr::cuda_memory_resource>(
-          mem_res, sizeof(TemporalBlock), blocks_to_preallocate);
-  mem_resources_for_metadata_.push(pool_res);
+  switch (mem_resource_type) {
+    case MemoryResourceType::kMemoryResourceTypeCUDA: {
+      auto mem_res = new rmm::mr::cuda_memory_resource();
+      mem_resources_for_metadata_.push(mem_res);
+      auto pool_res = new rmm::mr::fixed_size_memory_resource<
+          rmm::mr::cuda_memory_resource>(mem_res, sizeof(TemporalBlock),
+                                         blocks_to_preallocate);
+      mem_resources_for_metadata_.push(pool_res);
+      break;
+    }
+    case MemoryResourceType::kMemoryResourceTypeUnified: {
+      auto mem_res = new rmm::mr::managed_memory_resource();
+      mem_resources_for_metadata_.push(mem_res);
+      auto pool_res = new rmm::mr::fixed_size_memory_resource<
+          rmm::mr::managed_memory_resource>(mem_res, sizeof(TemporalBlock),
+                                            blocks_to_preallocate);
+      mem_resources_for_metadata_.push(pool_res);
+      break;
+    }
+    case MemoryResourceType::kMemoryResourceTypePinned: {
+      auto mem_res = new rmm::mr::pinned_memory_resource();
+      mem_resources_for_metadata_.push(mem_res);
+      auto pool_res = new rmm::mr::fixed_size_memory_resource<
+          rmm::mr::pinned_memory_resource>(mem_res, sizeof(TemporalBlock),
+                                           blocks_to_preallocate);
+      mem_resources_for_metadata_.push(pool_res);
+      break;
+    }
+    case MemoryResourceType::kMemoryResourceTypeShared: {
+      auto mem_res = new rmm::mr::cuda_memory_resource();
+      mem_resources_for_metadata_.push(mem_res);
+      auto pool_res = new rmm::mr::fixed_size_memory_resource<
+          rmm::mr::cuda_memory_resource>(mem_res, sizeof(TemporalBlock),
+                                         blocks_to_preallocate);
+      mem_resources_for_metadata_.push(pool_res);
+      break;
+    }
+  }
 
   rmm::mr::set_current_device_resource(mem_resources_for_metadata_.top());
 }
@@ -269,14 +305,14 @@ void DynamicGraph::AddEdgesForOneNode(
       std::size_t new_block_size;
       if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kNaive) {
         new_block_size = num_edges;
-      } else if (adaptive_block_size_strategy_ == AdaptiveBlockSizeStrategy::kFix) {
+      } else if (adaptive_block_size_strategy_ ==
+                 AdaptiveBlockSizeStrategy::kFix) {
         auto bigblock_size = std::getenv("BIGBLOCK_SIZE")
                                  ? std::stoi(std::getenv("BIGBLOCK_SIZE"))
                                  : 256lu;
         new_block_size = bigblock_size;
         CHECK_GE(new_block_size, num_edges);
-      }
-      else if (adaptive_block_size_strategy_ ==
+      } else if (adaptive_block_size_strategy_ ==
                  AdaptiveBlockSizeStrategy::kLinearAvg) {
         new_block_size = std::max(num_edges, avg_edges_per_insertion);
         // round up to the nearest power of 2
