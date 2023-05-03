@@ -4,6 +4,7 @@ import math
 import os
 import random
 import time
+import threading
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning,
                         message='TypedStorage is deprecated')
@@ -307,6 +308,7 @@ def main():
             else:
                 model.memory.restore(ckpt['memory'])
         logging.info("load checkpoint from {}".format(checkpoint_path))
+        del ckpt 
     else:
         phase1_train_start = time.time()
         train(phase1_train_df, phase1_val_df, sampler,
@@ -474,6 +476,18 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
     best_ap = 0
     best_auc = 0
     best_e = 0
+
+    next_data = None
+    total_sample_time = 0
+    total_feature_fetching_time = 0
+    def sampling(target_nodes, ts, eid):
+        nonlocal next_data
+        nonlocal total_sample_time
+        start = time.time()
+        mfgs = sampler.sample(target_nodes, ts)
+        total_sample_time += time.time() - start
+        next_data = (mfgs, eid)
+
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training...')
@@ -489,23 +503,36 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         cache_edge_ratio_sum = 0
         cache_node_ratio_sum = 0
         total_samples = 0
-        total_sample_time = 0
-        total_feature_fetching_time = 0
 
         epoch_time_start = time.time()
-        for i, (target_nodes, ts, eid) in enumerate(get_batch(df=train_df,
-                                                              batch_size=args.batch_size,
-                                                              num_chunks=0,
-                                                              rand_edge_sampler=train_rand_sampler,
-                                                              world_size=args.world_size)):
-            # Sample
-            start = time.time()
-            mfgs = sampler.sample(target_nodes, ts)
-            total_sample_time += time.time() - start
+        train_iter = get_batch(df=train_df, batch_size=args.batch_size,
+                                num_chunks=0, rand_edge_sampler=train_rand_sampler,
+                                world_size=args.world_size)
+        target_nodes, ts, eid = next(train_iter)
+        mfgs = sampler.sample(target_nodes, ts)
+        next_data = (mfgs, eid)
+
+        sampling_thread = None
+
+        i = 0
+        while True:
+            if sampling_thread is not None:
+                sampling_thread.join()
+
+            mfgs, eid = next_data
+            num_target_nodes = len(eid) * 3
+
+            # Sampling for next batch
+            try:
+                next_target_nodes, next_ts, next_eid = next(train_iter)
+            except StopIteration:
+                break
+            sampling_thread = threading.Thread(target=sampling, args=(
+                next_target_nodes, next_ts, next_eid))
+            sampling_thread.start()
 
             # Feature
             mfgs_to_cuda(mfgs, device)
-            start = time.time()
             start = time.time()
             mfgs = cache.fetch_feature(
                 mfgs, eid)
@@ -539,13 +566,13 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
 
             loss = criterion(pred_pos, torch.ones_like(pred_pos))
             loss += criterion(pred_neg, torch.zeros_like(pred_neg))
-            total_loss += float(loss) * len(target_nodes)
+            total_loss += float(loss) * num_target_nodes
             loss.backward()
             optimizer.step()
 
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
-            total_samples += len(target_nodes)
+            total_samples += num_target_nodes
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
@@ -565,45 +592,45 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         epoch_time = time.time() - epoch_time_start
         epoch_time_sum += epoch_time
 
-        # Validation
-        val_start = time.time()
-        val_ap, val_auc = evaluate(
-            val_df, sampler, model, criterion, cache, device, test_rand_sampler)
+        # # Validation
+        # val_start = time.time()
+        # val_ap, val_auc = evaluate(
+        #     val_df, sampler, model, criterion, cache, device, test_rand_sampler)
 
-        if args.distributed:
-            torch.distributed.barrier()
-            val_res = torch.tensor([val_ap, val_auc]).to(device)
-            torch.distributed.all_reduce(val_res)
-            val_res /= args.world_size
-            val_ap, val_auc = val_res[0].item(), val_res[1].item()
+        # if args.distributed:
+        #     torch.distributed.barrier()
+        #     val_res = torch.tensor([val_ap, val_auc]).to(device)
+        #     torch.distributed.all_reduce(val_res)
+        #     val_res /= args.world_size
+        #     val_ap, val_auc = val_res[0].item(), val_res[1].item()
 
-        val_end = time.time()
-        val_time = val_end - val_start
+        # val_end = time.time()
+        # val_time = val_end - val_start
 
-        if args.distributed:
-            torch.distributed.barrier()
-            metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
-                                    cache_node_ratio_sum, total_samples, total_sample_time],
-                                   device=device)
-            torch.distributed.all_reduce(metrics)
-            metrics /= args.world_size
-            val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
-                total_samples, total_sample_time = metrics.tolist()
+        # if args.distributed:
+        #     torch.distributed.barrier()
+        #     metrics = torch.tensor([val_ap, val_auc, cache_edge_ratio_sum,
+        #                             cache_node_ratio_sum, total_samples, total_sample_time],
+        #                            device=device)
+        #     torch.distributed.all_reduce(metrics)
+        #     metrics /= args.world_size
+        #     val_ap, val_auc, cache_edge_ratio_sum, cache_node_ratio_sum, \
+        #         total_samples, total_sample_time = metrics.tolist()
 
-        if args.rank == 0:
-            logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s".format(
-                e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
+        # if args.rank == 0:
+        #     logging.info("Epoch {:d}/{:d} | Validation ap {:.4f} | Validation auc {:.4f} | Train time {:.2f} s | Validation time {:.2f} s | Train Throughput {:.2f} samples/s | Cache node ratio {:.4f} | Cache edge ratio {:.4f} | Total sample time {:.2f}s".format(
+        #         e + 1, args.epoch, val_ap, val_auc, epoch_time, val_time, total_samples * args.world_size / epoch_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1), total_sample_time))
 
-        if args.rank == 0 and val_ap > best_ap:
-            best_e = e + 1
-            best_ap = val_ap
-            best_auc = val_auc
-            logging.info(
-                "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
+        # if args.rank == 0 and val_ap > best_ap:
+        #     best_e = e + 1
+        #     best_ap = val_ap
+        #     best_auc = val_auc
+        #     logging.info(
+        #         "Best val AP: {:.4f} & val AUC: {:.4f}".format(val_ap, val_auc))
 
-        if early_stopper.early_stop_check(val_ap):
-            logging.info("Early stop at epoch {}".format(e))
-            break
+        # if early_stopper.early_stop_check(val_ap):
+        #     logging.info("Early stop at epoch {}".format(e))
+        #     break
 
     if args.rank == 0:
         logging.info('Avg epoch time: {}'.format(epoch_time_sum / args.epoch))

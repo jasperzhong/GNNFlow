@@ -20,10 +20,10 @@ logging.basicConfig(level=logging.DEBUG)
 class TestPartition(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product(["fennel_edge", "hash"], [100000000], [10000000], [False]))
+        itertools.product(["hash", "fennel"], [100000000], [10000000], [False]))
     def test_partition_graph(self, partition_strategy, initial_ingestion_batch_size, ingestion_batch_size, assign_with_dst):
 
-        dataset_name = 'GDELT'
+        dataset_name = 'NETFLIX'
         p_stgy = partition_strategy
         num_p = 4
         undirected = True
@@ -79,10 +79,10 @@ class TestPartition(unittest.TestCase):
             if i == 0:
                 # Test GDELT Disabled! (updated, if there is not, there is not)
                 partitions, _ = test_partitioner.partition(
-                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
+                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False)
             else:
                 partitions, _ = test_partitioner.partition(
-                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False, is_initial_ingestion=False)
+                    src_nodes, dst_nodes, timestamps, eids, return_evenly_dataset=False)
 
             for pt_idx in range(num_p):
                 edge_num_tot[pt_idx] += len(partitions[pt_idx].eids)

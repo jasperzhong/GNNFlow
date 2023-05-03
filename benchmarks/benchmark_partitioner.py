@@ -1,5 +1,6 @@
 import itertools
 import time
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -18,13 +19,13 @@ def benchmark_partition_graph(dataset_name, partition_strategy, batch_size):
     num_nodes = 0
     num_edges = 0
 
-    test_partitioner = get_partitioner(p_stgy, num_p)
+    test_partitioner = get_partitioner(p_stgy, num_p, 8, dataset_name)
 
     overall_start = time.time()
     for i in range(0, len(dataset), ingestion_batch_size):
 
-        print("****** Dataset Range {} to {} Begin ******".format(i,
-              i + ingestion_batch_size))
+        # print("****** Dataset Range {} to {} Begin ******".format(i,
+        #       i + ingestion_batch_size))
 
         batch = dataset[i: i + ingestion_batch_size]
         src_nodes = batch["src"].values.astype(np.int64)
@@ -51,23 +52,23 @@ def benchmark_partition_graph(dataset_name, partition_strategy, batch_size):
         eids = torch.from_numpy(eids)
 
         partition_start = time.time()
-        partitions = test_partitioner.partition(
+        partitions, _ = test_partitioner.partition(
             src_nodes, dst_nodes, timestamps, eids)
         partition_end = time.time()
 
-        print("Test Partition. Time usage: {} seconds; Speed: {} edges per sec\n"
-              .format(partition_end - partition_start, ingestion_batch_size / (partition_end - partition_start)))
+        # print("Test Partition. Time usage: {} seconds; Speed: {} edges per sec\n"
+        #       .format(partition_end - partition_start, ingestion_batch_size / (partition_end - partition_start)))
 
-        for idx in range(len(partitions)):
-            pt = partitions[idx]
-            print("Test Partition; Dataset Name:{}; Partition ID:{}; num_edges:{}\n"
-                  .format(dataset_name, idx, len(pt.eids)))
+        # for idx in range(len(partitions)):
+        #     pt = partitions[idx]
+        #     print("Test Partition; Dataset Name:{}; Partition ID:{}; num_edges:{}\n"
+        #           .format(dataset_name, idx, len(pt.eids)))
 
-        print("Current Partition Table size is :{}\n".format(
-            len(test_partitioner.get_partition_table())))
+        # print("Current Partition Table size is :{}\n".format(
+        #     len(test_partitioner.get_partition_table())))
 
-        print("====== Dataset Range {} to {} finished ======\n".format(
-            i, i + ingestion_batch_size))
+        # print("====== Dataset Range {} to {} finished ======\n".format(
+        #     i, i + ingestion_batch_size))
 
     # load balance
     ptable = test_partitioner.get_partition_table()
@@ -84,7 +85,7 @@ def benchmark_partition_graph(dataset_name, partition_strategy, batch_size):
     # edge cut
     edge_cut = 0
     tt = 0
-    for idx, row in dataset.iterrows():
+    for idx, row in tqdm(dataset.iterrows()):
         u = int(row['src'])
         v = int(row['dst'])
         if ptable[u] != -1 and ptable[v] != -1 and (ptable[u] != ptable[v]):
@@ -103,9 +104,8 @@ def benchmark_partition_graph(dataset_name, partition_strategy, batch_size):
 
 
 if __name__ == "__main__":
-    datasets = ["WIKI", "REDDIT"]
-    partition_strategies = ["hash", "roundrobin",
-                            "edgecount", "timestampsum", "ldg"]
-    batch_sizes = [10000, 100000]
+    datasets = ["NETFLIX"]
+    partition_strategies = ["hash", "fennel"]
+    batch_sizes = [1000000]
     for dataset, partition_strategy, batch_size in itertools.product(datasets, partition_strategies, batch_sizes):
         benchmark_partition_graph(dataset, partition_strategy, batch_size)
