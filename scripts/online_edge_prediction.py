@@ -84,7 +84,8 @@ def split_chunks_by_days_gdelt(df: pd.DataFrame, days=120):
     chunks = [group for _, group in grouped]
     return chunks
 
-def split_chunks_by_days_netflix(df: pd.DataFrame, days=10):
+
+def split_chunks_by_days_netflix(df: pd.DataFrame, days=42):
     df['time_day'] = (df['time'] / 86400 // days).astype(int)
     grouped = df.groupby('time_day')
     chunks = [group for _, group in grouped]
@@ -638,7 +639,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
     if args.distributed:
         torch.distributed.barrier()
 
-    return total_sample_time, total_feature_fetching_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)
+    return total_sample_time, total_feature_fetching_time, (cache_node_ratio_sum / (i + 1)).item(), (cache_edge_ratio_sum / (i + 1)).item()
 
 
 if __name__ == '__main__':
