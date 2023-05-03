@@ -14,6 +14,7 @@ import torch.distributed
 import torch.nn
 import torch.nn.parallel
 import torch.utils.data
+import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 import gnnflow.cache as caches
@@ -60,8 +61,6 @@ parser.add_argument("--phase1-ratio", type=float, default=0.3,
                     help="ratio of phase 1")
 parser.add_argument("--epoch", help="maximum training epoch",
                     type=int, default=1)
-parser.add_argument("--split-type", type=str, default='size')
-parser.add_argument("--split-value", type=float, default=100)
 parser.add_argument("--val-ratio", type=float, default=0.1,
                     help="ratio of validation set")
 parser.add_argument("--replay-ratio", type=float, default=0,
@@ -76,6 +75,19 @@ args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
 logging.info(args)
+
+
+def split_chunks_by_days_gdelt(df: pd.DataFrame, days=120):
+    df['time_day'] = ((df['time'] * 15 / 60 / 24) // days).astype(int)
+    grouped = df.groupby('time_day')
+    chunks = [group for _, group in grouped]
+    return chunks
+
+def split_chunks_by_days_netflix(df: pd.DataFrame, days=10):
+    df['time_day'] = (df['time'] / 86400 // days).astype(int)
+    grouped = df.groupby('time_day')
+    chunks = [group for _, group in grouped]
+    return chunks
 
 
 def set_seed(seed):
@@ -297,8 +309,8 @@ def main():
         logging.info("load checkpoint from {}".format(checkpoint_path))
     else:
         phase1_train_start = time.time()
-        best_e, best_ap, best_auc = train(phase1_train_df, phase1_val_df, sampler,
-                                          model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
+        train(phase1_train_df, phase1_val_df, sampler,
+                model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
         phase1_train_end = time.time()
         phase1_train_time = phase1_train_end - phase1_train_start
         logging.info("phase1 train time: {}".format(phase1_train_time))
@@ -312,8 +324,7 @@ def main():
                 'model': model_to_save.state_dict(),
                 'memory': model_to_save.memory.backup() if args.use_memory else None
             }, checkpoint_path)
-            logging.info("save checkpoint to {}, epoch: {}, best_ap: {}".format(
-                checkpoint_path, best_e, best_ap))
+            logging.info("save checkpoint to {}".format(checkpoint_path))
         if args.distributed:
             torch.distributed.barrier()
 
@@ -323,18 +334,34 @@ def main():
         logging.info("Phase2 start")
 
     # retrain N times
-    retrain_num = int(args.split_value)
     phase2_df = full_data[phase1_len:]
-    phase2_len = len(phase2_df)
-    incremental_step = int(phase2_len / retrain_num)
+    # phase2_len = len(phase2_df)
+    # incremental_step = int(phase2_len / retrain_num)
+    if args.data == 'GDELT':
+        chunks = split_chunks_by_days_gdelt(phase2_df)
+    elif args.data == 'NETFLIX':
+        chunks = split_chunks_by_days_netflix(phase2_df)
+    else:
+        raise NotImplementedError
+    
+    del phase2_df
+    
     replay_ratio = args.replay_ratio
     old_data_start_index = 0
     logging.info("replay ratio: {}".format(replay_ratio))
     logging.info("retrain ratio: {}".format(args.retrain_ratio))
+    logging.info("# chunks %d in phase 2", len(chunks))
+    build_graph_time = 0
+    total_training_time = 0
+    total_sample_time = 0
+    total_feature_fetching_time = 0
     val_ap_list = []
-    for i in range(retrain_num):
+    node_cache_hit_rate_list = []
+    edge_cache_hit_rate_list = []
+    for i, increment_df in enumerate(chunks):
         phase2_build_graph_start = time.time()
-        increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
+        # increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
+        incremental_step = len(increment_df)
         src = increment_df['src'].to_numpy(dtype=np.int64)
         dst = increment_df['dst'].to_numpy(dtype=np.int64)
         ts = increment_df['time'].to_numpy(dtype=np.float32)
@@ -343,17 +370,16 @@ def main():
         dgraph.add_edges(src, dst, ts, eid,
                          add_reverse=data_config['undirected'])
 
+        phase2_new_data_start = increment_df.index[0]
+        phase2_new_data_end = increment_df.index[-1]
+
         phase2_build_graph_end = time.time()
         phase2_build_graph_time = phase2_build_graph_end - phase2_build_graph_start
         logging.info("phase2 {}th training build graph time: {}".format(
             i+1, phase2_build_graph_time))
         build_graph_time += phase2_build_graph_time
 
-        # random sample phase2 train dataset -> get phase2_train_df & phase2_val_df
-        phase2_new_data_start = phase1_len + incremental_step * i
-        phase2_new_data_end = phase1_len + incremental_step * (i + 1)
-        # do an evaluation first
-        val_df = full_data.iloc[phase2_new_data_start:phase2_new_data_end]
+        val_df = increment_df
         val_rand_sampler.add_dst_list(dst)
         val_index = list(
             range(args.rank, len(val_df), args.world_size))
@@ -371,15 +397,8 @@ def main():
             logging.info(
                 "{}th incremental evalutae ap: {} auc: {}".format(i+1, ap, auc))
         phase2_train_start = time.time()
-        if (i + 1) % args.retrain_ratio == 0:
-            if args.snapshot_time_window > 0:
-                current_time = ts[0] # the min time of this batch
-                old_time = current_time - args.snapshot_time_window
-                # remove old data
-                num_blocks = dgraph.offload_old_blocks(old_time)
-                old_data_start_index = np.searchsorted(full_data['time'].values, old_time)
-                logging.info("{} old blocks are removed before time {}. old_data_start_index={}, phase2_new_data_start={}".format(num_blocks, old_time, old_data_start_index, phase2_new_data_start))
 
+        if (i + 1) % args.retrain_ratio == 0:
             num_replay = int(replay_ratio * phase2_new_data_start)
             new_data_index = torch.arange(
                 phase2_new_data_start, phase2_new_data_end)
@@ -412,7 +431,7 @@ def main():
             # logging.info("phase2 val df: {}".format(phase2_val_df))
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
             phase2_training_func_start = time.time()
-            train(phase2_train_df, phase2_val_df, sampler,
+            sample_time, feature_fetching_time, node_cache_hit_rate, edge_cache_hit_rate = train(phase2_train_df, phase2_val_df, sampler,
                   model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
             phase2_train_end = time.time()
             phase2_train_func_time = phase2_train_end - phase2_training_func_start
@@ -421,22 +440,33 @@ def main():
                 i+1, phase2_train_func_time))
             logging.info("phase2 {}th train time: {}".format(
                 i+1, phase2_train_time))
-            total_training_time += phase2_train_time
+            total_training_time += phase2_train_func_time
+            total_sample_time += sample_time
+            total_feature_fetching_time += feature_fetching_time
+            node_cache_hit_rate_list.append(node_cache_hit_rate)
+            edge_cache_hit_rate_list.append(edge_cache_hit_rate)
         if args.distributed:
             torch.distributed.barrier()
 
     # all end
     logging.info("total build graph time: {}".format(build_graph_time))
+    logging.info("total sample time: {}".format(total_sample_time))
+    logging.info("total feature fetching time: {}".format(
+        total_feature_fetching_time))
     logging.info("total train time {}".format(total_training_time))
     logging.info("total time: {}".format(
         build_graph_time + total_training_time))
-
+    
     if args.rank == 0:
-        subdir = 'tmp_res'
+        subdir = 'tmp_res/continuous/'
         os.makedirs(subdir, exist_ok=True)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.retrain_ratio}_{args.replay_ratio}_{args.epoch}_ap.npy'), val_ap_list)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.retrain_ratio}_{args.replay_ratio}_{args.epoch}_build_graph_time.npy'), build_graph_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.retrain_ratio}_{args.replay_ratio}_{args.epoch}_total_training_time.npy'), total_training_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_ap.npy'), val_ap_list)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_build_graph_time.npy'), build_graph_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_sample_time.npy'), total_sample_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_feature_fetching_time.npy'), total_feature_fetching_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_total_training_time.npy'), total_training_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_node_cache_hit_rate.npy'), node_cache_hit_rate_list)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_edge_cache_hit_rate.npy'), edge_cache_hit_rate_list)
 
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
@@ -449,7 +479,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
-        cache.reset()
+        # cache.reset()
         if e > 0:
             if args.distributed:
                 model.module.reset()
@@ -460,6 +490,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         cache_node_ratio_sum = 0
         total_samples = 0
         total_sample_time = 0
+        total_feature_fetching_time = 0
 
         epoch_time_start = time.time()
         for i, (target_nodes, ts, eid) in enumerate(get_batch(df=train_df,
@@ -474,8 +505,11 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
 
             # Feature
             mfgs_to_cuda(mfgs, device)
+            start = time.time()
+            start = time.time()
             mfgs = cache.fetch_feature(
                 mfgs, eid)
+            total_feature_fetching_time += time.time() - start
 
             if args.use_memory:
                 b = mfgs[0][0]  # type: DGLBlock
@@ -577,7 +611,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
     if args.distributed:
         torch.distributed.barrier()
 
-    return best_e, best_ap, best_auc
+    return total_sample_time, total_feature_fetching_time, cache_node_ratio_sum / (i + 1), cache_edge_ratio_sum / (i + 1)
 
 
 if __name__ == '__main__':
