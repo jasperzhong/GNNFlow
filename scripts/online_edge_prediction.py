@@ -434,9 +434,9 @@ def main():
     if args.rank == 0:
         subdir = 'tmp_res'
         os.makedirs(subdir, exist_ok=True)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_{args.epoch}_ap.npy'), val_ap_list)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_{args.epoch}_build_graph_time.npy'), build_graph_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.split_value}_{args.replay_ratio}_{args.epoch}_total_training_time.npy'), total_training_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.retrain_ratio}_{args.replay_ratio}_{args.epoch}_ap.npy'), val_ap_list)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.retrain_ratio}_{args.replay_ratio}_{args.epoch}_build_graph_time.npy'), build_graph_time)
+        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.split_type}_{args.retrain_ratio}_{args.replay_ratio}_{args.epoch}_total_training_time.npy'), total_training_time)
 
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
