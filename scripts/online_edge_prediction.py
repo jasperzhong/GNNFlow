@@ -365,7 +365,6 @@ def main():
     for i, increment_df in enumerate(chunks):
         phase2_build_graph_start = time.time()
         # increment_df = phase2_df[i*incremental_step: (i+1)*incremental_step]
-        incremental_step = len(increment_df)
         src = increment_df['src'].to_numpy(dtype=np.int64)
         dst = increment_df['dst'].to_numpy(dtype=np.int64)
         ts = increment_df['time'].to_numpy(dtype=np.float32)
@@ -452,15 +451,24 @@ def main():
         if args.distributed:
             torch.distributed.barrier()
 
+        if args.rank == 0:
+            # all end
+            logging.info("Round {}: total build graph time: {}".format(i, build_graph_time))
+            logging.info("Round {}: total sample time: {}".format(i, total_sample_time))
+            logging.info("Round {}: total feature fetching time: {}".format(
+                i, total_feature_fetching_time))
+            logging.info("Round {}: total train time {}".format(i, total_training_time))
+            logging.info("Round {}: total time: {}".format(
+                i, build_graph_time + total_training_time))
     # all end
     logging.info("total build graph time: {}".format(build_graph_time))
     logging.info("total sample time: {}".format(total_sample_time))
     logging.info("total feature fetching time: {}".format(
-        total_feature_fetching_time))
+                total_feature_fetching_time))
     logging.info("total train time {}".format(total_training_time))
     logging.info("total time: {}".format(
-        build_graph_time + total_training_time))
-    
+                build_graph_time + total_training_time))
+
     if args.rank == 0:
         subdir = 'tmp_res/continuous/'
         os.makedirs(subdir, exist_ok=True)
