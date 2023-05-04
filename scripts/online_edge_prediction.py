@@ -68,6 +68,7 @@ parser.add_argument("--replay-ratio", type=float, default=0,
                     help="replay ratio")
 parser.add_argument("--retrain-ratio", type=int, default=1,
                     help="retrain ratio")
+parser.add_argument("--day", type=int, default=1, help="day for online learning")
 
 parser.add_argument("--snapshot-time-window", type=float, default=0,
                     help="time window for sampling")
@@ -341,9 +342,9 @@ def main():
     # phase2_len = len(phase2_df)
     # incremental_step = int(phase2_len / retrain_num)
     if args.data == 'GDELT':
-        chunks = split_chunks_by_days_gdelt(phase2_df)
+        chunks = split_chunks_by_days_gdelt(phase2_df, args.day)
     elif args.data == 'NETFLIX':
-        chunks = split_chunks_by_days_netflix(phase2_df)
+        chunks = split_chunks_by_days_netflix(phase2_df, args.day)
     else:
         raise NotImplementedError
     
@@ -382,23 +383,23 @@ def main():
             i+1, phase2_build_graph_time))
         build_graph_time += phase2_build_graph_time
 
-        val_df = increment_df
-        val_rand_sampler.add_dst_list(dst)
-        val_index = list(
-            range(args.rank, len(val_df), args.world_size))
-        val_df = val_df.iloc[val_index]
-        ap, auc = evaluate(
-            val_df, sampler, model, criterion, cache, device, val_rand_sampler)
-        if args.distributed:
-            val_res = torch.tensor([ap, auc]).to(device)
-            torch.distributed.all_reduce(val_res)
-            val_res /= args.world_size
-            ap, auc = val_res[0].item(), val_res[1].item()
-        val_ap_list.append(ap)
-        if args.rank == 0:
-            logging.info("incremental step: {}".format(incremental_step))
-            logging.info(
-                "{}th incremental evalutae ap: {} auc: {}".format(i+1, ap, auc))
+        # val_df = increment_df
+        # val_rand_sampler.add_dst_list(dst)
+        # val_index = list(
+        #     range(args.rank, len(val_df), args.world_size))
+        # val_df = val_df.iloc[val_index]
+        # ap, auc = evaluate(
+        #     val_df, sampler, model, criterion, cache, device, val_rand_sampler)
+        # if args.distributed:
+        #     val_res = torch.tensor([ap, auc]).to(device)
+        #     torch.distributed.all_reduce(val_res)
+        #     val_res /= args.world_size
+        #     ap, auc = val_res[0].item(), val_res[1].item()
+        # val_ap_list.append(ap)
+        # if args.rank == 0:
+        #     logging.info("incremental step: {}".format(incremental_step))
+        #     logging.info(
+        #         "{}th incremental evalutae ap: {} auc: {}".format(i+1, ap, auc))
         phase2_train_start = time.time()
 
         if (i + 1) % args.retrain_ratio == 0:
@@ -443,7 +444,7 @@ def main():
                 i+1, phase2_train_func_time))
             logging.info("phase2 {}th train time: {}".format(
                 i+1, phase2_train_time))
-            total_training_time += phase2_train_func_time
+            total_training_time += phase2_train_time
             total_sample_time += sample_time
             total_feature_fetching_time += feature_fetching_time
             node_cache_hit_rate_list.append(node_cache_hit_rate)
