@@ -104,6 +104,9 @@ class Cache:
         # used to extract src_node id of input eid
         self.neg_sample_ratio = neg_sample_ratio
 
+        self.node_access_count = 0
+        self.edge_access_count = 0
+
         # stores node's features
         if self.dim_node_feat != 0:
             self.cache_node_buffer = torch.zeros(
@@ -264,6 +267,7 @@ class Cache:
             hit_ratio_sum = 0
             for b in mfgs[0]:
                 nodes = b.srcdata['ID']
+                self.node_access_count += int(torch.unique(nodes).shape[0])
                 assert isinstance(nodes, torch.Tensor)
                 cache_mask = self.cache_node_flag[nodes]
 
@@ -322,6 +326,7 @@ class Cache:
             for mfg in mfgs:
                 for b in mfg:
                     edges = b.edata['ID']
+                    self.edge_access_count += int(torch.unique(edges).shape[0])
                     assert isinstance(edges, torch.Tensor)
                     if len(edges) == 0:
                         continue
