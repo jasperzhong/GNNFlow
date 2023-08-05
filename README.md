@@ -2,8 +2,6 @@
 
 A comprehensive framework for training graph neural networks on dynamic graphs.
 
-NB: this is an ongoing work.
-
 ## Install
 
 Our development environment:
