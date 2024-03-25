@@ -186,8 +186,8 @@ class LRUCache(Cache):
         print(
             f"len(uncached_edge_id): {len(uncached_edge_id)}, self.edge_capacity: {self.edge_capacity}")
 
-        if len(uncached_edge_id) > 0.1 * self.edge_capacity:
-            num_edge_to_cache = int(0.1 * self.edge_capacity)
+        if len(uncached_edge_id) > self.edge_capacity:
+            num_edge_to_cache = self.edge_capacity
         else:
             num_edge_to_cache = len(uncached_edge_id)
         edge_id_to_cache = uncached_edge_id[-num_edge_to_cache:]
