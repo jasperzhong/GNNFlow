@@ -22,7 +22,7 @@ def create_shared_mem_array(name, shape, dtype):
     d_size = np.dtype(dtype).itemsize * np.prod(shape)
 
     shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
-    shms.append(shm) # keep track of shared memory blocks
+    shms.append(shm)  # keep track of shared memory blocks
     # numpy array on shared memory buffer
     dst = np.ndarray(shape=shape, dtype=dtype, buffer=shm.buf)
     print(f'create shared memory array {name} with size {dst.size}')
@@ -31,7 +31,7 @@ def create_shared_mem_array(name, shape, dtype):
 
 def get_shared_mem_array(name, shape, dtype):
     shm = shared_memory.SharedMemory(name=name)
-    shms.append(shm) # keep track of shared memory blocks
+    shms.append(shm)  # keep track of shared memory blocks
     dst = np.ndarray(shape=shape, dtype=dtype, buffer=shm.buf)
     print(f'get shared memory array {name} with size {dst.size}')
     return dst
@@ -78,11 +78,11 @@ def load_dataset(dataset: str, data_dir: Optional[str] = None) -> \
     if data_dir is None:
         data_dir = os.path.join(get_project_root_dir(), "data")
 
-    path = os.path.join(data_dir, dataset, 'edges.csv')
+    path = os.path.join(data_dir, dataset, 'edges.feather')
     if not os.path.exists(path):
         raise ValueError('{} does not exist'.format(path))
 
-    full_data = pd.read_csv(path)
+    full_data = pd.read_feather(path)
     assert isinstance(full_data, pd.DataFrame)
 
     # if 'Unnamed: 0' in full_data.columns:
@@ -330,7 +330,8 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
                 # edge_feats = edge_feats.astype(np.float32)
                 edge_feats_shm = create_shared_mem_array(
                     'edge_feats', edge_feats.shape, edge_feats.dtype)
-                print("edge_feats_shm.shape: ", edge_feats_shm.shape, flush=True)
+                print("edge_feats_shm.shape: ",
+                      edge_feats_shm.shape, flush=True)
                 # edge_feats_shm[:] = edge_feats[:]
                 np.copyto(edge_feats_shm, edge_feats)
                 print("edge_feats assigned", flush=True)
@@ -366,7 +367,6 @@ def load_feat(dataset: str, data_dir: Optional[str] = None,
             logging.info("rank {} node_feats_shm shape {}".format(
                 local_rank, node_feats_shm.shape))
             node_feats_shm = torch.from_numpy(node_feats_shm)
-
 
         if edge_feats_shm is not None:
             logging.info("rank {} edge_feats_shm shape {}".format(

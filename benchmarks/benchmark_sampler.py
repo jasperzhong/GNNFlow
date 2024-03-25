@@ -20,7 +20,7 @@ parser.add_argument("--repeat", type=int, default=10000)
 parser.add_argument("--sort", action="store_true")
 parser.add_argument("--adaptive-block-size-strategy",
                     type=str, default="naive")
-parser.add_argument("--mem-resource-type", type=str, default="cuda")
+parser.add_argument("--mem-resource-type", type=str, default="pinned")
 args = parser.parse_args()
 
 MB = 1 << 20

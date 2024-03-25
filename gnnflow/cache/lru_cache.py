@@ -1,5 +1,6 @@
 from typing import Optional, Union
 
+import pandas as pd
 import torch
 
 from gnnflow.cache.cache import Cache
@@ -71,7 +72,7 @@ class LRUCache(Cache):
             mem_size += self.cache_edge_count.element_size() * self.cache_edge_count.nelement()
         return mem_size
 
-    def reset(self):
+    def reset(self, train_df: Optional[pd.DataFrame] = None):
         """
         Reset the cache
         """
@@ -96,15 +97,21 @@ class LRUCache(Cache):
             if self.edge_feats is not None:
                 cache_edge_id = torch.arange(
                     self.edge_capacity, dtype=torch.int64, device=self.device)
+                eid = torch.arange(
+                    self.edge_capacity, dtype=torch.int64, device=self.device)
+                if train_df is not None:
+                    eid_tmp = torch.from_numpy(
+                        train_df['eid'].unique()).to(self.device)[:self.edge_capacity]
+                    eid[:len(eid_tmp)] = eid_tmp
 
                 # Init parameters related to feature fetching
-                self.cache_edge_buffer[cache_edge_id] = self.edge_feats[:self.edge_capacity].to(
+                self.cache_edge_buffer[cache_edge_id] = self.edge_feats[eid.cpu()].to(
                     self.device, non_blocking=True)
                 self.cache_edge_flag[:] = False
-                self.cache_edge_flag[cache_edge_id] = True
-                self.cache_index_to_edge_id = cache_edge_id
+                self.cache_edge_flag[eid] = True
+                self.cache_index_to_edge_id = eid
                 self.cache_edge_map[:] = -1
-                self.cache_edge_map[cache_edge_id] = cache_edge_id
+                self.cache_edge_map[eid] = cache_edge_id
 
                 self.cache_edge_count.zero_()
 
@@ -176,12 +183,15 @@ class LRUCache(Cache):
         """
         # If the number of edges to cache is larger than the cache capacity,
         # we only cache the first self.capacity edges
-        if len(uncached_edge_id) > self.edge_capacity:
-            num_edge_to_cache = self.edge_capacity
+        print(
+            f"len(uncached_edge_id): {len(uncached_edge_id)}, self.edge_capacity: {self.edge_capacity}")
+
+        if len(uncached_edge_id) > 0.1 * self.edge_capacity:
+            num_edge_to_cache = int(0.1 * self.edge_capacity)
         else:
             num_edge_to_cache = len(uncached_edge_id)
-        edge_id_to_cache = uncached_edge_id[:num_edge_to_cache]
-        edge_feature_to_cache = uncached_edge_feature[:num_edge_to_cache]
+        edge_id_to_cache = uncached_edge_id[-num_edge_to_cache:]
+        edge_feature_to_cache = uncached_edge_feature[-num_edge_to_cache:]
 
         # first all -1
         self.cache_edge_count -= 1

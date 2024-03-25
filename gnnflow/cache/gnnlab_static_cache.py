@@ -17,7 +17,7 @@ class GNNLabStaticCache(Cache):
     paper: https://dl.acm.org/doi/abs/10.1145/3492321.3519557
     """
 
-    def __init__(self, cache_ratio: int, num_nodes: int, num_edges: int,
+    def __init__(self, edge_cache_ratio: float, node_cache_ratio: float, num_nodes: int, num_edges: int,
                  device: Union[str, torch.device],
                  node_feats: Optional[torch.Tensor] = None,
                  edge_feats: Optional[torch.Tensor] = None,
@@ -48,7 +48,8 @@ class GNNLabStaticCache(Cache):
             distributed: Whether to use distributed training
             neg_sample_ratio: The ratio of negative samples to positive samples
         """
-        super(GNNLabStaticCache, self).__init__(cache_ratio, num_nodes,
+        super(GNNLabStaticCache, self).__init__(edge_cache_ratio, node_cache_ratio,
+                                                num_nodes,
                                                 num_edges, device,
                                                 node_feats, edge_feats,
                                                 dim_node_feat, dim_edge_feat,
@@ -123,7 +124,9 @@ class GNNLabStaticCache(Cache):
                     self.node_capacity, dtype=torch.int64).to(self.device)
                 self.cache_node_buffer[cache_node_index] = self.kvstore_client.pull(
                     cache_node_id.cpu(), mode='node').to(self.device)
+                self.cache_node_flag[:] = False
                 self.cache_node_flag[cache_node_id] = True
+                self.cache_node_map[:] = -1
                 self.cache_node_map[cache_node_id] = cache_node_index
         else:
             if self.node_feats is not None:
@@ -134,9 +137,11 @@ class GNNLabStaticCache(Cache):
                 # Init parameters related to feature fetching
                 cache_node_index = torch.arange(
                     self.node_capacity, dtype=torch.int64).to(self.device)
-                self.cache_node_buffer[cache_node_index] = self.node_feats[cache_node_id].to(
+                self.cache_node_buffer[cache_node_index] = self.node_feats[cache_node_id.cpu()].to(
                     self.device, non_blocking=True)
+                self.cache_node_flag[:] = False
                 self.cache_node_flag[cache_node_id] = True
+                self.cache_node_map[:] = -1
                 self.cache_node_map[cache_node_id] = cache_node_index
 
         if self.distributed:
@@ -150,7 +155,10 @@ class GNNLabStaticCache(Cache):
                     self.edge_capacity, dtype=torch.int64).to(self.device)
                 self.cache_edge_buffer[cache_edge_index] = self.kvstore_client.pull(
                     cache_edge_id.cpu(), mode='edge', nid=eid_to_nid[cache_edge_id.cpu()]).to(self.device)
+
+                self.cache_edge_flag[:] = False
                 self.cache_edge_flag[cache_edge_id] = True
+                self.cache_edge_map[:] = -1
                 self.cache_edge_map[cache_edge_id] = cache_edge_index
 
         else:
@@ -162,9 +170,11 @@ class GNNLabStaticCache(Cache):
                 # Init parameters related to feature fetching
                 cache_edge_index = torch.arange(
                     self.edge_capacity, dtype=torch.int64).to(self.device)
-                self.cache_edge_buffer[cache_edge_index] = self.edge_feats[cache_edge_id].to(
+                self.cache_edge_buffer[cache_edge_index] = self.edge_feats[cache_edge_id.cpu()].to(
                     self.device, non_blocking=True)
+                self.cache_edge_flag[:] = False
                 self.cache_edge_flag[cache_edge_id] = True
+                self.cache_edge_map[:] = -1
                 self.cache_edge_map[cache_edge_id] = cache_edge_index
 
     def fetch_feature(self, mfgs: List[List[DGLBlock]],

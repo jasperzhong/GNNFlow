@@ -10,6 +10,7 @@ REPLAY="${7:-0}"
 PHASE1_RATIO="${8:-0.3}" # default 50% of replay
 TIME_WINDOW="${9:-0}"
 N_EPOCHS="${10:-1}"
+RESET_CACHE="${11:-0}"
 
 if [[ $NPROC_PER_NODE -gt 1 ]] ; then
     cmd="torchrun \
@@ -22,6 +23,10 @@ else
     cmd="python online_edge_prediction.py --model $MODEL --data $DATA \
         --cache $CACHE --edge-cache-ratio $EDGE_CACHE_RATIO --node-cache-ratio $NODE_CACHE_RATIO
         --replay-ratio $REPLAY --phase1-ratio $PHASE1_RATIO --snapshot-time-window $TIME_WINDOW --epoch $N_EPOCHS"
+fi
+
+if [[ $RESET_CACHE -eq 1 ]] ; then
+    cmd="$cmd --reset-cache"
 fi
 
 rm -rf /dev/shm/rmm_*

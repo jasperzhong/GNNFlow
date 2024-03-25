@@ -201,3 +201,5 @@ scripts/results/
 # MacOS
 .DS_Store
 
+*.feather
+

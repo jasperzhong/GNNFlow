@@ -160,7 +160,7 @@ _lastfm_default_config = {
 
 _netflix_default_config = {
     "initial_pool_size": 10*GiB,
-    "maximum_pool_size": 20*GiB,
+    "maximum_pool_size": 200*GiB,
     "mem_resource_type": "pinned",
     "minimum_block_size": 4,
     "blocks_to_preallocate": 8196,
@@ -173,7 +173,7 @@ _netflix_default_config = {
 
 _gdelt_default_config = {
     "initial_pool_size": 10*GiB,
-    "maximum_pool_size": 20*GiB,
+    "maximum_pool_size": 200*GiB,
     "mem_resource_type": "pinned",
     "minimum_block_size": 4,
     "blocks_to_preallocate": 8196,

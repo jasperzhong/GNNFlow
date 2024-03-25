@@ -3,19 +3,17 @@ import logging
 import math
 import os
 import random
-import time
 import threading
+import time
 import warnings
-warnings.filterwarnings('ignore', category=UserWarning,
-                        message='TypedStorage is deprecated')
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.distributed
 import torch.nn
 import torch.nn.parallel
 import torch.utils.data
-import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 import gnnflow.cache as caches
@@ -28,6 +26,10 @@ from gnnflow.utils import (DstRandEdgeSampler, EarlyStopMonitor,
                            build_dynamic_graph, get_batch, get_pinned_buffers,
                            get_project_root_dir, load_dataset, load_feat,
                            mfgs_to_cuda)
+
+warnings.filterwarnings('ignore', category=UserWarning,
+                        message='TypedStorage is deprecated')
+
 
 datasets = ['REDDIT', 'GDELT', 'LASTFM', 'MAG', 'MOOC', 'WIKI', 'NETFLIX']
 model_names = ['TGN', 'TGAT', 'DySAT', 'GRAPHSAGE', 'GAT']
@@ -68,10 +70,13 @@ parser.add_argument("--replay-ratio", type=float, default=0,
                     help="replay ratio")
 parser.add_argument("--retrain-ratio", type=int, default=1,
                     help="retrain ratio")
-parser.add_argument("--day", type=int, default=1, help="day for online learning")
+parser.add_argument("--day", type=int, default=1,
+                    help="day for online learning")
 
 parser.add_argument("--snapshot-time-window", type=float, default=0,
                     help="time window for sampling")
+
+parser.add_argument("--reset-cache", action='store_true', help="reset cache")
 
 args = parser.parse_args()
 
@@ -79,14 +84,21 @@ logging.basicConfig(level=logging.DEBUG)
 logging.info(args)
 
 
-def split_chunks_by_days_gdelt(df: pd.DataFrame, days=120):
+def split_chunks_by_days_gdelt(df: pd.DataFrame, days=1):
     df['time_day'] = ((df['time'] * 15 / 60 / 24) // days).astype(int)
     grouped = df.groupby('time_day')
     chunks = [group for _, group in grouped]
     return chunks
 
 
-def split_chunks_by_days_netflix(df: pd.DataFrame, days=42):
+def split_chunks_by_days_netflix(df: pd.DataFrame, days=1):
+    df['time_day'] = (df['time'] / 86400 // days).astype(int)
+    grouped = df.groupby('time_day')
+    chunks = [group for _, group in grouped]
+    return chunks
+
+
+def split_chunks_by_days_reddit(df: pd.DataFrame, days=1):
     df['time_day'] = (df['time'] / 86400 // days).astype(int)
     grouped = df.groupby('time_day')
     chunks = [group for _, group in grouped]
@@ -223,7 +235,24 @@ def main():
         range(args.rank, len(phase1_val_df), args.world_size))
     phase1_val_df = phase1_val_df.iloc[val_index]
 
+    # retrain N times
+    phase2_df = full_data[phase1_len:]
+    # phase2_len = len(phase2_df)
+    # incremental_step = int(phase2_len / retrain_num)
+    if args.data == 'GDELT':
+        chunks = split_chunks_by_days_gdelt(phase2_df, args.day)
+    elif args.data == 'NETFLIX':
+        chunks = split_chunks_by_days_netflix(phase2_df, args.day)
+    elif args.data == 'REDDIT':
+        chunks = split_chunks_by_days_reddit(phase2_df, args.day)
+    else:
+        raise NotImplementedError
+
+    del phase2_df
     args.batch_size = model_config['batch_size']
+    if args.cache != 'GNNLabStaticCache':
+        args.batch_size = 200
+
     # NB: learning rate is scaled by the number of workers
     args.lr = args.lr * math.sqrt(args.world_size)
     logging.info("batch size: {}, lr: {}".format(args.batch_size, args.lr))
@@ -273,7 +302,9 @@ def main():
         dim_node, dim_edge, node_dtype, edge_dtype)
 
     # Cache
-    cache = caches.__dict__[args.cache](args.edge_cache_ratio,
+    edge_cache_ratio = args.edge_cache_ratio
+    print(f"#chunks: {len(chunks)}, edge_cache_ratio: {edge_cache_ratio}")
+    cache = caches.__dict__[args.cache](edge_cache_ratio,
                                         args.node_cache_ratio,
                                         num_nodes,
                                         num_edges, device,
@@ -310,11 +341,11 @@ def main():
             else:
                 model.memory.restore(ckpt['memory'])
         logging.info("load checkpoint from {}".format(checkpoint_path))
-        del ckpt 
+        del ckpt
     else:
         phase1_train_start = time.time()
         train(phase1_train_df, phase1_val_df, sampler,
-                model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
+              model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
         phase1_train_end = time.time()
         phase1_train_time = phase1_train_end - phase1_train_start
         logging.info("phase1 train time: {}".format(phase1_train_time))
@@ -337,19 +368,6 @@ def main():
     if args.rank == 0:
         logging.info("Phase2 start")
 
-    # retrain N times
-    phase2_df = full_data[phase1_len:]
-    # phase2_len = len(phase2_df)
-    # incremental_step = int(phase2_len / retrain_num)
-    if args.data == 'GDELT':
-        chunks = split_chunks_by_days_gdelt(phase2_df, args.day)
-    elif args.data == 'NETFLIX':
-        chunks = split_chunks_by_days_netflix(phase2_df, args.day)
-    else:
-        raise NotImplementedError
-    
-    del phase2_df
-    
     replay_ratio = args.replay_ratio
     old_data_start_index = 0
     logging.info("replay ratio: {}".format(replay_ratio))
@@ -435,7 +453,7 @@ def main():
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
             phase2_training_func_start = time.time()
             sample_time, feature_fetching_time, node_cache_hit_rate, edge_cache_hit_rate = train(phase2_train_df, phase2_val_df, sampler,
-                  model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
+                                                                                                 model, optimizer, criterion, cache, device, train_rand_sampler, val_rand_sampler)
             phase2_train_end = time.time()
             phase2_train_func_time = phase2_train_end - phase2_training_func_start
             phase2_train_time = phase2_train_end - phase2_train_start
@@ -453,32 +471,43 @@ def main():
 
         if args.rank == 0:
             # all end
-            logging.info("Round {}: total build graph time: {}".format(i, build_graph_time))
-            logging.info("Round {}: total sample time: {}".format(i, total_sample_time))
+            logging.info("Round {}: total build graph time: {}".format(
+                i, build_graph_time))
+            logging.info("Round {}: total sample time: {}".format(
+                i, total_sample_time))
             logging.info("Round {}: total feature fetching time: {}".format(
                 i, total_feature_fetching_time))
-            logging.info("Round {}: total train time {}".format(i, total_training_time))
+            logging.info("Round {}: total train time {}".format(
+                i, total_training_time))
             logging.info("Round {}: total time: {}".format(
                 i, build_graph_time + total_training_time))
     # all end
     logging.info("total build graph time: {}".format(build_graph_time))
     logging.info("total sample time: {}".format(total_sample_time))
     logging.info("total feature fetching time: {}".format(
-                total_feature_fetching_time))
+        total_feature_fetching_time))
     logging.info("total train time {}".format(total_training_time))
     logging.info("total time: {}".format(
-                build_graph_time + total_training_time))
+        build_graph_time + total_training_time))
 
     if args.rank == 0:
         subdir = 'tmp_res/continuous/'
+        prefix = f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_{args.cache}_{args.edge_cache_ratio:.5f}_{args.node_cache_ratio:.5f}_reset{args.reset_cache}'
         os.makedirs(subdir, exist_ok=True)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_ap.npy'), val_ap_list)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_build_graph_time.npy'), build_graph_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_sample_time.npy'), total_sample_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_feature_fetching_time.npy'), total_feature_fetching_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_total_training_time.npy'), total_training_time)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_node_cache_hit_rate.npy'), node_cache_hit_rate_list)
-        np.save(os.path.join(subdir, f'{args.model}_{args.data}_{args.replay_ratio}_{args.epoch}_edge_cache_hit_rate.npy'), edge_cache_hit_rate_list)
+        # np.save(os.path.join(
+        #     subdir, f'{prefix}_ap.npy'), val_ap_list)
+        # np.save(os.path.join(
+        #     subdir, f'{prefix}_build_graph_time.npy'), build_graph_time)
+        # np.save(os.path.join(
+        #     subdir, f'{prefix}_sample_time.npy'), total_sample_time)
+        # np.save(os.path.join(
+        #     subdir, f'{prefix}_feature_fetching_time.npy'), total_feature_fetching_time)
+        # np.save(os.path.join(
+        #     subdir, f'{prefix}_total_training_time.npy'), total_training_time)
+        np.save(os.path.join(
+            subdir, f'{prefix}_node_cache_hit_rate.npy'), node_cache_hit_rate_list)
+        np.save(os.path.join(
+            subdir, f'{prefix}_edge_cache_hit_rate.npy'), edge_cache_hit_rate_list)
 
 
 def train(train_df, val_df, sampler, model, optimizer, criterion,
@@ -490,6 +519,7 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
     next_data = None
     total_sample_time = 0
     total_feature_fetching_time = 0
+
     def sampling(target_nodes, ts, eid):
         nonlocal next_data
         nonlocal total_sample_time
@@ -498,12 +528,25 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
         total_sample_time += time.time() - start
         next_data = (mfgs, eid)
 
+    if args.cache == 'GNNLabStaticCache':
+        if args.reset_cache:
+            cache.init_cache(sampler=sampler, train_df=train_df,
+                             pre_sampling_rounds=2)
+    else:
+        if args.reset_cache:
+            cache.reset()
+        else:
+            cache.reset(train_df)
+
     epoch_time_sum = 0
     early_stopper = EarlyStopMonitor()
     logging.info('Start training...')
     for e in range(args.epoch):
         model.train()
+
         # cache.reset()
+        # only gnnlab static need to pass param
+
         if e > 0:
             if args.distributed:
                 model.module.reset()
@@ -516,8 +559,8 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
 
         epoch_time_start = time.time()
         train_iter = get_batch(df=train_df, batch_size=args.batch_size,
-                                num_chunks=0, rand_edge_sampler=train_rand_sampler,
-                                world_size=args.world_size)
+                               num_chunks=0, rand_edge_sampler=train_rand_sampler,
+                               world_size=args.world_size)
         target_nodes, ts, eid = next(train_iter)
         mfgs = sampler.sample(target_nodes, ts)
         next_data = (mfgs, eid)
@@ -548,41 +591,42 @@ def train(train_df, val_df, sampler, model, optimizer, criterion,
                 mfgs, eid)
             total_feature_fetching_time += time.time() - start
 
-            if args.use_memory:
-                b = mfgs[0][0]  # type: DGLBlock
-                if args.distributed:
-                    model.module.memory.prepare_input(b)
-                    model.module.last_updated = model.module.memory_updater(b)
-                else:
-                    model.memory.prepare_input(b)
-                    model.last_updated = model.memory_updater(b)
+            # if args.use_memory:
+            #     b = mfgs[0][0]  # type: DGLBlock
+            #     if args.distributed:
+            #         model.module.memory.prepare_input(b)
+            #         model.module.last_updated = model.module.memory_updater(b)
+            #     else:
+            #         model.memory.prepare_input(b)
+            #         model.last_updated = model.memory_updater(b)
 
-            # Train
-            optimizer.zero_grad()
-            pred_pos, pred_neg = model(mfgs)
+            # # Train
+            # optimizer.zero_grad()
+            # pred_pos, pred_neg = model(mfgs)
 
-            if args.use_memory:
-                # NB: no need to do backward here
-                with torch.no_grad():
-                    # use one function
-                    if args.distributed:
-                        model.module.memory.update_mem_mail(
-                            **model.module.last_updated, edge_feats=cache.target_edge_features,
-                            neg_sample_ratio=1)
-                    else:
-                        model.memory.update_mem_mail(
-                            **model.last_updated, edge_feats=cache.target_edge_features,
-                            neg_sample_ratio=1)
+            # if args.use_memory:
+            #     # NB: no need to do backward here
+            #     with torch.no_grad():
+            #         # use one function
+            #         if args.distributed:
+            #             model.module.memory.update_mem_mail(
+            #                 **model.module.last_updated, edge_feats=cache.target_edge_features,
+            #                 neg_sample_ratio=1)
+            #         else:
+            #             model.memory.update_mem_mail(
+            #                 **model.last_updated, edge_feats=cache.target_edge_features,
+            #                 neg_sample_ratio=1)
 
-            loss = criterion(pred_pos, torch.ones_like(pred_pos))
-            loss += criterion(pred_neg, torch.zeros_like(pred_neg))
-            total_loss += float(loss) * num_target_nodes
-            loss.backward()
-            optimizer.step()
+            # loss = criterion(pred_pos, torch.ones_like(pred_pos))
+            # loss += criterion(pred_neg, torch.zeros_like(pred_neg))
+            # total_loss += float(loss) * num_target_nodes
+            # loss.backward()
+            # optimizer.step()
 
             cache_edge_ratio_sum += cache.cache_edge_ratio
             cache_node_ratio_sum += cache.cache_node_ratio
             total_samples += num_target_nodes
+            i += 1
 
             if (i+1) % args.print_freq == 0:
                 if args.distributed:
